@@ -37,7 +37,7 @@ The Autopilot Agent is the guest-side execution mechanism for substantial transf
 
 ## Configuration and stage contracts
 
-The operator supplies a `lab.yaml` configuration. It declares the topology, machine names, isolated domain/DNS details, source-media locations, enabled modules, and non-secret references to credentials or certificates. A committed `lab.example.yaml` documents the required shape. `lab.local.yaml` and the secrets directory remain ignored.
+The operator supplies a `lab.yaml` configuration. It declares the topology, machine names, isolated domain/DNS details, approved acquisition sources, enabled modules, and non-secret references to credentials or certificates. A committed `lab.example.yaml` documents the required shape. `lab.local.yaml` and the secrets directory remain ignored.
 
 Every deployment stage implements three PowerShell operations:
 
@@ -46,6 +46,10 @@ Every deployment stage implements three PowerShell operations:
 3. `Verify`: collect authoritative evidence that the stage completed.
 
 Guided mode executes one stage and displays its evidence before continuing. Unattended mode uses the same configuration and stage functions, executing the selected stages without interaction. A failure stops the run, retains the run folder, and can resume only after its `Test` operation succeeds or reports a safe, unapplied state.
+
+The first stage, `Acquire-InstallSources`, automates source collection before Windows or MECM configuration begins. It retrieves prerequisite installers, SQL Server media, MECM media, and selected third-party installers to a local cache. Every acquired item has a declared source URI or approved repository location, expected publisher/signature or SHA-256 hash, version, license requirement, and destination path. Public prerequisites can be acquired directly from their vendor source. Licensed, authenticated, or customer-specific installers are acquired only from an operator-provided source reference after the operator has supplied any required credentials and accepted the applicable license. The stage never commits installer media or credentials to Git.
+
+`Acquire-InstallSources` verifies each download before it becomes usable. An unavailable source, mismatched hash, invalid signature, missing credential, or unaccepted license is a hard stop with a precise preflight result. Later stages consume only cache entries whose verification record is present in the run evidence.
 
 ## Validation and evidence
 
@@ -68,7 +72,7 @@ A module cannot run unless the core health validation passed in the same or a ve
 
 ## Safety and secret handling
 
-The default target is an isolated lab. Preflight validation rejects unexpected production domains or tenant integrations unless an explicit, documented override is present. The repository never stores setup media, product keys, credentials, certificates, tenant secrets, or generated secrets. Preflight reports missing inputs by name only.
+The default target is an isolated lab. Preflight validation rejects unexpected production domains or tenant integrations unless an explicit, documented override is present. The repository never stores setup media, product keys, credentials, certificates, tenant secrets, or generated secrets. The acquisition cache is ignored by Git. Preflight reports missing inputs and required license acknowledgements by name only.
 
 ## Testing and code-quality gates
 
@@ -90,5 +94,5 @@ The project runbook documents five paths:
 
 - Production MECM deployment or production-tenant configuration.
 - A distributed MECM topology implementation.
-- Bundling licensed Microsoft, SQL Server, MECM, or third-party installer media.
+- Bundling licensed Microsoft, SQL Server, MECM, or third-party installer media in Git.
 - Automatic remediation of an ambiguous or unsafe partial installation.

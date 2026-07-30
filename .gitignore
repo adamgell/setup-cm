@@ -1,6 +1,7 @@
 .superpowers/
 .vscode/
 artifacts/
+cache/
 *.log
 *.clixml
 *.pfx
