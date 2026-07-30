@@ -1,0 +1,30 @@
+topology: single-box
+safety:
+  isolatedLab: true
+  allowProductionTarget: false
+evidenceRoot: C:\ProgramData\SetupCm\artifacts
+cacheRoot: C:\ProgramData\SetupCm\cache
+sources:
+  sqlServer:
+    uri: https://installer-vault.example.invalid/sql-server.iso
+    sha256: REPLACE_WITH_SHA256
+    publisher: Microsoft Corporation
+    version: REPLACE_WITH_VERSION
+    licenseAccepted: false
+    cacheFile: sql-server.iso
+  mecm:
+    uri: https://installer-vault.example.invalid/mecm.iso
+    sha256: REPLACE_WITH_SHA256
+    publisher: Microsoft Corporation
+    version: REPLACE_WITH_VERSION
+    licenseAccepted: false
+    cacheFile: mecm.iso
+  prerequisites: []
+sql:
+  instanceName: MSSQLSERVER
+  serviceAccount: CONTOSO\svc_sql
+  installDirectory: D:\SQL
+mecm:
+  siteCode: LAB
+  siteName: Lab Primary
+  sqlServer: CM01.lab.example

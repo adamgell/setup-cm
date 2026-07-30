@@ -14,4 +14,5 @@ jobs:
       - shell: pwsh
         run: |
           Install-Module Pester -RequiredVersion 6.0.0 -Force -Scope CurrentUser
+          Install-Module powershell-yaml -RequiredVersion 0.4.12 -Force -Scope CurrentUser
           Invoke-Pester ./tests/Unit -Output Detailed -CI
