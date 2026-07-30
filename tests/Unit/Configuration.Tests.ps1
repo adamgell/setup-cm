@@ -16,7 +16,7 @@ Describe 'Assert-SetupCmConfig' {
 
         It 'requires a MECM source' {
             {
-                Assert-SetupCmConfig @{ safety = @{ isolatedLab = $true }; sources = @{ sqlServer = @{} } }
+                Assert-SetupCmConfig @{ safety = @{ isolatedLab = $true }; sources = @{ sqlServer = @{ uri='https://vault/sql'; sha256=('a' * 64) } } }
             } | Should -Throw '*sources.mecm*'
         }
 
@@ -24,6 +24,15 @@ Describe 'Assert-SetupCmConfig' {
             $config = Read-SetupCmConfig -Path "$PSScriptRoot/../../config/lab.example.yaml"
             $config.topology | Should -Be 'single-box'
             $config.sources.sqlServer.cacheFile | Should -Be 'sql-server.iso'
+        }
+
+        It 'rejects installer placeholders in a runnable configuration' {
+            {
+                Assert-SetupCmConfig @{ safety=@{ isolatedLab=$true }; sources=@{
+                    sqlServer=@{ uri='https://vault/'; sha256='REPLACE_WITH_SHA256' }
+                    mecm=@{ uri='https://vault/'; sha256=('a' * 64) }
+                } }
+            } | Should -Throw '*placeholder*'
         }
     }
 }

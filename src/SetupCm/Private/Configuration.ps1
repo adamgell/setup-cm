@@ -73,6 +73,13 @@ function Assert-SetupCmConfig {
         if (-not $Config.sources.ContainsKey($name)) {
             throw "sources.$name is required."
         }
+        foreach ($field in 'uri', 'sha256') {
+            $value = [string]$Config.sources[$name][$field]
+            $isTemplate = $Config.ContainsKey('template') -and $Config['template']
+            if ((-not $isTemplate) -and ([string]::IsNullOrWhiteSpace($value) -or $value -match 'REPLACE|example\.invalid')) {
+                throw "sources.$name.$field contains a placeholder."
+            }
+        }
     }
 
     return $Config
