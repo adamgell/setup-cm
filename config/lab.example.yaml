@@ -28,3 +28,7 @@ mecm:
   siteCode: LAB
   siteName: Lab Primary
   sqlServer: CM01.lab.example
+  siteServerFqdn: CM01.lab.example
+  productId: Eval
+  smsInstallDir: D:\ConfigMgr
+  prerequisitePath: D:\Sources\Redist
