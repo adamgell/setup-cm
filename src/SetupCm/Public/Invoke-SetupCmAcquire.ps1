@@ -5,5 +5,11 @@ function Invoke-SetupCmAcquire {
         [string]$ConfigPath
     )
 
-    throw 'The SetupCm acquisition stage is not implemented yet.'
+    $config = Read-SetupCmConfig -Path $ConfigPath
+    $evidenceRoot = New-SetupCmRunEvidence -Root $config.evidenceRoot
+    $artifacts = foreach ($source in $config.sources.Values) {
+        Get-SetupCmArtifact -Source $source -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
+    }
+
+    return $artifacts
 }

@@ -1,0 +1,61 @@
+Import-Module "$PSScriptRoot/../../src/SetupCm/SetupCm.psd1" -Force
+
+Describe 'Get-SetupCmArtifact' {
+    InModuleScope SetupCm {
+        It 'uses a matching cached artifact without downloading' {
+            $cacheFile = Join-Path $TestDrive 'sql.iso'
+            Set-Content -LiteralPath $cacheFile -Value 'cached installer' -NoNewline
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cacheFile).Hash
+
+            $result = Get-SetupCmArtifact -Source @{
+                name = 'sqlServer'; cacheFile = 'sql.iso'; sha256 = $hash; licenseAccepted = $true
+            } -CacheRoot $TestDrive -EvidenceRoot $TestDrive
+
+            $result.Path | Should -Be $cacheFile
+            $result.Sha256 | Should -Be $hash.ToLowerInvariant()
+        }
+
+        It 'rejects a cached artifact with a mismatched hash' {
+            Set-Content -LiteralPath (Join-Path $TestDrive 'mecm.iso') -Value 'wrong installer' -NoNewline
+
+            {
+                Get-SetupCmArtifact -Source @{
+                    name = 'mecm'; cacheFile = 'mecm.iso'; sha256 = ('0' * 64); licenseAccepted = $true
+                } -CacheRoot $TestDrive -EvidenceRoot $TestDrive
+            } | Should -Throw '*SHA-256 mismatch*'
+        }
+
+        It 'rejects acquisition until the required license is accepted' {
+            {
+                Get-SetupCmArtifact -Source @{
+                    name = 'mecm'; cacheFile = 'mecm.iso'; sha256 = ('0' * 64); licenseAccepted = $false
+                } -CacheRoot $TestDrive -EvidenceRoot $TestDrive
+            } | Should -Throw '*licenseAccepted*'
+        }
+    }
+}
+
+Describe 'Invoke-SetupCmAcquire' {
+    InModuleScope SetupCm {
+        It 'acquires every configured source' {
+            $config = @{
+                cacheRoot = $TestDrive
+                evidenceRoot = $TestDrive
+                sources = @{
+                    sqlServer = @{ name = 'sqlServer' }
+                    mecm = @{ name = 'mecm' }
+                }
+            }
+            Mock Read-SetupCmConfig { $config }
+            Mock New-SetupCmRunEvidence { $TestDrive }
+            Mock Get-SetupCmArtifact {
+                [pscustomobject]@{ Name = $Source.name; Path = 'cached'; Sha256 = 'hash' }
+            }
+
+            $result = @(Invoke-SetupCmAcquire -ConfigPath 'lab.yaml')
+
+            $result | Should -HaveCount 2
+            Should -Invoke Get-SetupCmArtifact -Times 2 -Exactly
+        }
+    }
+}
