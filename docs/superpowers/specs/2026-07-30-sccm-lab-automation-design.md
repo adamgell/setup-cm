@@ -47,9 +47,9 @@ Every deployment stage implements three PowerShell operations:
 
 Guided mode executes one stage and displays its evidence before continuing. Unattended mode uses the same configuration and stage functions, executing the selected stages without interaction. A failure stops the run, retains the run folder, and can resume only after its `Test` operation succeeds or reports a safe, unapplied state.
 
-The first stage, `Acquire-InstallSources`, automates source collection before Windows or MECM configuration begins. It retrieves prerequisite installers, SQL Server media, MECM media, and selected third-party installers to a local cache. Every acquired item has a declared source URI or approved repository location, expected publisher/signature or SHA-256 hash, version, license requirement, and destination path. Public prerequisites can be acquired directly from their vendor source. Licensed, authenticated, or customer-specific installers are acquired only from an operator-provided source reference after the operator has supplied any required credentials and accepted the applicable license. The stage never commits installer media or credentials to Git.
+The first stage, `Acquire-InstallSources`, automates source collection before Windows or MECM configuration begins. It retrieves prerequisite installers, SQL Server media, MECM media, and selected third-party installers to a local cache. Every acquired item has a declared source URI or approved repository location, expected publisher/signature or SHA-256 hash, version, license requirement, and destination path. Public prerequisites can be acquired directly from their vendor source. Licensed, authenticated, customer-specific, or difficult-to-obtain installers can be retrieved from a durable private installer vault controlled by the operator, such as protected NAS storage, object storage, or an internal package/artifact repository. The stage never commits installer media or credentials to Git.
 
-`Acquire-InstallSources` verifies each download before it becomes usable. An unavailable source, mismatched hash, invalid signature, missing credential, or unaccepted license is a hard stop with a precise preflight result. Later stages consume only cache entries whose verification record is present in the run evidence.
+`Acquire-InstallSources` verifies each download before it becomes usable. An unavailable source, mismatched hash, invalid signature, missing credential, or unaccepted license is a hard stop with a precise preflight result. When the original vendor source is unavailable, the private installer vault is an approved retrieval source if its stored artifact matches the declared integrity record and license metadata. Later stages consume only cache entries whose verification record is present in the run evidence.
 
 ## Validation and evidence
 
@@ -72,7 +72,7 @@ A module cannot run unless the core health validation passed in the same or a ve
 
 ## Safety and secret handling
 
-The default target is an isolated lab. Preflight validation rejects unexpected production domains or tenant integrations unless an explicit, documented override is present. The repository never stores setup media, product keys, credentials, certificates, tenant secrets, or generated secrets. The acquisition cache is ignored by Git. Preflight reports missing inputs and required license acknowledgements by name only.
+The default target is an isolated lab. Preflight validation rejects unexpected production domains or tenant integrations unless an explicit, documented override is present. The repository never stores setup media, product keys, credentials, certificates, tenant secrets, or generated secrets. Installer media is intentionally retained outside Git in the private installer vault and local acquisition cache. Preflight reports missing inputs and required license acknowledgements by name only.
 
 ## Testing and code-quality gates
 
@@ -94,5 +94,4 @@ The project runbook documents five paths:
 
 - Production MECM deployment or production-tenant configuration.
 - A distributed MECM topology implementation.
-- Bundling licensed Microsoft, SQL Server, MECM, or third-party installer media in Git.
 - Automatic remediation of an ambiguous or unsafe partial installation.
