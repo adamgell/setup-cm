@@ -60,7 +60,7 @@ function Install-SetupCmPrimarySite {
     )
 
     if (-not $IsWindows) { throw 'MECM installation can only run on Windows Server.' }
-    $setup = Join-Path $MediaPath 'SMSSETUP\BIN\X64\Setup.exe'
+    $setup = Join-Path (Get-SetupCmMediaRoot -Path $MediaPath) 'SMSSETUP\BIN\X64\Setup.exe'
     if (-not (Test-Path -LiteralPath $setup)) { throw "MECM Setup.exe was not found at $setup" }
     $scriptPath = Join-Path $EvidenceRoot 'mecm-unattended.ini'
     New-Item -ItemType Directory -Path $EvidenceRoot -Force | Out-Null
