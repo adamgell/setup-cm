@@ -6,7 +6,7 @@
     CompanyName       = 'CMTrace Open'
     Copyright         = '(c) 2026 CMTrace Open'
     PowerShellVersion = '7.0'
-    FunctionsToExport = @('Invoke-SetupCm', 'Invoke-SetupCmAcquire')
+    FunctionsToExport = @('Invoke-SetupCm', 'Invoke-SetupCmAcquire', 'Test-SetupCmPreflight')
     CmdletsToExport   = @()
     VariablesToExport = @()
     AliasesToExport   = @()

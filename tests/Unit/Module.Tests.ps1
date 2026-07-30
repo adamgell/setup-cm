@@ -5,6 +5,6 @@ Describe 'SetupCm module' {
 
     It 'exports the two public commands' {
         Import-Module "$PSScriptRoot/../../src/SetupCm/SetupCm.psd1" -Force
-        Get-Command Invoke-SetupCm, Invoke-SetupCmAcquire | Should -HaveCount 2
+        Get-Command Invoke-SetupCm, Invoke-SetupCmAcquire, Test-SetupCmPreflight | Should -HaveCount 3
     }
 }
