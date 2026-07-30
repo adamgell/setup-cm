@@ -1,0 +1,11 @@
+.superpowers/
+.vscode/
+artifacts/
+*.log
+*.clixml
+*.pfx
+*.cer
+*.key
+*.pem
+lab.local.yaml
+secrets/
