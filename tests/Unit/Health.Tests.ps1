@@ -10,3 +10,18 @@ Describe 'Test-SetupCmLabHealth' {
         }
     }
 }
+
+Describe 'Export-SetupCmFixture' {
+    InModuleScope SetupCm {
+        It 'redacts password values before writing the fixture' {
+            $sourcePath = Join-Path $TestDrive 'LocationServices.log'
+            $fixtureRoot = Join-Path $TestDrive 'fixtures'
+            Set-Content -LiteralPath $sourcePath -Value 'Connecting with Password=NotForFixtures; to the management point.' -NoNewline
+
+            Export-SetupCmFixture -SourcePath $sourcePath -FixtureRoot $fixtureRoot
+            $fixturePath = Join-Path $fixtureRoot 'LocationServices.log'
+
+            (Get-Content -LiteralPath $fixturePath -Raw) | Should -Be 'Connecting with Password=<redacted>; to the management point.'
+        }
+    }
+}

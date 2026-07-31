@@ -25,9 +25,19 @@ function Test-SetupCmManagementPoint { if (-not $IsWindows) { return $false }; (
 function Test-SetupCmDistributionPoint { if (-not $IsWindows) { return $false }; (Get-Service SMS_SITE_COMPONENT_MANAGER -ErrorAction SilentlyContinue).Status -eq 'Running' }
 function Test-SetupCmClient { param([string]$ComputerName); if (-not $IsWindows) { return $false }; Test-Connection -ComputerName $ComputerName -Count 1 -Quiet }
 
+function ConvertTo-SetupCmSanitizedFixtureContent {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Content)
+
+    [regex]::Replace($Content, '(?im)(\b(?:password|pwd)\s*=\s*)[^;\r\n\s]+', '$1<redacted>')
+}
+
 function Export-SetupCmFixture {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$SourcePath,[Parameter(Mandatory)][string]$FixtureRoot)
     New-Item -ItemType Directory -Path $FixtureRoot -Force | Out-Null
-    Copy-Item -LiteralPath $SourcePath -Destination (Join-Path $FixtureRoot (Split-Path $SourcePath -Leaf)) -Force
+    $destinationPath = Join-Path $FixtureRoot (Split-Path $SourcePath -Leaf)
+    $content = Get-Content -LiteralPath $SourcePath -Raw
+    Set-Content -LiteralPath $destinationPath -Value (ConvertTo-SetupCmSanitizedFixtureContent -Content $content) -NoNewline
+    $destinationPath
 }
