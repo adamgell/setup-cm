@@ -59,3 +59,39 @@ Describe 'Invoke-SetupCmAcquire' {
         }
     }
 }
+
+Describe 'Invoke-SetupCm' {
+    InModuleScope SetupCm {
+        It 'keeps acquisition evidence in the outer deployment run' {
+            $cacheRoot = Join-Path $TestDrive 'cache'
+            $outerEvidenceRoot = Join-Path $TestDrive 'evidence-outer'
+            $innerEvidenceRoot = Join-Path $TestDrive 'evidence-inner'
+            New-Item -ItemType Directory -Path $cacheRoot -Force | Out-Null
+            Set-Content -LiteralPath (Join-Path $cacheRoot 'sql.iso') -Value 'sql installer' -NoNewline
+            Set-Content -LiteralPath (Join-Path $cacheRoot 'mecm.iso') -Value 'mecm installer' -NoNewline
+
+            $config = @{
+                cacheRoot = $cacheRoot
+                evidenceRoot = $TestDrive
+                sources = @{
+                    sqlServer = @{ name = 'sqlServer'; cacheFile = 'sql.iso'; sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $cacheRoot 'sql.iso')).Hash; licenseAccepted = $true }
+                    mecm = @{ name = 'mecm'; cacheFile = 'mecm.iso'; sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $cacheRoot 'mecm.iso')).Hash; licenseAccepted = $true }
+                }
+            }
+            $runRoots = [System.Collections.Generic.Queue[string]]::new()
+            $runRoots.Enqueue($outerEvidenceRoot)
+            $runRoots.Enqueue($innerEvidenceRoot)
+            Mock Read-SetupCmConfig { $config }
+            Mock New-SetupCmRunEvidence {
+                $path = $runRoots.Dequeue()
+                New-Item -ItemType Directory -Path $path -Force | Out-Null
+                $path
+            }
+
+            Invoke-SetupCm -ConfigPath 'lab.yaml' -Mode Unattended -Stage Acquire | Out-Null
+
+            Test-Path -LiteralPath (Join-Path $outerEvidenceRoot 'acquisition.json') | Should -BeTrue
+            Test-Path -LiteralPath $innerEvidenceRoot | Should -BeFalse
+        }
+    }
+}
