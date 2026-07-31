@@ -1,5 +1,8 @@
 topology: single-box
 template: true
+lab:
+  name: labz1
+  domain: test.gell.one
 safety:
   isolatedLab: true
   allowProductionTarget: false
@@ -28,8 +31,11 @@ sql:
 mecm:
   siteCode: LAB
   siteName: Lab Primary
-  sqlServer: CM01.lab.example
-  siteServerFqdn: CM01.lab.example
+  sqlServer: LABZ1-CM01.test.gell.one
+  siteServerFqdn: LABZ1-CM01.test.gell.one
   productId: Eval
   smsInstallDir: D:\ConfigMgr
   prerequisitePath: D:\Sources\Redist
+testClient:
+  name: LABZ1-CMCLIENT01
+  domain: test.gell.one
