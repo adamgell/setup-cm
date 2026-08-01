@@ -11,7 +11,8 @@ function Invoke-SetupCmAcquire {
     if ([string]::IsNullOrWhiteSpace($EvidenceRoot)) {
         $EvidenceRoot = New-SetupCmRunEvidence -Root $config.evidenceRoot
     }
-    $artifacts = foreach ($source in $config.sources.Values) {
+    $artifacts = foreach ($name in 'sqlServer', 'mecm') {
+        $source = $config.sources[$name]
         Get-SetupCmArtifact -Source $source -CacheRoot $config.cacheRoot -EvidenceRoot $EvidenceRoot
     }
 

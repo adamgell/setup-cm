@@ -62,6 +62,7 @@ Describe 'Invoke-SetupCmAcquire' {
                 sources = @{
                     sqlServer = @{ name = 'sqlServer' }
                     mecm = @{ name = 'mecm' }
+                    prerequisites = @('dotnet48', 'adk')
                 }
             }
             Mock Read-SetupCmConfig { $config }
@@ -73,6 +74,7 @@ Describe 'Invoke-SetupCmAcquire' {
             $result = @(Invoke-SetupCmAcquire -ConfigPath 'lab.yaml')
 
             $result | Should -HaveCount 2
+            $result.Name | Should -BeExactly @('sqlServer', 'mecm')
             Should -Invoke Get-SetupCmArtifact -Times 2 -Exactly
         }
     }
