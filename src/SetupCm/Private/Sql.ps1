@@ -2,10 +2,11 @@ function Test-SetupCmSql {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$InstanceName,
-        [scriptblock]$ServiceStateProvider = { Get-Service -Name "MSSQL`$$InstanceName" -ErrorAction SilentlyContinue }
+        [scriptblock]$ServiceStateProvider = { param($Name) Get-Service -Name $Name -ErrorAction SilentlyContinue }
     )
 
-    $service = & $ServiceStateProvider
+    $serviceName = if ($InstanceName -ieq 'MSSQLSERVER') { 'MSSQLSERVER' } else { "MSSQL`$$InstanceName" }
+    $service = & $ServiceStateProvider $serviceName
     if ($null -ne $service -and $service.Status -eq 'Running') { return 'Compliant' }
     return 'NotCompliant'
 }

@@ -2,6 +2,18 @@ Import-Module "$PSScriptRoot/../../src/SetupCm/SetupCm.psd1" -Force
 
 Describe 'Test-SetupCmSql' {
     InModuleScope SetupCm {
+        It 'checks the default SQL service by its unqualified service name' {
+            $script:queriedServiceName = $null
+
+            Test-SetupCmSql -InstanceName 'MSSQLSERVER' -ServiceStateProvider {
+                param($Name)
+                $script:queriedServiceName = $Name
+                [pscustomobject]@{ Status = 'Running' }
+            } | Should -Be 'Compliant'
+
+            $script:queriedServiceName | Should -Be 'MSSQLSERVER'
+        }
+
         It 'returns Compliant when the configured SQL service is running' {
             Test-SetupCmSql -InstanceName 'MSSQLSERVER' -ServiceStateProvider {
                 [pscustomobject]@{ Status = 'Running' }
