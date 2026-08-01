@@ -67,6 +67,36 @@ function Get-SetupCmMecmPrerequisites {
     return $PrerequisitePath
 }
 
+function Test-SetupCmMecmOdbcDriver18 {
+    [CmdletBinding()]
+    param(
+        [scriptblock]$RegistryProvider = {
+            Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\MSODBCSQL18' -ErrorAction SilentlyContinue
+        }
+    )
+
+    if ($null -ne (& $RegistryProvider)) { return 'Compliant' }
+    return 'NotCompliant'
+}
+
+function Install-SetupCmMecmOdbcDriver18 {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][hashtable]$Source,
+        [Parameter(Mandatory)][string]$CacheRoot,
+        [Parameter(Mandatory)][string]$EvidenceRoot
+    )
+
+    if (-not $IsWindows) { throw 'MECM ODBC Driver installation can only run on Windows Server.' }
+    $artifact = Get-SetupCmArtifact -Source $Source -CacheRoot $CacheRoot -EvidenceRoot $EvidenceRoot
+    $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList @(
+        '/i', $artifact.Path, '/qn', 'IACCEPTMSODBCSQLLICENSETERMS=YES'
+    ) -Wait -PassThru -NoNewWindow
+    if ($process.ExitCode -notin 0, 3010) {
+        throw "MECM ODBC Driver installation failed with exit code $($process.ExitCode)."
+    }
+}
+
 function Install-SetupCmPrimarySite {
     [CmdletBinding()]
     param(

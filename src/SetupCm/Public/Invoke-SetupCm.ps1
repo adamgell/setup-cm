@@ -28,6 +28,12 @@ function Invoke-SetupCm {
             'Mecm' {
                 Invoke-SetupCmStage -Name Mecm -EvidenceRoot $evidenceRoot -Test { 'NotCompliant' } -Apply {
                     $media = Get-SetupCmArtifact -Source $config.sources.mecm -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
+                    if (-not $config.sources.ContainsKey('odbcDriver18')) {
+                        throw 'sources.odbcDriver18 is required before MECM prerequisite download.'
+                    }
+                    if ((Test-SetupCmMecmOdbcDriver18) -ne 'Compliant') {
+                        Install-SetupCmMecmOdbcDriver18 -Source $config.sources.odbcDriver18 -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
+                    }
                     Get-SetupCmMecmPrerequisites -MediaPath $media.Path -PrerequisitePath $config.mecm.prerequisitePath | Out-Null
                     Install-SetupCmPrimarySite -MediaPath $media.Path -Mecm $config.mecm -EvidenceRoot $evidenceRoot | Out-Null
                 } -Verify { 'Compliant' } | Write-Output

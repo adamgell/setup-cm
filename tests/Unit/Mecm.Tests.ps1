@@ -39,3 +39,25 @@ Describe 'Get-SetupCmMecmPrerequisites' {
         }
     }
 }
+
+Describe 'Install-SetupCmMecmOdbcDriver18' {
+    InModuleScope SetupCm {
+        It 'installs a verified, license-accepted ODBC artifact silently' {
+            $script:IsWindows = $true
+            Mock Get-SetupCmArtifact {
+                [pscustomobject]@{ Path = 'C:\SetupCm\cache\msodbcsql18-x64.msi' }
+            }
+            Mock Start-Process { [pscustomobject]@{ ExitCode = 0 } }
+
+            Install-SetupCmMecmOdbcDriver18 -Source @{ name = 'odbcDriver18'; licenseAccepted = $true } -CacheRoot 'C:\SetupCm\cache' -EvidenceRoot $TestDrive
+
+            Should -Invoke Get-SetupCmArtifact -Times 1 -Exactly
+            Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter {
+                $FilePath -eq 'msiexec.exe' -and
+                $ArgumentList -contains '/qn' -and
+                $ArgumentList -contains 'IACCEPTMSODBCSQLLICENSETERMS=YES' -and
+                $ArgumentList -contains 'C:\SetupCm\cache\msodbcsql18-x64.msi'
+            }
+        }
+    }
+}
