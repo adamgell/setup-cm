@@ -41,7 +41,7 @@ Describe 'Install-SetupCmSql' {
             }
 
             Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter {
-                $ArgumentList -contains '/SQLSVCACCOUNT=NT AUTHORITY\NETWORK SERVICE' -and
+                $ArgumentList -contains '/SQLSVCACCOUNT="NT AUTHORITY\NETWORK SERVICE"' -and
                 $ArgumentList -contains '/SQLSYSADMINACCOUNTS="TEST\Domain Admins" "NT AUTHORITY\SYSTEM"'
             }
         }

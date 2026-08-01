@@ -37,7 +37,7 @@ function Install-SetupCmSql {
         '/ACTION=Install',
         '/FEATURES=SQLENGINE',
         "/INSTANCENAME=$($Sql.instanceName)",
-        "/SQLSVCACCOUNT=$serviceAccount",
+        ('/SQLSVCACCOUNT="{0}"' -f $serviceAccount),
         ('/SQLSYSADMINACCOUNTS=' + ($quotedSysAdmins -join ' ')),
         '/IACCEPTSQLSERVERLICENSETERMS'
     )
