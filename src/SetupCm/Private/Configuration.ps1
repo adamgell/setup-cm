@@ -11,7 +11,7 @@ function ConvertTo-SetupCmHashtable {
     }
 
     if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
-        return @($Value | ForEach-Object { ConvertTo-SetupCmHashtable -Value $_ })
+        return @(foreach ($item in $Value) { ConvertTo-SetupCmHashtable -Value $item })
     }
 
     if ($Value -is [pscustomobject]) {

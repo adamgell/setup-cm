@@ -2,6 +2,15 @@ Import-Module "$PSScriptRoot/../../src/SetupCm/SetupCm.psd1" -Force
 
 Describe 'Assert-SetupCmConfig' {
     InModuleScope SetupCm {
+        It 'preserves scalar strings while normalizing nested YAML values' {
+            $config = ConvertTo-SetupCmHashtable -Value @{
+                sql = @{ sysAdminAccounts = @('TEST\\Domain Admins', 'NT AUTHORITY\\SYSTEM') }
+            }
+
+            $config.sql.sysAdminAccounts | Should -BeExactly @('TEST\\Domain Admins', 'NT AUTHORITY\\SYSTEM')
+            $config.sql.sysAdminAccounts[0] | Should -BeOfType [string]
+        }
+
         It 'rejects a production target without explicit approval' {
             {
                 Assert-SetupCmConfig @{ safety = @{ isolatedLab = $false; allowProductionTarget = $false } }
