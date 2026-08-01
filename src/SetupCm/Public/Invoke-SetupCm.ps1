@@ -19,11 +19,18 @@ function Invoke-SetupCm {
                 Invoke-SetupCmStage -Name Acquire -EvidenceRoot $evidenceRoot -Test { 'NotCompliant' } -Apply { Invoke-SetupCmAcquire -ConfigPath $ConfigPath -EvidenceRoot $evidenceRoot | Out-Null } -Verify { 'Compliant' } | Write-Output
             }
             'Sql' {
-                Invoke-SetupCmStage -Name Sql -EvidenceRoot $evidenceRoot -Test { Test-SetupCmSql -InstanceName $config.sql.instanceName } -Apply {
-                    $media = Get-SetupCmArtifact -Source $config.sources.sqlServer -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
-                    Install-SetupCmWindowsPrerequisites
-                    Install-SetupCmSql -MediaPath $media.Path -Sql $config.sql
-                } -Verify { Verify-SetupCmSql -InstanceName $config.sql.instanceName } | Write-Output
+                Invoke-SetupCmStage -Name Sql -EvidenceRoot $evidenceRoot -Test {
+                    if ((Test-SetupCmSql -InstanceName $config.sql.instanceName) -eq 'Compliant' -and (Test-SetupCmSqlNetwork -InstanceName $config.sql.instanceName) -eq 'Compliant') { 'Compliant' } else { 'NotCompliant' }
+                } -Apply {
+                    if ((Test-SetupCmSql -InstanceName $config.sql.instanceName) -ne 'Compliant') {
+                        $media = Get-SetupCmArtifact -Source $config.sources.sqlServer -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
+                        Install-SetupCmWindowsPrerequisites
+                        Install-SetupCmSql -MediaPath $media.Path -Sql $config.sql
+                    }
+                    Enable-SetupCmSqlNetwork -InstanceName $config.sql.instanceName
+                } -Verify {
+                    if ((Test-SetupCmSql -InstanceName $config.sql.instanceName) -eq 'Compliant' -and (Test-SetupCmSqlNetwork -InstanceName $config.sql.instanceName) -eq 'Compliant') { 'Compliant' } else { 'NotCompliant' }
+                } | Write-Output
             }
             'Mecm' {
                 Invoke-SetupCmStage -Name Mecm -EvidenceRoot $evidenceRoot -Test { 'NotCompliant' } -Apply {

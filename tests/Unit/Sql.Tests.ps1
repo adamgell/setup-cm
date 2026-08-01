@@ -2,6 +2,12 @@ Import-Module "$PSScriptRoot/../../src/SetupCm/SetupCm.psd1" -Force
 
 Describe 'Test-SetupCmSql' {
     InModuleScope SetupCm {
+        It 'requires an enabled TCP listener on port 1433 for a default instance' {
+            Test-SetupCmSqlNetwork -InstanceName 'MSSQLSERVER' -RegistryProvider {
+                [pscustomobject]@{ Enabled = 1; TcpPort = '1433'; TcpDynamicPorts = '' }
+            } -ListenerProvider { $true } | Should -Be 'Compliant'
+        }
+
         It 'checks the default SQL service by its unqualified service name' {
             $script:queriedServiceName = $null
 
@@ -54,6 +60,7 @@ Describe 'Install-SetupCmSql' {
 
             Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter {
                 $ArgumentList -contains '/SQLSVCACCOUNT="NT AUTHORITY\NETWORK SERVICE"' -and
+                $ArgumentList -contains '/TCPENABLED=1' -and
                 $ArgumentList -contains '/SQLSYSADMINACCOUNTS="TEST\Domain Admins" "NT AUTHORITY\SYSTEM"'
             }
         }

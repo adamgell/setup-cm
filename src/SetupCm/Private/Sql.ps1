@@ -11,6 +11,48 @@ function Test-SetupCmSql {
     return 'NotCompliant'
 }
 
+function Test-SetupCmSqlNetwork {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$InstanceName,
+        [scriptblock]$RegistryProvider = {
+            param($Name)
+            $instanceId = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL' -ErrorAction Stop).$Name
+            if ([string]::IsNullOrWhiteSpace($instanceId)) { return $null }
+            $tcpPath = "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\$instanceId\MSSQLServer\SuperSocketNetLib\Tcp"
+            $tcp = Get-ItemProperty -Path $tcpPath -ErrorAction Stop
+            $ipAll = Get-ItemProperty -Path "$tcpPath\IPAll" -ErrorAction Stop
+            [pscustomobject]@{ Enabled = $tcp.Enabled; TcpPort = $ipAll.TcpPort; TcpDynamicPorts = $ipAll.TcpDynamicPorts }
+        },
+        [scriptblock]$ListenerProvider = { Get-NetTCPConnection -LocalPort 1433 -State Listen -ErrorAction SilentlyContinue }
+    )
+
+    $tcp = & $RegistryProvider $InstanceName
+    if ($null -eq $tcp -or $tcp.Enabled -ne 1 -or $tcp.TcpPort -ne '1433' -or -not [string]::IsNullOrEmpty($tcp.TcpDynamicPorts)) {
+        return 'NotCompliant'
+    }
+    if ($null -eq (& $ListenerProvider)) { return 'NotCompliant' }
+    return 'Compliant'
+}
+
+function Enable-SetupCmSqlNetwork {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$InstanceName)
+
+    if (-not $IsWindows) { throw 'SQL Server network configuration can only run on Windows Server.' }
+    $instanceId = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL' -ErrorAction Stop).$InstanceName
+    if ([string]::IsNullOrWhiteSpace($instanceId)) { throw "SQL Server instance '$InstanceName' is not installed." }
+    $tcpPath = "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\$instanceId\MSSQLServer\SuperSocketNetLib\Tcp"
+    Set-ItemProperty -Path $tcpPath -Name Enabled -Value 1
+    Set-ItemProperty -Path "$tcpPath\IPAll" -Name TcpDynamicPorts -Value ''
+    Set-ItemProperty -Path "$tcpPath\IPAll" -Name TcpPort -Value '1433'
+    $serviceName = if ($InstanceName -ieq 'MSSQLSERVER') { 'MSSQLSERVER' } else { "MSSQL`$$InstanceName" }
+    Restart-Service -Name $serviceName -Force
+    if (-not (Get-NetFirewallRule -DisplayName 'Setup-CM SQL Server TCP 1433' -ErrorAction SilentlyContinue)) {
+        New-NetFirewallRule -DisplayName 'Setup-CM SQL Server TCP 1433' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 1433 | Out-Null
+    }
+}
+
 function Install-SetupCmWindowsPrerequisites {
     [CmdletBinding()]
     param([string[]]$FeatureName = @('NET-Framework-Features', 'BITS', 'Web-Server'))
@@ -39,6 +81,7 @@ function Install-SetupCmSql {
         '/FEATURES=SQLENGINE',
         "/INSTANCENAME=$($Sql.instanceName)",
         ('/SQLSVCACCOUNT="{0}"' -f $serviceAccount),
+        '/TCPENABLED=1',
         ('/SQLSYSADMINACCOUNTS=' + ($quotedSysAdmins -join ' ')),
         '/IACCEPTSQLSERVERLICENSETERMS'
     )
