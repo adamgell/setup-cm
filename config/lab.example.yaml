@@ -29,6 +29,8 @@ sources:
 sql:
   instanceName: MSSQLSERVER
   serviceAccount: CONTOSO\svc_sql
+  sysAdminAccounts:
+    - CONTOSO\CMSetupAdmins
   installDirectory: D:\SQL
 mecm:
   siteCode: LAB

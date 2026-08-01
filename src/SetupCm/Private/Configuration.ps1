@@ -82,5 +82,9 @@ function Assert-SetupCmConfig {
         }
     }
 
+    if (-not $Config.ContainsKey('sql') -or -not $Config.sql.ContainsKey('sysAdminAccounts') -or @($Config.sql.sysAdminAccounts).Count -eq 0) {
+        throw 'sql.sysAdminAccounts must include at least one Windows identity.'
+    }
+
     return $Config
 }

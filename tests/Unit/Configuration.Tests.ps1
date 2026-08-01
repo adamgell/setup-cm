@@ -20,6 +20,19 @@ Describe 'Assert-SetupCmConfig' {
             } | Should -Throw '*sources.mecm*'
         }
 
+        It 'requires explicit SQL sysadmin accounts' {
+            {
+                Assert-SetupCmConfig @{
+                    safety = @{ isolatedLab = $true }
+                    sources = @{
+                        sqlServer = @{ uri='https://vault/sql'; sha256=('a' * 64) }
+                        mecm = @{ uri='https://vault/mecm'; sha256=('b' * 64) }
+                    }
+                    sql = @{ instanceName = 'MSSQLSERVER' }
+                }
+            } | Should -Throw '*sql.sysAdminAccounts*'
+        }
+
         It 'reads the documented single-box example' {
             $config = Read-SetupCmConfig -Path "$PSScriptRoot/../../config/lab.example.yaml"
             $config.topology | Should -Be 'single-box'

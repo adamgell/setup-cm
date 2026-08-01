@@ -23,7 +23,24 @@ function Install-SetupCmSql {
     if (-not $IsWindows) { throw 'SQL Server installation can only run on Windows Server.' }
     $setup = Join-Path (Get-SetupCmMediaRoot -Path $MediaPath) 'setup.exe'
     if (-not (Test-Path -LiteralPath $setup)) { throw "SQL Server setup.exe was not found at $setup" }
-    $arguments = @('/Q', '/ACTION=Install', '/FEATURES=SQLENGINE', "/INSTANCENAME=$($Sql.instanceName)", "/SQLSVCACCOUNT=$($Sql.serviceAccount)", '/IACCEPTSQLSERVERLICENSETERMS')
+    $serviceAccount = 'NT AUTHORITY\NETWORK SERVICE'
+    if ($Sql.ContainsKey('serviceAccount') -and -not [string]::IsNullOrWhiteSpace($Sql.serviceAccount)) {
+        $serviceAccount = $Sql.serviceAccount
+    }
+    $sysAdminAccounts = @($Sql.sysAdminAccounts | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($sysAdminAccounts.Count -eq 0) {
+        throw 'sql.sysAdminAccounts must include at least one Windows identity.'
+    }
+    $quotedSysAdmins = $sysAdminAccounts | ForEach-Object { '"{0}"' -f $_ }
+    $arguments = @(
+        '/Q',
+        '/ACTION=Install',
+        '/FEATURES=SQLENGINE',
+        "/INSTANCENAME=$($Sql.instanceName)",
+        "/SQLSVCACCOUNT=$serviceAccount",
+        ('/SQLSYSADMINACCOUNTS=' + ($quotedSysAdmins -join ' ')),
+        '/IACCEPTSQLSERVERLICENSETERMS'
+    )
     $process = Start-Process -FilePath $setup -ArgumentList $arguments -Wait -PassThru -NoNewWindow
     if ($process.ExitCode -ne 0) { throw "SQL Server setup failed with exit code $($process.ExitCode)." }
 }
