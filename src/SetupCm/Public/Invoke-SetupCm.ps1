@@ -35,6 +35,12 @@ function Invoke-SetupCm {
             'Mecm' {
                 Invoke-SetupCmStage -Name Mecm -EvidenceRoot $evidenceRoot -Test { 'NotCompliant' } -Apply {
                     $media = Get-SetupCmArtifact -Source $config.sources.mecm -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
+                    if (-not $config.sources.ContainsKey('adk')) {
+                        throw 'sources.adk is required before MECM installation.'
+                    }
+                    if ((Test-SetupCmMecmAdk) -ne 'Compliant') {
+                        Install-SetupCmMecmAdk -Source $config.sources.adk -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
+                    }
                     if (-not $config.sources.ContainsKey('odbcDriver18')) {
                         throw 'sources.odbcDriver18 is required before MECM prerequisite download.'
                     }

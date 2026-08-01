@@ -61,3 +61,74 @@ Describe 'Install-SetupCmMecmOdbcDriver18' {
         }
     }
 }
+
+Describe 'Install-SetupCmMecmAdk' {
+    InModuleScope SetupCm {
+        It 'reports compliant only when both Deployment Tools and USMT are installed' {
+            Test-SetupCmMecmAdk -DirectoryProvider {
+                param($Path)
+                $Path -in @(
+                    'C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools',
+                    'C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\User State Migration Tool'
+                )
+            } | Should -Be 'Compliant'
+        }
+
+        It 'installs only the MECM-required ADK Deployment Tools and USMT features' {
+            $script:IsWindows = $true
+            Mock Get-SetupCmArtifact {
+                [pscustomobject]@{ Path = 'C:\SetupCm\cache\adksetup.exe' }
+            }
+            Mock Start-Process { [pscustomobject]@{ ExitCode = 0 } }
+
+            Install-SetupCmMecmAdk -Source @{ name = 'adk'; licenseAccepted = $true } -CacheRoot 'C:\SetupCm\cache' -EvidenceRoot $TestDrive
+
+            Should -Invoke Get-SetupCmArtifact -Times 1 -Exactly
+            Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter {
+                $FilePath -eq 'C:\SetupCm\cache\adksetup.exe' -and
+                $ArgumentList -contains '/quiet' -and
+                $ArgumentList -contains '/norestart' -and
+                $ArgumentList -contains 'OptionId.DeploymentTools' -and
+                $ArgumentList -contains 'OptionId.UserStateMigrationTool'
+            }
+        }
+    }
+}
+
+Describe 'MECM stage prerequisites' {
+    InModuleScope SetupCm {
+        It 'installs the approved ADK before downloading MECM prerequisites' {
+            $config = @{
+                cacheRoot = 'C:\SetupCm\cache'
+                evidenceRoot = $TestDrive
+                mecm = @{ prerequisitePath = 'C:\SetupCm\prereqs' }
+                sources = @{
+                    mecm = @{ name = 'mecm' }
+                    adk = @{ name = 'adk'; licenseAccepted = $true }
+                    odbcDriver18 = @{ name = 'odbcDriver18'; licenseAccepted = $true }
+                }
+            }
+            Mock Read-SetupCmConfig { $config }
+            Mock New-SetupCmRunEvidence { $TestDrive }
+            Mock Invoke-SetupCmStage {
+                param($Name, $Test, $Apply, $Verify, $EvidenceRoot)
+                & $Apply
+                & $Verify
+                [pscustomobject]@{ name = $Name; state = 'Succeeded' }
+            }
+            Mock Get-SetupCmArtifact { [pscustomobject]@{ Path = 'C:\SetupCm\cache\mecm.iso' } }
+            Mock Test-SetupCmMecmAdk { 'NotCompliant' }
+            Mock Install-SetupCmMecmAdk {}
+            Mock Test-SetupCmMecmOdbcDriver18 { 'Compliant' }
+            Mock Get-SetupCmMecmPrerequisites {}
+            Mock Install-SetupCmPrimarySite {}
+
+            Invoke-SetupCm -ConfigPath 'lab.yaml' -Mode Unattended -Stage Mecm | Out-Null
+
+            Should -Invoke Install-SetupCmMecmAdk -Times 1 -Exactly -ParameterFilter {
+                $Source.name -eq 'adk' -and $CacheRoot -eq 'C:\SetupCm\cache'
+            }
+            Should -Invoke Get-SetupCmMecmPrerequisites -Times 1 -Exactly
+        }
+    }
+}

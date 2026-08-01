@@ -25,6 +25,20 @@ sources:
     version: REPLACE_WITH_VERSION
     licenseAccepted: false
     cacheFile: mecm.iso
+  adk:
+    uri: https://go.microsoft.com/fwlink/?linkid=2289980
+    sha256: REPLACE_WITH_SHA256
+    publisher: Microsoft Corporation
+    version: 10.1.26100.2454
+    licenseAccepted: false
+    cacheFile: adksetup.exe
+  odbcDriver18:
+    uri: https://installer-vault.example.invalid/msodbcsql18-x64.msi
+    sha256: REPLACE_WITH_SHA256
+    publisher: Microsoft Corporation
+    version: REPLACE_WITH_VERSION
+    licenseAccepted: false
+    cacheFile: msodbcsql18-x64.msi
   prerequisites: []
 sql:
   instanceName: MSSQLSERVER

@@ -79,6 +79,27 @@ function Test-SetupCmMecmOdbcDriver18 {
     return 'NotCompliant'
 }
 
+function Test-SetupCmMecmAdk {
+    [CmdletBinding()]
+    param(
+        [scriptblock]$DirectoryProvider = {
+            param($Path)
+            Test-Path -LiteralPath $Path -PathType Container
+        }
+    )
+
+    $requiredDirectories = @(
+        'C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools',
+        'C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\User State Migration Tool'
+    )
+
+    foreach ($directory in $requiredDirectories) {
+        if (-not (& $DirectoryProvider $directory)) { return 'NotCompliant' }
+    }
+
+    return 'Compliant'
+}
+
 function Install-SetupCmMecmOdbcDriver18 {
     [CmdletBinding()]
     param(
@@ -94,6 +115,24 @@ function Install-SetupCmMecmOdbcDriver18 {
     ) -Wait -PassThru -NoNewWindow
     if ($process.ExitCode -notin 0, 3010) {
         throw "MECM ODBC Driver installation failed with exit code $($process.ExitCode)."
+    }
+}
+
+function Install-SetupCmMecmAdk {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][hashtable]$Source,
+        [Parameter(Mandatory)][string]$CacheRoot,
+        [Parameter(Mandatory)][string]$EvidenceRoot
+    )
+
+    if (-not $IsWindows) { throw 'Windows ADK installation can only run on Windows Server.' }
+    $artifact = Get-SetupCmArtifact -Source $Source -CacheRoot $CacheRoot -EvidenceRoot $EvidenceRoot
+    $process = Start-Process -FilePath $artifact.Path -ArgumentList @(
+        '/quiet', '/norestart', '/features', 'OptionId.DeploymentTools', 'OptionId.UserStateMigrationTool'
+    ) -Wait -PassThru -NoNewWindow
+    if ($process.ExitCode -notin 0, 3010) {
+        throw "Windows ADK installation failed with exit code $($process.ExitCode)."
     }
 }
 
