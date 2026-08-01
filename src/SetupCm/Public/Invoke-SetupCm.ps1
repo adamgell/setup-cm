@@ -28,6 +28,7 @@ function Invoke-SetupCm {
             'Mecm' {
                 Invoke-SetupCmStage -Name Mecm -EvidenceRoot $evidenceRoot -Test { 'NotCompliant' } -Apply {
                     $media = Get-SetupCmArtifact -Source $config.sources.mecm -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
+                    Get-SetupCmMecmPrerequisites -MediaPath $media.Path -PrerequisitePath $config.mecm.prerequisitePath | Out-Null
                     Install-SetupCmPrimarySite -MediaPath $media.Path -Mecm $config.mecm -EvidenceRoot $evidenceRoot | Out-Null
                 } -Verify { 'Compliant' } | Write-Output
             }

@@ -19,7 +19,7 @@ SiteCode=$($Mecm.siteCode)
 SiteName=$($Mecm.siteName)
 SMSInstallDir=$($Mecm.smsInstallDir)
 SDKServer=$($Mecm.siteServerFqdn)
-PrerequisiteComp=0
+PrerequisiteComp=1
 PrerequisitePath=$($Mecm.prerequisitePath)
 AdminConsole=1
 JoinCEIP=0
@@ -49,6 +49,22 @@ UseProxy=0
 SAActive=1
 CurrentBranch=1
 "@
+}
+
+function Get-SetupCmMecmPrerequisites {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$MediaPath,
+        [Parameter(Mandatory)][string]$PrerequisitePath
+    )
+
+    if (-not $IsWindows) { throw 'MECM prerequisite download can only run on Windows Server.' }
+    $setupDl = Join-Path (Get-SetupCmMediaRoot -Path $MediaPath) 'SMSSETUP\BIN\X64\Setupdl.exe'
+    if (-not (Test-Path -LiteralPath $setupDl)) { throw "MECM Setupdl.exe was not found at $setupDl" }
+    New-Item -ItemType Directory -Path $PrerequisitePath -Force | Out-Null
+    $process = Start-Process -FilePath $setupDl -ArgumentList @('/NOUI', $PrerequisitePath) -Wait -PassThru -NoNewWindow
+    if ($process.ExitCode -ne 0) { throw "MECM prerequisite download failed with exit code $($process.ExitCode)." }
+    return $PrerequisitePath
 }
 
 function Install-SetupCmPrimarySite {
