@@ -1,6 +1,12 @@
 [CmdletBinding()]
 param(
-    [string]$ConfigPath = $env:SETUPCM_CONFIG
+    [string]$ConfigPath = $env:SETUPCM_CONFIG,
+
+    [ValidateSet('Guided', 'Unattended')]
+    [string]$Mode = 'Unattended',
+
+    [ValidateSet('Acquire', 'Sql', 'Mecm', 'Health')]
+    [string[]]$Stage
 )
 
 if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
@@ -8,4 +14,4 @@ if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
 }
 
 Import-Module "$PSScriptRoot/../src/SetupCm/SetupCm.psd1" -Force
-Invoke-SetupCm -ConfigPath $ConfigPath -Mode Unattended
+Invoke-SetupCm -ConfigPath $ConfigPath -Mode $Mode -Stage $Stage
