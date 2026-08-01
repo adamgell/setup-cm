@@ -35,6 +35,24 @@ Describe 'Get-SetupCmArtifact' {
     }
 }
 
+Describe 'Resolve-SetupCmArtifactSignaturePath' {
+    InModuleScope SetupCm {
+        It 'resolves a signed setup binary inside ISO media' {
+            $setup = Join-Path $TestDrive 'SMSSETUP/BIN/X64/setup.exe'
+            New-Item -ItemType Directory -Path (Split-Path -Parent $setup) -Force | Out-Null
+            Set-Content -LiteralPath $setup -Value 'signed setup'
+            Mock Get-SetupCmMediaRoot { $TestDrive }
+
+            $resolved = Resolve-SetupCmArtifactSignaturePath `
+                -Path 'C:\SetupCm\Media\mecm.iso' `
+                -SignatureRelativePath 'SMSSETUP\BIN\X64\setup.exe'
+
+            $resolved | Should -Be $setup
+            Should -Invoke Get-SetupCmMediaRoot -Times 1 -Exactly
+        }
+    }
+}
+
 Describe 'Invoke-SetupCmAcquire' {
     InModuleScope SetupCm {
         It 'acquires every configured source' {

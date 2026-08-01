@@ -1,10 +1,34 @@
+function Resolve-SetupCmArtifactSignaturePath {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path,
+
+        [string]$SignatureRelativePath
+    )
+
+    if ([string]::IsNullOrWhiteSpace($SignatureRelativePath)) {
+        return $Path
+    }
+
+    $mediaRoot = Get-SetupCmMediaRoot -Path $Path
+    $relativePath = $SignatureRelativePath -replace '[\\/]', [IO.Path]::DirectorySeparatorChar
+    $signaturePath = Join-Path $mediaRoot $relativePath
+    if (-not (Test-Path -LiteralPath $signaturePath -PathType Leaf)) {
+        throw "Artifact signature file was not found at $signaturePath."
+    }
+    return $signaturePath
+}
+
 function Test-SetupCmArtifactSignature {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
         [string]$Path,
 
-        [string]$ExpectedPublisher
+        [string]$ExpectedPublisher,
+
+        [string]$SignatureRelativePath
     )
 
     if ([string]::IsNullOrWhiteSpace($ExpectedPublisher)) {
@@ -15,7 +39,8 @@ function Test-SetupCmArtifactSignature {
         throw "Authenticode publisher validation for '$ExpectedPublisher' requires Windows."
     }
 
-    $signature = Get-AuthenticodeSignature -FilePath $Path
+    $signaturePath = Resolve-SetupCmArtifactSignaturePath -Path $Path -SignatureRelativePath $SignatureRelativePath
+    $signature = Get-AuthenticodeSignature -FilePath $signaturePath
     if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike "*$ExpectedPublisher*") {
         throw "Authenticode signature validation failed for $Path."
     }
@@ -79,7 +104,8 @@ function Get-SetupCmArtifact {
     }
 
     $publisher = if ($Source.ContainsKey('publisher')) { $Source['publisher'] } else { $null }
-    Test-SetupCmArtifactSignature -Path $path -ExpectedPublisher $publisher
+    $signatureRelativePath = if ($Source.ContainsKey('signatureRelativePath')) { $Source['signatureRelativePath'] } else { $null }
+    Test-SetupCmArtifactSignature -Path $path -ExpectedPublisher $publisher -SignatureRelativePath $signatureRelativePath
     $artifact = [pscustomobject]@{
         Name       = $Source.name
         Path       = $path
