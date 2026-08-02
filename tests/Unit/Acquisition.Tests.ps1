@@ -62,6 +62,8 @@ Describe 'Invoke-SetupCmAcquire' {
                 sources = @{
                     sqlServer = @{ name = 'sqlServer' }
                     mecm = @{ name = 'mecm' }
+                    vcRedistX64 = @{ name = 'vcRedistX64' }
+                    vcRedistX86 = @{ name = 'vcRedistX86' }
                     prerequisites = @('dotnet48', 'adk')
                 }
             }
@@ -73,9 +75,12 @@ Describe 'Invoke-SetupCmAcquire' {
 
             $result = @(Invoke-SetupCmAcquire -ConfigPath 'lab.yaml')
 
-            $result | Should -HaveCount 2
-            $result.Name | Should -BeExactly @('sqlServer', 'mecm')
-            Should -Invoke Get-SetupCmArtifact -Times 2 -Exactly
+            $result | Should -HaveCount 4
+            $result.Name | Should -Contain 'sqlServer'
+            $result.Name | Should -Contain 'mecm'
+            $result.Name | Should -Contain 'vcRedistX64'
+            $result.Name | Should -Contain 'vcRedistX86'
+            Should -Invoke Get-SetupCmArtifact -Times 4 -Exactly
         }
     }
 }
