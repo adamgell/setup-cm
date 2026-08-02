@@ -41,6 +41,12 @@ function Invoke-SetupCm {
                     if ((Test-SetupCmMecmAdk) -ne 'Compliant') {
                         Install-SetupCmMecmAdk -Source $config.sources.adk -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
                     }
+                    if (-not $config.sources.ContainsKey('adkWinPe')) {
+                        throw 'sources.adkWinPe is required before MECM installation.'
+                    }
+                    if ((Test-SetupCmMecmWinPeAddOn) -ne 'Compliant') {
+                        Install-SetupCmMecmWinPeAddOn -Source $config.sources.adkWinPe -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
+                    }
                     if (-not $config.sources.ContainsKey('odbcDriver18')) {
                         throw 'sources.odbcDriver18 is required before MECM prerequisite download.'
                     }

@@ -32,6 +32,13 @@ sources:
     version: 10.1.26100.2454
     licenseAccepted: false
     cacheFile: adksetup.exe
+  adkWinPe:
+    uri: https://go.microsoft.com/fwlink/?linkid=2289981
+    sha256: REPLACE_WITH_SHA256
+    publisher: Microsoft Corporation
+    version: 10.1.26100.2454
+    licenseAccepted: false
+    cacheFile: adkwinpesetup.exe
   odbcDriver18:
     uri: https://installer-vault.example.invalid/msodbcsql18-x64.msi
     sha256: REPLACE_WITH_SHA256

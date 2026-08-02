@@ -3,7 +3,7 @@
 ## Prepare
 
 1. Copy `config/lab.example.yaml` to ignored `config/lab.local.yaml`.
-2. Set every installer source, SHA-256, version, and license acknowledgement. MECM requires the approved Windows ADK source with Deployment Tools and USMT enabled; Windows PE is added later only when boot-image work is enabled.
+2. Set every installer source, SHA-256, version, and license acknowledgement. MECM requires the approved Windows ADK source with Deployment Tools and USMT, plus the matching Windows PE add-on.
 3. Put hard-to-find media in the configured private vault or cache.
 
 ## Guided run

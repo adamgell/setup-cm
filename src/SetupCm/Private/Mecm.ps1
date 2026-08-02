@@ -100,6 +100,21 @@ function Test-SetupCmMecmAdk {
     return 'Compliant'
 }
 
+function Test-SetupCmMecmWinPeAddOn {
+    [CmdletBinding()]
+    param(
+        [scriptblock]$DirectoryProvider = {
+            param($Path)
+            Test-Path -LiteralPath $Path -PathType Container
+        }
+    )
+
+    if (& $DirectoryProvider 'C:\Program Files (x86)\Windows Kits\10\Assessment and Deployment Kit\Windows Preinstallation Environment') {
+        return 'Compliant'
+    }
+    return 'NotCompliant'
+}
+
 function Install-SetupCmMecmOdbcDriver18 {
     [CmdletBinding()]
     param(
@@ -133,6 +148,22 @@ function Install-SetupCmMecmAdk {
     ) -Wait -PassThru -NoNewWindow
     if ($process.ExitCode -notin 0, 3010) {
         throw "Windows ADK installation failed with exit code $($process.ExitCode)."
+    }
+}
+
+function Install-SetupCmMecmWinPeAddOn {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][hashtable]$Source,
+        [Parameter(Mandatory)][string]$CacheRoot,
+        [Parameter(Mandatory)][string]$EvidenceRoot
+    )
+
+    if (-not $IsWindows) { throw 'Windows PE add-on installation can only run on Windows Server.' }
+    $artifact = Get-SetupCmArtifact -Source $Source -CacheRoot $CacheRoot -EvidenceRoot $EvidenceRoot
+    $process = Start-Process -FilePath $artifact.Path -ArgumentList @('/quiet', '/norestart') -Wait -PassThru -NoNewWindow
+    if ($process.ExitCode -notin 0, 3010) {
+        throw "Windows PE add-on installation failed with exit code $($process.ExitCode)."
     }
 }
 
