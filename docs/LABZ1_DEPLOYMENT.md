@@ -2,7 +2,7 @@
 
 ## New machines
 
-- `LABZ1-CM01.test.gell.one`: Windows Server 2025, single-box SQL Server and MECM primary site.
+- `LABZ1-CM01.test.gell.one`: Windows Server 2022, single-box SQL Server and MECM primary site.
 - `LABZ1-CMCLIENT01.test.gell.one`: newly provisioned Windows client used for MECM client, boundary, policy, and log validation.
 
 ## Existing machines
