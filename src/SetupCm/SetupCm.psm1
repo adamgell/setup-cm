@@ -13,4 +13,4 @@ foreach ($folder in 'Private', 'Public') {
     }
 }
 
-Export-ModuleMember -Function Invoke-SetupCm, Invoke-SetupCmAcquire, Test-SetupCmPreflight
+Export-ModuleMember -Function Invoke-SetupCm, Invoke-SetupCmAcquire, Invoke-SetupCmClient, Test-SetupCmPreflight
