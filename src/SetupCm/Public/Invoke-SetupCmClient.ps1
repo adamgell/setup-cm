@@ -10,6 +10,6 @@ function Invoke-SetupCmClient {
         Install-SetupCmClient -Manifest $manifest | Out-Null
         Write-SetupCmEvidenceJson -EvidenceRoot $evidenceRoot -Name 'client-install' -Value (Get-SetupCmClientEvidence -Manifest $manifest) | Out-Null
     } -Verify {
-        Test-SetupCmClientInstallation -Manifest $manifest
+        Wait-SetupCmClientInstallation -Manifest $manifest
     }
 }

@@ -27,14 +27,17 @@ Describe 'Read-SetupCmClientManifest' {
 
 Describe 'Test-SetupCmClientInstallation' {
     InModuleScope SetupCm {
-        It 'reports compliant only when the client service, site, and management point all match' {
+        It 'reports compliant when the client service, site, and location-services management point match case-insensitively' {
             $matchingManifest = @{ siteCode = 'LAB'; managementPointFqdn = 'LABZ1-CM01.test.gell.one'; evidenceRoot = 'C:\ProgramData\SetupCm\artifacts' }
             Test-SetupCmClientInstallation -Manifest $matchingManifest -ServiceStateProvider {
                 param($Name)
                 @{ Status = 'Running' }
             } -RegistryProvider {
                 param($Path)
-                @{ AssignedSiteCode = 'LAB'; LastValidMP = 'LABZ1-CM01.test.gell.one' }
+                if ($Path -eq 'HKLM:\SOFTWARE\Microsoft\SMS\Mobile Client') {
+                    return @{ AssignedSiteCode = 'LAB' }
+                }
+                @{ EventLastUsedMP = 'labz1-cm01.test.gell.one' }
             } | Should -Be 'Compliant'
         }
 
@@ -45,8 +48,25 @@ Describe 'Test-SetupCmClientInstallation' {
                 @{ Status = 'Running' }
             } -RegistryProvider {
                 param($Path)
-                @{ AssignedSiteCode = 'LAB'; LastValidMP = 'LABZ1-CM01.test.gell.one' }
+                if ($Path -eq 'HKLM:\SOFTWARE\Microsoft\SMS\Mobile Client') {
+                    return @{ AssignedSiteCode = 'LAB' }
+                }
+                @{ EventLastUsedMP = 'LABZ1-CM01.test.gell.one' }
             } | Should -Be 'NotCompliant'
+        }
+
+        It 'waits for client location readiness before declaring the install failed' {
+            $manifest = @{ siteCode = 'LAB'; managementPointFqdn = 'LABZ1-CM01.test.gell.one'; evidenceRoot = 'C:\ProgramData\SetupCm\artifacts' }
+            $script:attempt = 0
+
+            Wait-SetupCmClientInstallation -Manifest $manifest -RetryCount 2 -RetryDelaySeconds 0 -InstallationTestProvider {
+                param($clientManifest)
+                $script:attempt++
+                if ($script:attempt -eq 3) { return 'Compliant' }
+                'NotCompliant'
+            } | Should -Be 'Compliant'
+
+            $script:attempt | Should -Be 3
         }
     }
 }

@@ -55,12 +55,38 @@ function Test-SetupCmClientInstallation {
     }
 
     $clientState = & $RegistryProvider 'HKLM:\SOFTWARE\Microsoft\SMS\Mobile Client'
+    $locationState = & $RegistryProvider 'HKLM:\SOFTWARE\Microsoft\CCM\LocationServices'
     if ($null -eq $clientState -or
+        $null -eq $locationState -or
         $clientState.AssignedSiteCode -ne $Manifest.siteCode -or
-        $clientState.LastValidMP -ne $Manifest.managementPointFqdn) {
+        $locationState.EventLastUsedMP -ine $Manifest.managementPointFqdn) {
         return 'NotCompliant'
     }
     'Compliant'
+}
+
+function Wait-SetupCmClientInstallation {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][hashtable]$Manifest,
+        [ValidateRange(0, 24)][int]$RetryCount = 12,
+        [ValidateRange(0, 30)][int]$RetryDelaySeconds = 5,
+        [scriptblock]$InstallationTestProvider = {
+            param($ClientManifest)
+            Test-SetupCmClientInstallation -Manifest $ClientManifest
+        }
+    )
+
+    for ($attempt = 0; $attempt -le $RetryCount; $attempt++) {
+        if ((& $InstallationTestProvider $Manifest) -eq 'Compliant') {
+            return 'Compliant'
+        }
+        if ($attempt -lt $RetryCount -and $RetryDelaySeconds -gt 0) {
+            Start-Sleep -Seconds $RetryDelaySeconds
+        }
+    }
+
+    'NotCompliant'
 }
 
 function Install-SetupCmClient {
