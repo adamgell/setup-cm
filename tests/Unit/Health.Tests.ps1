@@ -11,6 +11,27 @@ Describe 'Test-SetupCmLabHealth' {
     }
 }
 
+Describe 'Test-SetupCmClientRegistration' {
+    InModuleScope SetupCm {
+        It 'requires a discovered active client record for the selected site' {
+            $script:clientRegistrationQuery = $null
+            Test-SetupCmClientRegistration -SiteCode LAB -ComputerName RING0IVY24-01 -SqlQuery {
+                param($Query)
+                $script:clientRegistrationQuery = $Query
+                'RING0IVY24-01|1|1|LAB'
+            } | Should -BeTrue
+            $script:clientRegistrationQuery | Should -Match 'v_RA_System_SMSAssignedSites'
+        }
+
+        It 'rejects a client discovery record that is inactive' {
+            Test-SetupCmClientRegistration -SiteCode LAB -ComputerName RING0IVY24-01 -SqlQuery {
+                param($Query)
+                'RING0IVY24-01|1|0|LAB'
+            } | Should -BeFalse
+        }
+    }
+}
+
 Describe 'Export-SetupCmFixture' {
     InModuleScope SetupCm {
         It 'redacts password values before writing the fixture' {
