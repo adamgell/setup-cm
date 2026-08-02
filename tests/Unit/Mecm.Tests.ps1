@@ -64,6 +64,11 @@ Describe 'Install-SetupCmMecmOdbcDriver18' {
 
 Describe 'Test-SetupCmMecmVcRedist' {
     InModuleScope SetupCm {
+        It 'uses the native hive for x64 and WOW6432Node for x86 runtime registration' {
+            Get-SetupCmMecmVcRedistRegistryPath -Architecture x64 | Should -Be 'HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64'
+            Get-SetupCmMecmVcRedistRegistryPath -Architecture x86 | Should -Be 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x86'
+        }
+
         It 'requires an installed VC++ v14 runtime at or above 14.34 for each architecture' {
             Test-SetupCmMecmVcRedistArchitecture -Architecture x64 -RegistryProvider {
                 param($Architecture)

@@ -79,13 +79,24 @@ function Test-SetupCmMecmOdbcDriver18 {
     return 'NotCompliant'
 }
 
+function Get-SetupCmMecmVcRedistRegistryPath {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][ValidateSet('x64', 'x86')][string]$Architecture)
+
+    if ($Architecture -eq 'x86') {
+        return 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x86'
+    }
+
+    return 'HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64'
+}
+
 function Test-SetupCmMecmVcRedistArchitecture {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][ValidateSet('x64', 'x86')][string]$Architecture,
         [scriptblock]$RegistryProvider = {
             param($Architecture)
-            Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\$Architecture" -ErrorAction SilentlyContinue
+            Get-ItemProperty -Path (Get-SetupCmMecmVcRedistRegistryPath -Architecture $Architecture) -ErrorAction SilentlyContinue
         }
     )
 
@@ -109,7 +120,7 @@ function Test-SetupCmMecmVcRedist {
     param(
         [scriptblock]$RegistryProvider = {
             param($Architecture)
-            Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\$Architecture" -ErrorAction SilentlyContinue
+            Get-ItemProperty -Path (Get-SetupCmMecmVcRedistRegistryPath -Architecture $Architecture) -ErrorAction SilentlyContinue
         }
     )
 
