@@ -11,9 +11,13 @@ function Invoke-SetupCmAcquire {
     if ([string]::IsNullOrWhiteSpace($EvidenceRoot)) {
         $EvidenceRoot = New-SetupCmRunEvidence -Root $config.evidenceRoot
     }
-    $artifacts = foreach ($source in $config.sources.Values) {
-        if ($source -isnot [hashtable] -or -not $source.ContainsKey('name')) {
+    $artifacts = foreach ($sourceEntry in $config.sources.GetEnumerator()) {
+        if ($sourceEntry.Value -isnot [hashtable]) {
             continue
+        }
+        $source = $sourceEntry.Value.Clone()
+        if (-not $source.ContainsKey('name') -or [string]::IsNullOrWhiteSpace($source['name'])) {
+            $source['name'] = $sourceEntry.Key
         }
         Get-SetupCmArtifact -Source $source -CacheRoot $config.cacheRoot -EvidenceRoot $EvidenceRoot
     }

@@ -198,7 +198,10 @@ function Install-SetupCmMecmVcRedist {
     if (-not $IsWindows) { throw 'Microsoft Visual C++ Redistributable installation can only run on Windows Server.' }
     $artifact = Get-SetupCmArtifact -Source $Source -CacheRoot $CacheRoot -EvidenceRoot $EvidenceRoot
     $process = Start-Process -FilePath $artifact.Path -ArgumentList @('/install', '/quiet', '/norestart') -Wait -PassThru -NoNewWindow
-    if ($process.ExitCode -notin 0, 3010) {
+    if ($process.ExitCode -eq 3010) {
+        throw 'Microsoft Visual C++ Redistributable installation requires a restart before MECM setup can continue (exit code 3010).'
+    }
+    if ($process.ExitCode -ne 0) {
         throw "Microsoft Visual C++ Redistributable installation failed with exit code $($process.ExitCode)."
     }
 }

@@ -82,6 +82,26 @@ Describe 'Invoke-SetupCmAcquire' {
             $result.Name | Should -Contain 'vcRedistX86'
             Should -Invoke Get-SetupCmArtifact -Times 4 -Exactly
         }
+
+        It 'uses the source key as the name when the source lacks a name field' {
+            $config = @{
+                cacheRoot = $TestDrive
+                evidenceRoot = $TestDrive
+                sources = @{
+                    sqlServer = @{ cacheFile = 'sql.iso'; sha256 = ('0' * 64); licenseAccepted = $true }
+                }
+            }
+            Mock Read-SetupCmConfig { $config }
+            Mock New-SetupCmRunEvidence { $TestDrive }
+            Mock Get-SetupCmArtifact {
+                [pscustomobject]@{ Name = $Source.name; Path = 'cached'; Sha256 = 'hash' }
+            }
+
+            $result = @(Invoke-SetupCmAcquire -ConfigPath 'lab.yaml')
+
+            $result | Should -HaveCount 1
+            $result[0].Name | Should -Be 'sqlServer'
+        }
     }
 }
 

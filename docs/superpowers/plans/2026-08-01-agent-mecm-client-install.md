@@ -144,11 +144,11 @@ git commit -m "feat: add MECM client installation stage"
 ```powershell
 It 'requires a discovered active client record for the selected site' {
     Test-SetupCmClientRegistration -SiteCode LAB -ComputerName RING0IVY24-01 `
-        -SqlQuery { 'RING0IVY24-01|1|LAB' } | Should -BeTrue
+        -SqlQuery { 'RING0IVY24-01|1|1|LAB' } | Should -BeTrue
 }
 ```
 
-Add a second case returning `RING0IVY24-01|0|LAB` and assert `False`.
+Add a second case returning `RING0IVY24-01|1|0|LAB` and assert `False`.
 
 - [x] **Step 2: Run the test and confirm it fails**
 

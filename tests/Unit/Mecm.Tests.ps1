@@ -107,7 +107,7 @@ Describe 'Install-SetupCmMecmVcRedist' {
             Mock Get-SetupCmArtifact {
                 [pscustomobject]@{ Path = 'C:\SetupCm\cache\vc_redist.x64.exe' }
             }
-            Mock Start-Process { [pscustomobject]@{ ExitCode = 3010 } }
+            Mock Start-Process { [pscustomobject]@{ ExitCode = 0 } }
 
             Install-SetupCmMecmVcRedist -Source @{ name = 'vcRedistX64'; licenseAccepted = $true } -CacheRoot 'C:\SetupCm\cache' -EvidenceRoot $TestDrive
 
@@ -118,6 +118,17 @@ Describe 'Install-SetupCmMecmVcRedist' {
                 $ArgumentList -contains '/quiet' -and
                 $ArgumentList -contains '/norestart'
             }
+        }
+
+        It 'rejects exit code 3010 and requires a restart before continuing' {
+            $script:IsWindows = $true
+            Mock Get-SetupCmArtifact {
+                [pscustomobject]@{ Path = 'C:\SetupCm\cache\vc_redist.x64.exe' }
+            }
+            Mock Start-Process { [pscustomobject]@{ ExitCode = 3010 } }
+
+            { Install-SetupCmMecmVcRedist -Source @{ name = 'vcRedistX64'; licenseAccepted = $true } -CacheRoot 'C:\SetupCm\cache' -EvidenceRoot $TestDrive } |
+                Should -Throw '*restart before MECM setup can continue*'
         }
     }
 }
@@ -253,6 +264,33 @@ Describe 'MECM stage prerequisites' {
             }
             Should -Invoke Get-SetupCmMecmPrerequisites -Times 1 -Exactly
             $callOrder | Should -Be @('vcRedistX64', 'vcRedistX86', 'prerequisiteDownload')
+        }
+
+        It 'does not download MECM prerequisites after a VC++ restart-required exit' {
+            $config = @{
+                cacheRoot = 'C:\SetupCm\cache'
+                evidenceRoot = $TestDrive
+                mecm = @{ prerequisitePath = 'C:\SetupCm\prereqs' }
+                sources = @{
+                    mecm = @{ name = 'mecm' }
+                    vcRedistX64 = @{ name = 'vcRedistX64'; licenseAccepted = $true }
+                    vcRedistX86 = @{ name = 'vcRedistX86'; licenseAccepted = $true }
+                }
+            }
+            Mock Read-SetupCmConfig { $config }
+            Mock New-SetupCmRunEvidence { $TestDrive }
+            Mock Invoke-SetupCmStage {
+                param($Name, $Test, $Apply, $Verify, $EvidenceRoot)
+                & $Apply
+            }
+            Mock Get-SetupCmArtifact { [pscustomobject]@{ Path = 'C:\SetupCm\cache\mecm.iso' } }
+            Mock Test-SetupCmMecmVcRedistArchitecture { 'NotCompliant' }
+            Mock Install-SetupCmMecmVcRedist { throw 'Microsoft Visual C++ Redistributable installation requires a restart before MECM setup can continue (exit code 3010).' }
+            Mock Get-SetupCmMecmPrerequisites {}
+
+            { Invoke-SetupCm -ConfigPath 'lab.yaml' -Mode Unattended -Stage Mecm } | Should -Throw '*restart before MECM setup can continue*'
+
+            Should -Invoke Get-SetupCmMecmPrerequisites -Times 0 -Exactly
         }
     }
 }

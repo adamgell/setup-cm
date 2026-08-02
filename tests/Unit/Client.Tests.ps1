@@ -138,10 +138,32 @@ Describe 'Invoke-SetupCmClient' {
             Mock New-SetupCmRunEvidence { $TestDrive }
             Mock Test-SetupCmClientInstallation { 'Compliant' }
             Mock Install-SetupCmClient {}
+            Mock Get-SetupCmClientEvidence {
+                [pscustomobject]@{ siteCode = 'LAB'; managementPointFqdn = 'LABZ1-CM01.test.gell.one'; logs = @() }
+            }
 
             Invoke-SetupCmClient -ManifestPath $manifestPath | Out-Null
 
             Should -Invoke Install-SetupCmClient -Times 0 -Exactly
+        }
+
+        It 'writes client-install evidence even when the target is already compliant' {
+            $manifestPath = Join-Path $TestDrive 'compliant-manifest.json'
+            @{ siteCode = 'LAB'; managementPointFqdn = 'LABZ1-CM01.test.gell.one'; evidenceRoot = $TestDrive } |
+                ConvertTo-Json | Set-Content -LiteralPath $manifestPath -Encoding utf8
+            Mock New-SetupCmRunEvidence { $TestDrive }
+            Mock Test-SetupCmClientInstallation { 'Compliant' }
+            Mock Install-SetupCmClient {}
+            Mock Get-SetupCmClientEvidence {
+                [pscustomobject]@{ siteCode = 'LAB'; managementPointFqdn = 'LABZ1-CM01.test.gell.one'; logs = @() }
+            }
+            Mock Write-SetupCmEvidenceJson {}
+
+            Invoke-SetupCmClient -ManifestPath $manifestPath | Out-Null
+
+            Should -Invoke Write-SetupCmEvidenceJson -Times 1 -Exactly -ParameterFilter {
+                $Name -eq 'client-install'
+            }
         }
     }
 }
