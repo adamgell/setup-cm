@@ -12,7 +12,7 @@ Use this runbook only after a provisioning layer has created an isolated, domain
 
 2. Copy `config/lab.example.yaml` to the ignored `config/lab.local.yaml`.
 3. Replace every placeholder source, checksum, version, host name, domain, directory, and license acknowledgement with the isolated-lab values.
-4. Put SQL Server and MECM media in the configured cache or an approved private vault when they cannot be retrieved directly. Confirm that the ADK, Windows PE add-on, and ODBC Driver 18 sources are available for the MECM stage.
+4. Put SQL Server and MECM media in the configured cache or an approved private vault when they cannot be retrieved directly. Confirm that the ADK source with Deployment Tools and USMT, the matching Windows PE add-on, ODBC Driver 18, and the Microsoft Visual C++ v14 Redistributables for both x64 and x86 are available for the MECM stage. The Agent verifies and installs both runtime architectures before MECM downloads prerequisites.
 5. Confirm there is sufficient space at the configured cache, evidence, SQL, MECM, and prerequisite paths.
 
 Do not place product keys, credentials, certificates, or installer media in the repository.

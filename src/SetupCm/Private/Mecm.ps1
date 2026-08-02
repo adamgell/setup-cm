@@ -79,6 +79,49 @@ function Test-SetupCmMecmOdbcDriver18 {
     return 'NotCompliant'
 }
 
+function Test-SetupCmMecmVcRedistArchitecture {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateSet('x64', 'x86')][string]$Architecture,
+        [scriptblock]$RegistryProvider = {
+            param($Architecture)
+            Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\$Architecture" -ErrorAction SilentlyContinue
+        }
+    )
+
+    $runtime = & $RegistryProvider $Architecture
+    if ($null -eq $runtime) { return 'NotCompliant' }
+
+    try {
+        if ([int]$runtime.Installed -ne 1) { return 'NotCompliant' }
+        $version = [version](([string]$runtime.Version).TrimStart('v'))
+    }
+    catch {
+        return 'NotCompliant'
+    }
+
+    if ($version -lt [version]'14.34') { return 'NotCompliant' }
+    return 'Compliant'
+}
+
+function Test-SetupCmMecmVcRedist {
+    [CmdletBinding()]
+    param(
+        [scriptblock]$RegistryProvider = {
+            param($Architecture)
+            Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\$Architecture" -ErrorAction SilentlyContinue
+        }
+    )
+
+    foreach ($architecture in 'x64', 'x86') {
+        if ((Test-SetupCmMecmVcRedistArchitecture -Architecture $architecture -RegistryProvider $RegistryProvider) -ne 'Compliant') {
+            return 'NotCompliant'
+        }
+    }
+
+    return 'Compliant'
+}
+
 function Test-SetupCmMecmAdk {
     [CmdletBinding()]
     param(
@@ -130,6 +173,22 @@ function Install-SetupCmMecmOdbcDriver18 {
     ) -Wait -PassThru -NoNewWindow
     if ($process.ExitCode -notin 0, 3010) {
         throw "MECM ODBC Driver installation failed with exit code $($process.ExitCode)."
+    }
+}
+
+function Install-SetupCmMecmVcRedist {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][hashtable]$Source,
+        [Parameter(Mandatory)][string]$CacheRoot,
+        [Parameter(Mandatory)][string]$EvidenceRoot
+    )
+
+    if (-not $IsWindows) { throw 'Microsoft Visual C++ Redistributable installation can only run on Windows Server.' }
+    $artifact = Get-SetupCmArtifact -Source $Source -CacheRoot $CacheRoot -EvidenceRoot $EvidenceRoot
+    $process = Start-Process -FilePath $artifact.Path -ArgumentList @('/install', '/quiet', '/norestart') -Wait -PassThru -NoNewWindow
+    if ($process.ExitCode -notin 0, 3010) {
+        throw "Microsoft Visual C++ Redistributable installation failed with exit code $($process.ExitCode)."
     }
 }
 

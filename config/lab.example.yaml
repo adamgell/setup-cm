@@ -46,6 +46,20 @@ sources:
     version: REPLACE_WITH_VERSION
     licenseAccepted: false
     cacheFile: msodbcsql18-x64.msi
+  vcRedistX64:
+    uri: https://aka.ms/vc14/vc_redist.x64.exe
+    sha256: REPLACE_WITH_SHA256
+    publisher: Microsoft Corporation
+    version: REPLACE_WITH_VERSION
+    licenseAccepted: false
+    cacheFile: vc_redist.x64.exe
+  vcRedistX86:
+    uri: https://aka.ms/vc14/vc_redist.x86.exe
+    sha256: REPLACE_WITH_SHA256
+    publisher: Microsoft Corporation
+    version: REPLACE_WITH_VERSION
+    licenseAccepted: false
+    cacheFile: vc_redist.x86.exe
   prerequisites: []
 sql:
   instanceName: MSSQLSERVER

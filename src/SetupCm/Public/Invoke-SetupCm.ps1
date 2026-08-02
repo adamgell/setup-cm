@@ -34,6 +34,22 @@ function Invoke-SetupCm {
             }
             'Mecm' {
                 Invoke-SetupCmStage -Name Mecm -EvidenceRoot $evidenceRoot -Test { 'NotCompliant' } -Apply {
+                    $vcRedistSources = @{ x64 = 'vcRedistX64'; x86 = 'vcRedistX86' }
+                    foreach ($architecture in 'x64', 'x86') {
+                        $sourceName = $vcRedistSources[$architecture]
+                        if (-not $config.sources.ContainsKey($sourceName)) {
+                            throw "sources.$sourceName is required before MECM prerequisite download."
+                        }
+                    }
+                    foreach ($architecture in 'x64', 'x86') {
+                        $sourceName = $vcRedistSources[$architecture]
+                        if ((Test-SetupCmMecmVcRedistArchitecture -Architecture $architecture) -ne 'Compliant') {
+                            Install-SetupCmMecmVcRedist -Source $config.sources[$sourceName] -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
+                        }
+                    }
+                    if ((Test-SetupCmMecmVcRedist) -ne 'Compliant') {
+                        throw 'Microsoft Visual C++ Redistributable x64 and x86 version 14.34 or later are required before MECM prerequisite download.'
+                    }
                     $media = Get-SetupCmArtifact -Source $config.sources.mecm -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
                     if (-not $config.sources.ContainsKey('adk')) {
                         throw 'sources.adk is required before MECM installation.'
