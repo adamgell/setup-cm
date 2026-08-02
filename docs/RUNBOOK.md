@@ -1,29 +1,80 @@
-# SetupCm Runbook
+# SetupCm runbook
 
-## Prepare
+Use this runbook only after a provisioning layer has created an isolated, domain-joined Windows Server and a separate test client. Read the [project overview](../README.md) and [configuration reference](CONFIGURATION.md) first.
 
-1. Copy `config/lab.example.yaml` to ignored `config/lab.local.yaml`.
-2. Set every installer source, SHA-256, version, and license acknowledgement. MECM requires the approved Windows ADK source with Deployment Tools and USMT, plus the matching Windows PE add-on.
-3. Put hard-to-find media in the configured private vault or cache.
+## Prepare the lab
+
+1. Install PowerShell 7 and the `powershell-yaml` module on the server:
+
+   ```powershell
+   Install-Module powershell-yaml -RequiredVersion 0.4.12 -Scope CurrentUser
+   ```
+
+2. Copy `config/lab.example.yaml` to the ignored `config/lab.local.yaml`.
+3. Replace every placeholder source, checksum, version, host name, domain, directory, and license acknowledgement with the isolated-lab values.
+4. Put SQL Server and MECM media in the configured cache or an approved private vault when they cannot be retrieved directly. Confirm that the ADK, Windows PE add-on, and ODBC Driver 18 sources are available for the MECM stage.
+5. Confirm there is sufficient space at the configured cache, evidence, SQL, MECM, and prerequisite paths.
+
+Do not place product keys, credentials, certificates, or installer media in the repository.
+
+## Run preflight
+
+```powershell
+Import-Module ./src/SetupCm/SetupCm.psd1 -Force
+Test-SetupCmPreflight -ConfigPath ./config/lab.local.yaml
+```
+
+Continue only when `Ready` is `True`. Resolve the names in `Missing` by accepting the relevant license or supplying a source, vault location, or cached file.
 
 ## Guided run
 
+Guided mode pauses between stages so the operator can inspect progress:
+
 ```powershell
-pwsh ./src/SetupCm/Public/Invoke-SetupCm.ps1 -ConfigPath ./config/lab.local.yaml -Mode Guided
+pwsh ./src/SetupCm/Public/Invoke-SetupCm.ps1 `
+  -ConfigPath ./config/lab.local.yaml `
+  -Mode Guided
 ```
 
-## Unattended Autopilot Agent run
+The default order is `Acquire`, `Sql`, `Mecm`, then `Health`.
 
-Set `SETUPCM_CONFIG` to the staged lab configuration, then run:
+## Unattended agent run
+
+Stage the source bundle and a non-template local configuration on the server. Set `SETUPCM_CONFIG` to the configuration path, then run:
 
 ```powershell
+$env:SETUPCM_CONFIG = 'C:\Path\To\lab.local.yaml'
 pwsh ./scripts/Invoke-SetupCm.ps1
 ```
 
-## Reset and resume
+The wrapper runs in unattended mode by default. To run a subset, pass `-Stage Acquire`, `-Stage Sql`, `-Stage Mecm`, or `-Stage Health`.
 
-Reset the VM through ProxmoxVEAutopilot. For a failed stage, inspect `artifacts/<run-id>/stage-<name>.json`, correct the named prerequisite, and rerun that stage using `-Stage <name>`.
+## Inspect evidence and recover
 
-## Modules
+Each execution creates a new directory under `evidenceRoot`. It contains `stage-<name>.json` for every selected stage. A result has one of these states:
 
-Run the core health stage successfully before enabling future co-management, Patch My PC, reporting, or diagnostic modules.
+| State | Meaning |
+| --- | --- |
+| `Succeeded` | The stage applied its work and its verification passed. |
+| `Skipped` | The stage test found the target already compliant. |
+| `Failed` | The stage stopped; its message identifies the immediate error. |
+
+For a failed stage:
+
+1. Preserve the evidence directory and review the failed `stage-<name>.json`.
+2. Correct the stated prerequisite, source, configuration, or host condition.
+3. Rerun the failed stage and any later dependent stages:
+
+   ```powershell
+   pwsh ./src/SetupCm/Public/Invoke-SetupCm.ps1 `
+     -ConfigPath ./config/lab.local.yaml `
+     -Stage Sql,Mecm,Health
+   ```
+
+4. Reset the VM through the provisioning layer when the installation is ambiguous or cannot be safely resumed. Do not assume a partial MECM installation is recoverable.
+
+## Validate and extend
+
+Keep the evidence from the first successful `Health` run. It is the baseline proof that SQL, site roles, boundaries, the test client, and expected logs are healthy.
+
+Run the core health stage successfully before enabling future co-management, Patch My PC, reporting, or diagnostic modules. These capabilities are not part of the current baseline.
