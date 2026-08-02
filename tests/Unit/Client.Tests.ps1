@@ -84,6 +84,17 @@ Describe 'Install-SetupCmClient' {
 
 Describe 'Get-SetupCmClientEvidence' {
     InModuleScope SetupCm {
+        It 'records an empty log tail without failing evidence collection' {
+            $manifest = @{ siteCode = 'LAB'; managementPointFqdn = 'LABZ1-CM01.test.gell.one'; evidenceRoot = 'C:\ProgramData\SetupCm\artifacts' }
+
+            $evidence = Get-SetupCmClientEvidence -Manifest $manifest -ContentProvider {
+                param($Path)
+                ''
+            }
+
+            $evidence.logs | ForEach-Object { $_.tail | Should -Be '' }
+        }
+
         It 'redacts credential-like values from client log tails' {
             $manifest = @{ siteCode = 'LAB'; managementPointFqdn = 'LABZ1-CM01.test.gell.one'; evidenceRoot = 'C:\ProgramData\SetupCm\artifacts' }
 

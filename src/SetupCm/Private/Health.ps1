@@ -63,7 +63,7 @@ ORDER BY sys.Active0 DESC, sys.Client0 DESC;
 
 function ConvertTo-SetupCmSanitizedFixtureContent {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$Content)
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Content)
 
     [regex]::Replace($Content, '(?im)(\b(?:password|pwd)\s*=\s*)[^;\r\n\s]+', '$1<redacted>')
 }
