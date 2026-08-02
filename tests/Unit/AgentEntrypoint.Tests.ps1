@@ -10,6 +10,7 @@ Describe 'Autopilot Agent entry point' {
         $parameterNames | Should -Contain 'ConfigPath'
         $parameterNames | Should -Contain 'Mode'
         $parameterNames | Should -Contain 'Stage'
+        $ast.Extent.Text | Should -Match '\$ErrorActionPreference\s*=\s*''Stop'''
         $ast.Extent.Text | Should -Match 'Invoke-SetupCm.*-ConfigPath.*\$ConfigPath.*-Mode.*\$Mode.*-Stage.*\$Stage'
     }
 }

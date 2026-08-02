@@ -9,6 +9,8 @@ param(
     [string[]]$Stage
 )
 
+$ErrorActionPreference = 'Stop'
+
 if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
     throw 'SETUPCM_CONFIG must contain the path to a lab YAML configuration.'
 }
