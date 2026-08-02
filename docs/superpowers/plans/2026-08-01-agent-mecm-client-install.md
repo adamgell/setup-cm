@@ -1,6 +1,8 @@
 # Agent-driven MECM Client Installation Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> **Status (2026-08-02):** Tasks 1–4 are complete and committed on this branch. Tasks 3 and 4 were already implemented upstream in ProxmoxVEAutopilot `origin/main`; this branch contains the server-side Setup-CM work only. Task 5 needs revision before execution.
 
 **Goal:** Install and verify the Configuration Manager client on `RING0IVY24-01` through a signed, typed Autopilot Agent work item.
 
@@ -51,7 +53,7 @@
 - Produces: `Invoke-SetupCmClient -ManifestPath $manifestPath` and `stage-Client.json` evidence.
 - Depends on: `Invoke-SetupCmStage` and `Write-SetupCmEvidenceJson`.
 
-- [ ] **Step 1: Write failing Pester tests for the manifest boundary**
+- [x] **Step 1: Write failing Pester tests for the manifest boundary**
 
 ```powershell
 Describe 'Read-SetupCmClientManifest' {
@@ -68,13 +70,13 @@ Describe 'Read-SetupCmClientManifest' {
 }
 ```
 
-- [ ] **Step 2: Run the focused test and confirm it fails because the function is missing**
+- [x] **Step 2: Run the focused test and confirm it fails because the function is missing**
 
 Run: `pwsh -NoProfile -Command "Invoke-Pester ./tests/Unit/Client.Tests.ps1 -Output Detailed"`
 
 Expected: FAIL referencing `Read-SetupCmClientManifest`.
 
-- [ ] **Step 3: Implement the minimal client stage**
+- [x] **Step 3: Implement the minimal client stage**
 
 Create `Client.ps1` with these public/private contracts:
 
@@ -99,7 +101,7 @@ Create `Invoke-SetupCmClient.ps1` so it creates an evidence run and calls
 functions. Create the script entry point with `-ManifestPath`, import the
 module, and call `Invoke-SetupCmClient`.
 
-- [ ] **Step 4: Complete the Pester contract and make it pass**
+- [x] **Step 4: Complete the Pester contract and make it pass**
 
 Add tests that inject file/service/registry/process providers and prove:
 
@@ -116,7 +118,7 @@ Run: `pwsh -NoProfile -Command "Invoke-Pester ./tests/Unit/Client.Tests.ps1 -Out
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the Setup-CM client stage**
+- [x] **Step 5: Commit the Setup-CM client stage**
 
 ```bash
 git add src/SetupCm/Private/Client.ps1 src/SetupCm/Public/Invoke-SetupCmClient.ps1 \
@@ -137,7 +139,7 @@ git commit -m "feat: add MECM client installation stage"
 - Produces: `Test-SetupCmClientRegistration` returning a Boolean and a health
   artifact that distinguishes installed-local from discovered-server state.
 
-- [ ] **Step 1: Write the failing health test**
+- [x] **Step 1: Write the failing health test**
 
 ```powershell
 It 'requires a discovered active client record for the selected site' {
@@ -148,13 +150,13 @@ It 'requires a discovered active client record for the selected site' {
 
 Add a second case returning `RING0IVY24-01|0|LAB` and assert `False`.
 
-- [ ] **Step 2: Run the test and confirm it fails**
+- [x] **Step 2: Run the test and confirm it fails**
 
 Run: `pwsh -NoProfile -Command "Invoke-Pester ./tests/Unit/Health.Tests.ps1 -Output Detailed"`
 
 Expected: FAIL referencing `Test-SetupCmClientRegistration`.
 
-- [ ] **Step 3: Implement the registration query and wire it into health**
+- [x] **Step 3: Implement the registration query and wire it into health**
 
 Implement `Test-SetupCmClientRegistration` with an injectable query provider.
 The production provider runs `sqlcmd` against `CM_<siteCode>` and queries the
@@ -162,20 +164,24 @@ ConfigMgr client-discovery view for the exact computer name, active status,
 and `LAB` site code. Add the server registration result to
 `Test-SetupCmLabHealth`; retain SQL, MP, DP, and local client checks.
 
-- [ ] **Step 4: Run the focused Pester suite**
+- [x] **Step 4: Run the focused Pester suite**
 
 Run: `pwsh -NoProfile -Command "Invoke-Pester ./tests/Unit/Health.Tests.ps1 -Output Detailed"`
 
 Expected: PASS with both registration states covered.
 
-- [ ] **Step 5: Commit the server registration gate**
+- [x] **Step 5: Commit the server registration gate**
 
 ```bash
 git add src/SetupCm/Private/Health.ps1 tests/Unit/Health.Tests.ps1
 git commit -m "feat: verify MECM client server registration"
 ```
 
-## Task 3: Typed Autopilot Agent client work
+## Task 3: Typed Autopilot Agent client work (done upstream)
+
+> This work was already released in ProxmoxVEAutopilot `origin/main` (VERSION `2026.08.16`).
+> The upstream implementation differs from the plan below; see the deviation table in `docs/HANDOFF-2026-08-02-agent-mecm-client-install.md`.
+> The checkboxes are marked complete because the capability is delivered upstream, not because this branch implements it.
 
 **Files:**
 
@@ -189,7 +195,7 @@ git commit -m "feat: verify MECM client server registration"
 - Produces: `client-manifest.json` under the SHA-derived Agent work root and
   a completed work item with bounded output.
 
-- [ ] **Step 1: Add failing C# contract assertions**
+- [x] **Step 1: Add failing C# contract assertions**
 
 ```csharp
 Assert(SetupCmWorkService.SupportedKinds.Contains("setup_cm_client_install"),
@@ -202,13 +208,13 @@ AssertThrows<InvalidOperationException>(
 Cover unknown request fields, a four-character site code, `server.example.com`,
 an archive outside approved roots, and a malformed SHA-256.
 
-- [ ] **Step 2: Run the contract test and confirm it fails**
+- [x] **Step 2: Run the contract test and confirm it fails**
 
 Run: `dotnet run --project autopilot-agent/tests/AutopilotAgent.ContractTests/AutopilotAgent.ContractTests.csproj`
 
 Expected: FAIL because `setup_cm_client_install` is unsupported.
 
-- [ ] **Step 3: Implement a separate typed request path**
+- [x] **Step 3: Implement a separate typed request path**
 
 Add `setup_cm_client_install` to `SupportedKinds`. Keep existing request
 validation unchanged for server stages. Add a client request record that
@@ -218,14 +224,14 @@ Do not add an arbitrary command, UNC path, or server YAML field. Keep the
 archive copy, SHA validation, extraction validation, three-hour timeout, and
 256 KiB output limit shared with current Setup-CM work.
 
-- [ ] **Step 4: Run the contract test and make it pass**
+- [x] **Step 4: Run the contract test and make it pass**
 
 Run: `dotnet run --project autopilot-agent/tests/AutopilotAgent.ContractTests/AutopilotAgent.ContractTests.csproj`
 
 Expected: PASS, including all rejection cases and a manifest containing only
 the non-secret client fields.
 
-- [ ] **Step 5: Commit the Agent contract**
+- [x] **Step 5: Commit the Agent contract**
 
 ```bash
 git -C ../ProxmoxVEAutopilot add autopilot-agent/src/AutopilotAgent/SetupCmWorkService.cs \
@@ -233,7 +239,10 @@ git -C ../ProxmoxVEAutopilot add autopilot-agent/src/AutopilotAgent/SetupCmWorkS
 git -C ../ProxmoxVEAutopilot commit -m "feat: add typed MECM client Agent work"
 ```
 
-## Task 4: Controller queue endpoint
+## Task 4: Controller queue endpoint (done upstream)
+
+> This work was already released in ProxmoxVEAutopilot `origin/main` (VERSION `2026.08.16`).
+> See the upstream deviation table in `docs/HANDOFF-2026-08-02-agent-mecm-client-install.md`.
 
 **Files:**
 
@@ -246,7 +255,7 @@ git -C ../ProxmoxVEAutopilot commit -m "feat: add typed MECM client Agent work"
 - Produces: a `202` `setup_cm_client_install` work item with a fully typed,
   sanitized request body.
 
-- [ ] **Step 1: Add failing pytest endpoint tests**
+- [x] **Step 1: Add failing pytest endpoint tests**
 
 ```python
 response = agent_client.post(
@@ -266,13 +275,13 @@ assert response.json()["kind"] == "setup_cm_client_install"
 Add `422` tests for `LABZ1-CM01.example.com`, `LABZ`, a `product_key` field,
 an unapproved archive path, and a malformed SHA-256.
 
-- [ ] **Step 2: Run the focused pytest case and confirm it fails**
+- [x] **Step 2: Run the focused pytest case and confirm it fails**
 
 Run: `pytest -q autopilot-proxmox/tests/test_agent_v1_endpoints.py -k client_install`
 
 Expected: FAIL because the route and model do not exist.
 
-- [ ] **Step 3: Implement `SetupCmClientInstallBody` and the queue route**
+- [x] **Step 3: Implement `SetupCmClientInstallBody` and the queue route**
 
 Use Pydantic `extra="forbid"`. Validate `site_code` with
 `^[A-Z0-9]{3}$`, validate the FQDN suffix exactly as `.test.gell.one`, and
@@ -280,13 +289,13 @@ reuse `_is_inside` plus the existing approved archive roots. Create the work
 item with kind `setup_cm_client_install`; never persist a complete server
 configuration or secret.
 
-- [ ] **Step 4: Run focused and neighboring endpoint tests**
+- [x] **Step 4: Run focused and neighboring endpoint tests**
 
 Run: `pytest -q autopilot-proxmox/tests/test_agent_v1_endpoints.py -k "client_install or setup_cm_queue"`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the controller contract**
+- [x] **Step 5: Commit the controller contract**
 
 ```bash
 git -C ../ProxmoxVEAutopilot add autopilot-proxmox/web/setup_cm_endpoints.py \
@@ -327,20 +336,21 @@ Run CodeRabbit against the committed diffs. For each finding, verify it
 against the typed request and secret-handling contracts before changing code;
 rerun the affected test after every accepted correction.
 
-- [ ] **Step 3: Build, sign, and publish Agent version `2026.8.3`**
+- [ ] **Step 3: Confirm the deployed Agent supports the client work kind**
 
-Use the existing build-host work path and
-`autopilot-agent/scripts/Build-AutopilotAgent.ps1 -Version 2026.8.3`.
-Verify Authenticode signature and SHA-256 before publishing through the
-existing artifact publication flow. Do not print the signing identity,
-certificate material, or update token.
+Agent version `2026.8.3` was the planned target, but ProxmoxVEAutopilot
+`origin/main` already released VERSION `2026.08.16` with the client work kind.
+There is probably nothing to build. Verify the released MSI contains
+`setup_cm_client_install`, or use the current release version in the next step.
+The signed MSI build requires a Windows host; WiX cannot build MSIs on macOS.
 
 - [ ] **Step 4: Verify the target Agent self-update before queueing work**
 
-Wait for `agent-ring0ivy24-01` heartbeat telemetry to report version
-`2026.8.3` and capability `setup_cm_client_install`. If the heartbeat does
-not update, use the existing per-agent update/restart workflow; do not use
-WinRM or an arbitrary remote script.
+Wait for `agent-ring0ivy24-01` heartbeat telemetry to report the current
+Agent version and capability `setup_cm_client_install`. Do not target the
+stale `2026.8.3` version. If the heartbeat does not update, use the existing
+per-agent update/restart workflow; do not use WinRM or an arbitrary remote
+script.
 
 - [ ] **Step 5: Queue and verify the client install**
 
