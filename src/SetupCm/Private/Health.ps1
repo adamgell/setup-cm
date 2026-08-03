@@ -18,7 +18,7 @@ function Test-SetupCmLabHealth {
         }
     }
     $results = [ordered]@{}
-    foreach ($name in $Checks.Keys) { $results[$name] = [bool](& $Checks[$name]) }
+    foreach ($name in ($Checks.Keys | Sort-Object)) { $results[$name] = [bool](& $Checks[$name]) }
     Write-SetupCmEvidenceJson -EvidenceRoot $EvidenceRoot -Name 'health' -Value $results | Out-Null
     if ($results.Values -contains $false) { return 'NotCompliant' }
     'Compliant'

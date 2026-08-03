@@ -24,7 +24,8 @@ function Assert-SetupCmClientManifest {
         throw 'siteCode must be exactly three uppercase letters or numbers.'
     }
     if ([string]::IsNullOrWhiteSpace($Manifest.managementPointFqdn) -or
-        -not $Manifest.managementPointFqdn.EndsWith('.test.gell.one', [System.StringComparison]::OrdinalIgnoreCase)) {
+        -not $Manifest.managementPointFqdn.EndsWith('.test.gell.one', [System.StringComparison]::OrdinalIgnoreCase) -or
+        $Manifest.managementPointFqdn -match '[/\\]') {
         throw 'managementPointFqdn must be within test.gell.one.'
     }
     if ([string]::IsNullOrWhiteSpace($Manifest.evidenceRoot)) {
@@ -107,8 +108,9 @@ function Install-SetupCmClient {
     $arguments = @("/mp:$($Manifest.managementPointFqdn)", "SMSSITECODE=$($Manifest.siteCode)")
     $result = & $ProcessProvider $installerPath $arguments
     if ($null -eq $result -or $result.ExitCode -notin 0, 3010) {
+        $exitCode = if ($null -eq $result) { 'null' } else { [string]$result.ExitCode }
         $output = if ($null -eq $result) { '' } else { [string]$result.Output }
-        throw "ccmsetup.exe failed with exit code $($result.ExitCode): $(ConvertTo-SetupCmSanitizedFixtureContent -Content $output)"
+        throw "ccmsetup.exe failed with exit code ${exitCode}: $(ConvertTo-SetupCmSanitizedFixtureContent -Content $output)"
     }
     [pscustomobject]@{ installerPath = $installerPath; arguments = $arguments; exitCode = $result.ExitCode }
 }
