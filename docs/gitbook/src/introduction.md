@@ -1,5 +1,8 @@
 # Introduction
 
+> **Work in Progress**
+> This documentation is actively being developed alongside `setup-cm`. Content may be incomplete, outdated, or change without notice. Verify critical commands and procedures against the repository source.
+
 `setup-cm` automates a repeatable, evidence-backed Microsoft Configuration Manager (MECM, formerly SCCM) primary-site deployment for an **isolated lab**.
 
 It installs and validates a single Windows Server that hosts SQL Server, a MECM primary site, Management Point, and Distribution Point. The baseline also verifies that a dedicated test client can use the site.

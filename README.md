@@ -1,6 +1,7 @@
 # setup-cm
 
-work in progress 
+> **Work in Progress**
+> This repository and its documentation are under active development. Features, commands, and procedures may change. Verify against the latest source before relying on specific behavior.
 
 `setup-cm` automates a repeatable, evidence-backed Microsoft Configuration Manager (MECM, formerly SCCM) primary-site deployment for an **isolated lab**.
 
