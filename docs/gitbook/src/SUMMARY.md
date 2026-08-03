@@ -30,6 +30,13 @@
 - [Configuration Schema](./reference/configuration-schema.md)
 - [Evidence Format](./reference/evidence-format.md)
 
+# How Adam Got This to Work
+
+- [The ProxmoxVEAutopilot Journey](./how-adam-got-this-to-work/proxmoxveautopilot-journey.md)
+- [Building the Autopilot Agent](./how-adam-got-this-to-work/building-autopilot-agent.md)
+- [Two Execution Models](./how-adam-got-this-to-work/two-execution-models.md)
+- [Platform Support Roadmap](./how-adam-got-this-to-work/platform-support.md)
+
 # Development
 
 - [Design Documents](./development/design-documents.md)
