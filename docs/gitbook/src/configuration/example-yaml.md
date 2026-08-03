@@ -1,0 +1,94 @@
+# lab.example.yaml Annotated
+
+The committed `config/lab.example.yaml` is a complete, safe template. Every value that must be replaced is marked `REPLACE_WITH_*` or uses a placeholder URL.
+
+```yaml
+topology: single-box
+template: true
+lab:
+  name: labz1
+  domain: test.gell.one
+safety:
+  isolatedLab: true
+  allowProductionTarget: false
+evidenceRoot: C:\ProgramData\SetupCm\artifacts
+cacheRoot: C:\ProgramData\SetupCm\cache
+sources:
+  sqlServer:
+    uri: https://installer-vault.example.invalid/sql-server.iso
+    sha256: REPLACE_WITH_SHA256
+    publisher: Microsoft Corporation
+    signatureRelativePath: setup.exe
+    version: REPLACE_WITH_VERSION
+    licenseAccepted: false
+    cacheFile: sql-server.iso
+  mecm:
+    uri: https://installer-vault.example.invalid/mecm.iso
+    sha256: REPLACE_WITH_SHA256
+    publisher: Microsoft Corporation
+    signatureRelativePath: SMSSETUP\BIN\X64\setup.exe
+    version: REPLACE_WITH_VERSION
+    licenseAccepted: false
+    cacheFile: mecm.iso
+  adk:
+    uri: https://go.microsoft.com/fwlink/?linkid=2289980
+    sha256: REPLACE_WITH_SHA256
+    publisher: Microsoft Corporation
+    version: 10.1.26100.2454
+    licenseAccepted: false
+    cacheFile: adksetup.exe
+  adkWinPe:
+    uri: https://go.microsoft.com/fwlink/?linkid=2289981
+    sha256: REPLACE_WITH_SHA256
+    publisher: Microsoft Corporation
+    version: 10.1.26100.2454
+    licenseAccepted: false
+    cacheFile: adkwinpesetup.exe
+  odbcDriver18:
+    uri: https://installer-vault.example.invalid/msodbcsql18-x64.msi
+    sha256: REPLACE_WITH_SHA256
+    publisher: Microsoft Corporation
+    version: REPLACE_WITH_VERSION
+    licenseAccepted: false
+    cacheFile: msodbcsql18-x64.msi
+  vcRedistX64:
+    uri: https://aka.ms/vc14/vc_redist.x64.exe
+    sha256: REPLACE_WITH_SHA256
+    publisher: Microsoft Corporation
+    version: REPLACE_WITH_VERSION
+    licenseAccepted: false
+    cacheFile: vc_redist.x64.exe
+  vcRedistX86:
+    uri: https://aka.ms/vc14/vc_redist.x86.exe
+    sha256: REPLACE_WITH_SHA256
+    publisher: Microsoft Corporation
+    version: REPLACE_WITH_VERSION
+    licenseAccepted: false
+    cacheFile: vc_redist.x86.exe
+  prerequisites: []
+sql:
+  instanceName: MSSQLSERVER
+  serviceAccount: CONTOSO\svc_sql
+  sysAdminAccounts:
+    - CONTOSO\CMSetupAdmins
+  installDirectory: D:\SQL
+mecm:
+  siteCode: LAB
+  siteName: Lab Primary
+  sqlServer: LABZ1-CM01.test.gell.one
+  siteServerFqdn: LABZ1-CM01.test.gell.one
+  productId: Eval
+  smsInstallDir: D:\ConfigMgr
+  prerequisitePath: D:\Sources\Redist
+testClient:
+  name: LABZ1-CMCLIENT01
+  domain: test.gell.one
+```
+
+## Key annotations
+
+- `template: true` — keeps the committed example valid even with placeholders. Set to `false` or remove in a real configuration.
+- `safety.isolatedLab: true` — required for the intended lab use case.
+- `licenseAccepted: false` — you must explicitly set this to `true` after accepting the license terms for each installer.
+- `REPLACE_WITH_SHA256` / `REPLACE_WITH_VERSION` — must be replaced with the actual SHA-256 checksum and version of your approved media.
+- `evidenceRoot` and `cacheRoot` — should be on local, adequately sized storage outside the repository.

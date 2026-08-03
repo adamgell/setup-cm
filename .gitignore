@@ -11,3 +11,4 @@ cache/
 *.pem
 lab.local.yaml
 secrets/
+docs/gitbook/book/
