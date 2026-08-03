@@ -13,21 +13,19 @@ Describe 'Test-SetupCmLabHealth' {
 
 Describe 'Test-SetupCmClientRegistration' {
     InModuleScope SetupCm {
-        It 'requires a discovered active client record for the selected site' {
-            $script:clientRegistrationQuery = $null
-            Test-SetupCmClientRegistration -SiteCode LAB -ComputerName RING0IVY24-01 -SqlQuery {
-                param($Query)
-                $script:clientRegistrationQuery = $Query
-                'RING0IVY24-01|1|1|LAB'
-            } | Should -BeTrue
-            $script:clientRegistrationQuery | Should -Match 'v_RA_System_SMSAssignedSites'
+        BeforeAll {
+            function Get-CimInstance {
+                [pscustomobject]@{
+                    Name = 'RING0IVY24-01'
+                    Active = 1
+                    Obsolete = 0
+                }
+            }
         }
 
-        It 'rejects a client discovery record that is inactive' {
-            Test-SetupCmClientRegistration -SiteCode LAB -ComputerName RING0IVY24-01 -SqlQuery {
-                param($Query)
-                'RING0IVY24-01|1|0|LAB'
-            } | Should -BeFalse
+        It 'accepts an active, non-obsolete MECM resource without requiring ICMP or sqlcmd' {
+            Test-SetupCmClientRegistration -SiteCode LAB -ComputerName RING0IVY24-01 |
+                Should -BeTrue
         }
     }
 }

@@ -11,9 +11,9 @@ function Test-SetupCmLabHealth {
             Sql = { (Test-SetupCmSql -InstanceName $Config.sql.instanceName) -eq 'Compliant' }
             ManagementPoint = { Test-SetupCmManagementPoint }
             DistributionPoint = { Test-SetupCmDistributionPoint }
-            Client = { Test-SetupCmClient -ComputerName $Config.testClient.name }
+            Client = { Test-SetupCmClient -ComputerName $Config.testClient.name -SiteCode $Config.mecm.siteCode }
             ClientRegistration = {
-                Test-SetupCmClientRegistration -SiteCode $Config.mecm.siteCode -ComputerName $Config.testClient.name -SqlServer $Config.mecm.sqlServer
+                Test-SetupCmClientRegistration -SiteCode $Config.mecm.siteCode -ComputerName $Config.testClient.name
             }
         }
     }
@@ -26,39 +26,33 @@ function Test-SetupCmLabHealth {
 
 function Test-SetupCmManagementPoint { if (-not $IsWindows) { return $false }; (Get-Service SMS_EXECUTIVE -ErrorAction SilentlyContinue).Status -eq 'Running' }
 function Test-SetupCmDistributionPoint { if (-not $IsWindows) { return $false }; (Get-Service SMS_SITE_COMPONENT_MANAGER -ErrorAction SilentlyContinue).Status -eq 'Running' }
-function Test-SetupCmClient { param([string]$ComputerName); if (-not $IsWindows) { return $false }; Test-Connection -ComputerName $ComputerName -Count 1 -Quiet }
+function Test-SetupCmClient {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$ComputerName,[string]$SiteCode)
+
+    if (-not $IsWindows) { return $false }
+    if (-not [string]::IsNullOrWhiteSpace($SiteCode)) {
+        return Test-SetupCmClientRegistration -SiteCode $SiteCode -ComputerName $ComputerName
+    }
+    Test-Connection -ComputerName $ComputerName -Count 1 -Quiet
+}
 
 function Test-SetupCmClientRegistration {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][ValidatePattern('^[A-Z0-9]{3}$')][string]$SiteCode,
-        [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9-]{1,63}$')][string]$ComputerName,
-        [string]$SqlServer = 'localhost',
-        [scriptblock]$SqlQuery
+        [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9-]{1,63}$')][string]$ComputerName
     )
 
-    $query = @"
-SELECT TOP (1)
-    sys.Name0 + '|' + CONVERT(varchar(1), sys.Client0) + '|' + CONVERT(varchar(1), sys.Active0) + '|' + ISNULL(assigned.SMS_Assigned_Sites0, '')
-FROM dbo.v_R_System AS sys
-LEFT JOIN dbo.v_RA_System_SMSAssignedSites AS assigned ON assigned.ResourceID = sys.ResourceID
-WHERE sys.Name0 = N'$ComputerName'
-ORDER BY sys.Active0 DESC, sys.Client0 DESC;
-"@
-    if ($null -eq $SqlQuery) {
-        $SqlQuery = {
-            param($Query)
-            & sqlcmd -S $SqlServer -E -d "CM_$SiteCode" -h -1 -W -Q $Query
-        }
+    $escapedComputerName = $ComputerName.Replace("'", "''")
+    try {
+        $resources = @(
+            Get-CimInstance -Namespace "root\SMS\site_$SiteCode" -ClassName SMS_R_System -Filter "Name = '$escapedComputerName'" -ErrorAction Stop
+        )
     }
-    $record = @(& $SqlQuery $query | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
-    if ($record.Count -ne 1) { return $false }
-    $values = ([string]$record[0]).Trim().Split('|')
-    $values.Count -eq 4 -and
-        $values[0] -eq $ComputerName -and
-        $values[1] -eq '1' -and
-        $values[2] -eq '1' -and
-        $values[3] -eq $SiteCode
+    catch { return $false }
+
+    @($resources | Where-Object { [int]$_.Active -eq 1 -and [int]$_.Obsolete -eq 0 }).Count -gt 0
 }
 
 function ConvertTo-SetupCmSanitizedFixtureContent {
