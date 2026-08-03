@@ -48,6 +48,6 @@ See `docs/superpowers/plans/2026-08-01-agent-mecm-client-install.md` for the ful
 **Tasks:**
 1. Pin runtime detection with Pester — **complete**.
 2. Pin verified installation and stage order — **complete**.
-3. Make the source contract reusable and validate LABZ1 privately — **in progress**.
+3. Make the source contract reusable and validate the reference lab privately — **in progress**.
 
 See `docs/superpowers/plans/2026-08-01-mecm-vc-redist-dependency.md` for the full plan with checkboxes.

@@ -6,7 +6,6 @@
 
 - [Overview & Quick Start](./getting-started/overview.md)
 - [Prerequisites](./getting-started/prerequisites.md)
-- [LabZ1 Deployment Target](./getting-started/labz1-deployment.md)
 
 # Configuration
 
