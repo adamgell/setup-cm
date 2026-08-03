@@ -15,6 +15,7 @@ create-missing = true
 default-theme = "navy"
 preferred-dark-theme = "navy"
 smart-punctuation = true
+no-section-label = true
 git-repository-url = "https://github.com/AdamGell/setup-cm"
 edit-url-template = "https://github.com/AdamGell/setup-cm/edit/main/docs/gitbook/src/{path}"
 site-url = "/setup-cm/"
