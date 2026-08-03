@@ -62,6 +62,8 @@ Describe 'Invoke-SetupCmAcquire' {
                 sources = @{
                     sqlServer = @{ name = 'sqlServer' }
                     mecm = @{ name = 'mecm' }
+                    vcRedistX64 = @{ name = 'vcRedistX64' }
+                    vcRedistX86 = @{ name = 'vcRedistX86' }
                     prerequisites = @('dotnet48', 'adk')
                 }
             }
@@ -73,9 +75,32 @@ Describe 'Invoke-SetupCmAcquire' {
 
             $result = @(Invoke-SetupCmAcquire -ConfigPath 'lab.yaml')
 
-            $result | Should -HaveCount 2
-            $result.Name | Should -BeExactly @('sqlServer', 'mecm')
-            Should -Invoke Get-SetupCmArtifact -Times 2 -Exactly
+            $result | Should -HaveCount 4
+            $result.Name | Should -Contain 'sqlServer'
+            $result.Name | Should -Contain 'mecm'
+            $result.Name | Should -Contain 'vcRedistX64'
+            $result.Name | Should -Contain 'vcRedistX86'
+            Should -Invoke Get-SetupCmArtifact -Times 4 -Exactly
+        }
+
+        It 'uses the source key as the name when the source lacks a name field' {
+            $config = @{
+                cacheRoot = $TestDrive
+                evidenceRoot = $TestDrive
+                sources = @{
+                    sqlServer = @{ cacheFile = 'sql.iso'; sha256 = ('0' * 64); licenseAccepted = $true }
+                }
+            }
+            Mock Read-SetupCmConfig { $config }
+            Mock New-SetupCmRunEvidence { $TestDrive }
+            Mock Get-SetupCmArtifact {
+                [pscustomobject]@{ Name = $Source.name; Path = 'cached'; Sha256 = 'hash' }
+            }
+
+            $result = @(Invoke-SetupCmAcquire -ConfigPath 'lab.yaml')
+
+            $result | Should -HaveCount 1
+            $result[0].Name | Should -Be 'sqlServer'
         }
     }
 }

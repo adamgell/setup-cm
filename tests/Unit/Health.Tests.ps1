@@ -11,6 +11,25 @@ Describe 'Test-SetupCmLabHealth' {
     }
 }
 
+Describe 'Test-SetupCmClientRegistration' {
+    InModuleScope SetupCm {
+        BeforeAll {
+            function Get-CimInstance {
+                [pscustomobject]@{
+                    Name = 'RING0IVY24-01'
+                    Active = 1
+                    Obsolete = 0
+                }
+            }
+        }
+
+        It 'accepts an active, non-obsolete MECM resource without requiring ICMP or sqlcmd' {
+            Test-SetupCmClientRegistration -SiteCode LAB -ComputerName RING0IVY24-01 |
+                Should -BeTrue
+        }
+    }
+}
+
 Describe 'Export-SetupCmFixture' {
     InModuleScope SetupCm {
         It 'redacts password values before writing the fixture' {

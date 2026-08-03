@@ -1,0 +1,34 @@
+[book]
+title = "Setup-CM Documentation"
+description = "Documentation for setup-cm: automated MECM lab deployment"
+authors = ["Adam"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+create-missing = true
+
+[preprocessor]
+
+[output.html]
+default-theme = "navy"
+preferred-dark-theme = "navy"
+smart-punctuation = true
+git-repository-url = "https://github.com/AdamGell/setup-cm"
+edit-url-template = "https://github.com/AdamGell/setup-cm/edit/main/docs/gitbook/src/{path}"
+site-url = "/setup-cm/"
+
+[output.html.print]
+enable = true
+
+[output.html.search]
+enable = true
+limit-results = 20
+teaser-word-count = 30
+use-boolean-and = true
+boost-title = 2
+boost-hierarchy = 2
+boost-paragraph = 1
+expand = true
+heading-split-level = 2

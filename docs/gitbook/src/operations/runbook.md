@@ -1,6 +1,6 @@
-# SetupCm runbook
+# Operator Runbook
 
-Use this runbook only after a provisioning layer has created an isolated, domain-joined Windows Server and a separate test client. Read the [project overview](../README.md) and [configuration reference](CONFIGURATION.md) first.
+Use this runbook only after a provisioning layer has created an isolated, domain-joined Windows Server and a separate test client. Read the [Overview & Quick Start](../getting-started/overview.md) and [Configuration Reference](../configuration/reference.md) first.
 
 ## Prepare the lab
 

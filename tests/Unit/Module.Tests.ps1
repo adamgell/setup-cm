@@ -3,8 +3,8 @@ Describe 'SetupCm module' {
         $PSVersionTable.PSVersion.Major | Should -BeGreaterOrEqual 7
     }
 
-    It 'exports the two public commands' {
+    It 'exports the public client installation command' {
         Import-Module "$PSScriptRoot/../../src/SetupCm/SetupCm.psd1" -Force
-        Get-Command Invoke-SetupCm, Invoke-SetupCmAcquire, Test-SetupCmPreflight | Should -HaveCount 3
+        Get-Command Invoke-SetupCm, Invoke-SetupCmAcquire, Invoke-SetupCmClient, Test-SetupCmPreflight | Should -HaveCount 4
     }
 }

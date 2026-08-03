@@ -1,3 +1,8 @@
+# lab.example.yaml Annotated
+
+The committed `config/lab.example.yaml` is a complete, safe template. Every value that must be replaced is marked `REPLACE_WITH_*` or uses a placeholder URL.
+
+```yaml
 topology: single-box
 template: true
 lab:
@@ -78,3 +83,12 @@ mecm:
 testClient:
   name: LABZ1-CMCLIENT01
   domain: test.gell.one
+```
+
+## Key annotations
+
+- `template: true` — keeps the committed example valid even with placeholders. Set to `false` or remove in a real configuration.
+- `safety.isolatedLab: true` — required for the intended lab use case.
+- `licenseAccepted: false` — you must explicitly set this to `true` after accepting the license terms for each installer.
+- `REPLACE_WITH_SHA256` / `REPLACE_WITH_VERSION` — must be replaced with the actual SHA-256 checksum and version of your approved media.
+- `evidenceRoot` and `cacheRoot` — should be on local, adequately sized storage outside the repository.

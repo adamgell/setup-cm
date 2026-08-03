@@ -89,6 +89,19 @@ Each selected stage records a JSON result named `stage-<stage>.json` in a unique
 
 ## Documentation
 
+The full documentation is published as a [GitBook-style site](https://adamgell.github.io/setup-cm/) built with mdBook. It includes:
+
+- [Getting started](https://adamgell.github.io/setup-cm/getting-started/overview.html) — overview, prerequisites, and quick start.
+- [Configuration](https://adamgell.github.io/setup-cm/configuration/reference.html) — field-by-field YAML reference.
+- [Operations](https://adamgell.github.io/setup-cm/operations/runbook.html) — runbook, stages, evidence, and recovery.
+- [Architecture](https://adamgell.github.io/setup-cm/architecture/why.html) — design principles and module layout.
+- [Reference](https://adamgell.github.io/setup-cm/reference/public-commands.html) — commands, schema, and evidence format.
+- [Development](https://adamgell.github.io/setup-cm/development/design-documents.html) — designs, plans, testing, and handoffs.
+
+The source lives in `docs/gitbook/` and is built automatically on every push to `main`.
+
+For offline reading, the original markdown sources are still available:
+
 - [Why setup-cm exists](docs/WHY.md) — the problem, design choices, and non-goals.
 - [Operator runbook](docs/RUNBOOK.md) — prepare, run, recover, and validate a lab deployment.
 - [Configuration reference](docs/CONFIGURATION.md) — how to safely complete `lab.local.yaml`.
