@@ -6,6 +6,7 @@
 
 - [Overview & Quick Start](./getting-started/overview.md)
 - [Prerequisites](./getting-started/prerequisites.md)
+- [Getting Media](./getting-started/getting-media.md)
 
 # Configuration
 
