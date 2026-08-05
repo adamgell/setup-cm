@@ -22,6 +22,14 @@ Describe 'Read-SetupCmClientManifest' {
             { Read-SetupCmClientManifest -Path $outsideDomainManifest } |
                 Should -Throw '*test.gell.one*'
         }
+
+        It 'rejects a managementPointFqdn that contains a path separator' {
+            $pathSeparatorManifest = Join-Path $TestDrive 'path-separator-manifest.json'
+            @{ siteCode = 'LAB'; managementPointFqdn = 'evil\test.gell.one'; evidenceRoot = 'C:\ProgramData\SetupCm\artifacts' } |
+                ConvertTo-Json | Set-Content -LiteralPath $pathSeparatorManifest -Encoding utf8
+            { Read-SetupCmClientManifest -Path $pathSeparatorManifest } |
+                Should -Throw '*test.gell.one*'
+        }
     }
 }
 
@@ -98,6 +106,17 @@ Describe 'Install-SetupCmClient' {
                     @{ ExitCode = 1603; Output = 'Password=NotForEvidence; client install failed' }
                 }
             } | Should -Throw '*Password=<redacted>*'
+        }
+
+        It 'reports a null process result as exit code null without a null-property error' {
+            $manifest = @{ siteCode = 'LAB'; managementPointFqdn = 'LABZ1-CM01.test.gell.one'; evidenceRoot = 'C:\ProgramData\SetupCm\artifacts' }
+
+            {
+                Install-SetupCmClient -Manifest $manifest -FileProvider { param($Path) $true } -ProcessProvider {
+                    param($Path, $ArgumentList)
+                    $null
+                }
+            } | Should -Throw '*exit code null*'
         }
     }
 }

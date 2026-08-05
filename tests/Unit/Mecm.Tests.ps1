@@ -287,10 +287,12 @@ Describe 'MECM stage prerequisites' {
             Mock Test-SetupCmMecmVcRedistArchitecture { 'NotCompliant' }
             Mock Install-SetupCmMecmVcRedist { throw 'Microsoft Visual C++ Redistributable installation requires a restart before MECM setup can continue (exit code 3010).' }
             Mock Get-SetupCmMecmPrerequisites {}
+            Mock Install-SetupCmPrimarySite {}
 
             { Invoke-SetupCm -ConfigPath 'lab.yaml' -Mode Unattended -Stage Mecm } | Should -Throw '*restart before MECM setup can continue*'
 
             Should -Invoke Get-SetupCmMecmPrerequisites -Times 0 -Exactly
+            Should -Invoke Install-SetupCmPrimarySite -Times 0 -Exactly
         }
     }
 }
