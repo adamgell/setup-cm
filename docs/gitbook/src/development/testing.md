@@ -42,7 +42,7 @@ Every private function has a corresponding `*.Tests.ps1` file in `tests/Unit/`. 
 
 ## Integration tests
 
-The integration suite in `tests/Integration/` has three independent boundaries:
+The integration suite in `tests/Integration/` has four independent boundaries:
 
 | File | Gate |
 | --- | --- |

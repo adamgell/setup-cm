@@ -13,6 +13,12 @@ Describe 'Setup-CM marker provider acceptance' -Skip:(-not $runProviderIntegrati
         if ($providerMode -notin 'PreMigration', 'PostMigration') {
             throw 'SETUPCM_MARKER_PROVIDER_MODE must be PreMigration or PostMigration.'
         }
+        $providerMode = if ($providerMode -ieq 'PreMigration') {
+            'PreMigration'
+        }
+        else {
+            'PostMigration'
+        }
         $config = @{
             safety = @{ isolatedLab = $true; allowProductionTarget = $false }
             mecm = @{ siteCode = 'LAB'; siteServerFqdn = 'LABZ1-CM01.test.gell.one' }

@@ -723,7 +723,9 @@ Describe 'Setup-CM marker published evidence assessment' {
         }
 
         It 'matches the fixed computer name case-insensitively' {
-            $json = $script:exactEvidenceJson.Replace('RING0IVY24-01', 'ring0ivy24-01')
+            $inventory = New-TestPublishedEvidenceInventory
+            $json = [System.Text.UTF8Encoding]::new($false).GetString(
+                $inventory.Evidence.Bytes).Replace('RING0IVY24-01', 'ring0ivy24-01')
             $inventory = New-TestPublishedEvidenceInventory -Json $json
 
             $assessment = Get-SetupCmMarkerPublishedEvidenceAssessment `
