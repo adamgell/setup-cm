@@ -2,7 +2,7 @@
 
 **Operator date:** 2026-08-29
 
-**Final evidence time:** 2026-08-30 04:02 UTC
+**Final evidence time:** 2026-08-30 04:37 UTC
 
 **Status:** Accepted — the required lab-only marker application is installed
 and compliant exclusively on `RING0IVY24-01`.
@@ -20,6 +20,8 @@ provider queries; no VNC or visual acceptance was used.
 - Marker: `C:\ProgramData\SetupCm\Phase1\marker.json`
 - Expected marker SHA-256:
   `3F44AA70B40C9E9095E69F1C57E98F6ACC06900788A2054E251BCC58179B6254`
+- Accepted embedded VBScript detector SHA-256:
+  `DFDDD8489C137940A06A4DD18630B0618E0BE5868559366D056352A0A88505AC`
 - Uninstall removes only `marker.json` and removes its directory only when the
   directory is otherwise empty.
 - No client-setting, execution-policy, certificate-trust, co-management,
@@ -42,19 +44,20 @@ Test-first evidence:
 | Suite | Accepted result |
 | --- | --- |
 | Marker payload unit tests | PASS — 5 passed, 0 failed |
-| Windows VBScript detector integration | PASS — 3 passed, 0 failed |
+| Windows VBScript detector integration | PASS — 4 passed, 0 failed |
 
 The Windows integration suite proves that the live detector emits `Installed`
 only for the exact expected hash and emits nothing for tampered or missing
-markers.
+markers. It also proves that putting the expected hash in the marker directory
+name cannot create a false positive for tampered marker bytes.
 
 ## Configuration Manager objects
 
 | Object | Accepted identity |
 | --- | --- |
-| Application | `Setup-CM Phase 1 Marker`; CI `16777524`; revision 3 |
+| Application | `Setup-CM Phase 1 Marker`; CI `16777528`; revision 4 |
 | Application model | `ScopeId_DA24E410-B098-424D-B335-AF69DBB32CD9/Application_fb49968f-4669-436c-9739-d4835689be6d` |
-| Deployment type | `Install Setup-CM Phase 1 Marker`; CI `16777525`; revision 2 |
+| Deployment type | `Install Setup-CM Phase 1 Marker`; CI `16777529`; revision 3 |
 | Content | `Content_8b2f7ca4-c603-4079-a7f4-58206c7d4064`; package `LAB00008` |
 | Device collection | `Setup-CM Phase 1 Marker - RING0IVY24-01 Only`; `LAB00016` |
 | Assignment | `16777217` |
@@ -119,11 +122,25 @@ Client logs then proved the complete path:
 6. Client state messages recorded `APP_CI_ENFORCEMENT_SUCCEEDED` and
    `APP_CI_PRESENT` for application revision 3 and deployment-type revision 2.
 
-Fresh client state at 2026-08-30 03:57:01 UTC:
+Code review then identified that the revision-2 detector searched all
+`certutil` output for the expected hash. A marker directory containing that
+hash could therefore make tampered bytes appear installed. The regression was
+reproduced on CM01, pinned by a failing Windows integration test, and corrected
+by comparing complete normalized output lines. Provider XML independently
+proved that deployment-type revision 3 embeds the exact reviewed detector
+bytes.
+
+The client retrieved application revision 4 and deployment-type revision 3.
+At 2026-08-30 04:31:35 UTC, detection reported the existing exact marker as
+installed without running the installer or changing the marker last-write
+time. The client sent `APP_CI_PRESENT` state messages for application revision
+4, deployment-type revision 3, and required-application revision 4.
+
+Fresh client state after the corrected-detector evaluation:
 
 | Check | Accepted result |
 | --- | --- |
-| Application revision | 3 |
+| Application revision | 4 |
 | Install state | `Installed` |
 | Evaluation state | 1 |
 | Resolved state | `Installed` |
@@ -131,9 +148,9 @@ Fresh client state at 2026-08-30 03:57:01 UTC:
 | Marker exists | true |
 | Marker SHA-256 exact match | true |
 
-A final application re-evaluation at 2026-08-30 04:01:27 UTC advanced the
-client `LastEvalTime` and retained revision 3, `Installed`, error code 0, and
-the exact marker hash.
+The marker last-write time remained `2026-08-30 03:56:52 UTC`, independently
+proving that the revision-4 evaluation was detection-only rather than another
+installer execution.
 
 ## Independent server compliance
 
@@ -145,15 +162,18 @@ one `SMS_AppDeploymentAssetDetails` row for assignment `16777217`:
 | Machine | `RING0IVY24-01` |
 | Machine ID | `16777219` |
 | Collection | `LAB00016` |
-| Application revision | 3 |
-| Deployment type CI | `16777525` |
+| Application revision | 4 |
+| Deployment type CI | `16777529` |
 | Compliance state | 1 |
-| Enforcement state | 1000 |
+| Enforcement state | 1001 — succeeded, already installed |
 | Installed state | 2 |
 
 This provider row is the independent server-side acceptance gate; aggregate
 deployment summarization had not yet populated when the per-device row already
-reported compliant and enforcement succeeded.
+reported compliant. Enforcement state `1001` is the expected no-op result after
+the corrected detector found an already-installed marker, per Microsoft's
+[Configuration Manager state-message reference](https://learn.microsoft.com/en-us/intune/configmgr/core/plan-design/hierarchy/state-messages);
+the original install reported enforcement state `1000`.
 
 ## Operational notes
 
@@ -166,9 +186,12 @@ reported compliant and enforcement succeeded.
   new retrieval cycle. The supported `SMS_Client.RequestMachinePolicy(0)` and
   `EvaluateMachinePolicy()` methods produced the current policy and were used
   before application evaluation.
-- The temporary CM01 Windows-integration staging directory was removed after
-  the detector passed and the deployment type embedded the tested script. The
-  application content source and installed marker remain in place.
+- Code review found and CM01 reproduced a whole-output substring false positive
+  in the first VBScript detector. Exact-line matching fixed the root cause; the
+  new path-confusion regression failed before the fix and passed afterward.
+- The temporary CM01 Windows-integration, review-reproduction, and SQL-query
+  staging files were removed after verification. The application content
+  source and installed marker remain in place.
 
 ## Rollback boundary
 

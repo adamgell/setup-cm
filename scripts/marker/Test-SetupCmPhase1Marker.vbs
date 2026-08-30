@@ -8,7 +8,9 @@ Dim markerPath
 Dim shell
 Dim process
 Dim hashOutput
-Dim compactOutput
+Dim hashLines
+Dim hashLine
+Dim normalizedLine
 
 Set fileSystem = CreateObject("Scripting.FileSystemObject")
 
@@ -32,14 +34,15 @@ If process.ExitCode <> 0 Then
     WScript.Quit 0
 End If
 
-compactOutput = Replace(hashOutput, " ", "")
-compactOutput = Replace(compactOutput, vbTab, "")
-compactOutput = Replace(compactOutput, vbCr, "")
-compactOutput = Replace(compactOutput, vbLf, "")
-
-If InStr(1, UCase(compactOutput), ExpectedHash, vbBinaryCompare) > 0 Then
-    WScript.Echo "Installed"
-End If
+hashLines = Split(Replace(hashOutput, vbCr, ""), vbLf)
+For Each hashLine In hashLines
+    normalizedLine = Replace(hashLine, " ", "")
+    normalizedLine = Replace(normalizedLine, vbTab, "")
+    If StrComp(UCase(normalizedLine), ExpectedHash, vbBinaryCompare) = 0 Then
+        WScript.Echo "Installed"
+        WScript.Quit 0
+    End If
+Next
 
 WScript.Quit 0
 
