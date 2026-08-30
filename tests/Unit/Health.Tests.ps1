@@ -9,6 +9,15 @@ Describe 'Test-SetupCmLabHealth' {
                 Should -Be 'NotCompliant'
         }
 
+        It 'reports the exact failed checks for check-only orchestration' {
+            $result = Test-SetupCmLabHealth -Config @{} -EvidenceRoot $TestDrive -Checks @{
+                Sql = { $true }; Client = { $false }; ManagementPoint = { $false }
+            } -PassThru
+
+            $result.State | Should -BeExactly 'NotCompliant'
+            $result.FailedChecks | Should -BeExactly @('Client', 'ManagementPoint')
+        }
+
         It 'writes fresh health evidence on every read-only evaluation' {
             Mock Write-SetupCmEvidenceJson {}
             $config = @{ sql = @{ instanceName = 'MSSQLSERVER' }; testClient = @{ name = 'CL01' } }
@@ -73,7 +82,10 @@ Describe 'Invoke-SetupCm Health read-only orchestration' {
         }
 
         It 'skips an already healthy lab after one read-only Test evaluation' {
-            Mock Test-SetupCmLabHealth { 'Compliant' }
+            Mock Test-SetupCmLabHealth {
+                if (-not $PassThru) { throw 'Health orchestration omitted PassThru.' }
+                [pscustomobject]@{ State = 'Compliant'; FailedChecks = @() }
+            }
 
             $result = Invoke-SetupCm -ConfigPath 'lab.yaml' -Mode Unattended -Stage Health
 
@@ -81,12 +93,18 @@ Describe 'Invoke-SetupCm Health read-only orchestration' {
             Should -Invoke Test-SetupCmLabHealth -Times 1 -Exactly
         }
 
-        It 'rechecks a failed health state without invoking a repair action' {
-            Mock Test-SetupCmLabHealth { 'NotCompliant' }
+        It 'fails a failed health state after one read-only evaluation' {
+            Mock Test-SetupCmLabHealth {
+                if (-not $PassThru) { throw 'Health orchestration omitted PassThru.' }
+                [pscustomobject]@{
+                    State = 'NotCompliant'
+                    FailedChecks = @('ClientRegistration')
+                }
+            }
 
             { Invoke-SetupCm -ConfigPath 'lab.yaml' -Mode Unattended -Stage Health } |
-                Should -Throw '*verification failed*'
-            Should -Invoke Test-SetupCmLabHealth -Times 2 -Exactly
+                Should -Throw '*ClientRegistration*'
+            Should -Invoke Test-SetupCmLabHealth -Times 1 -Exactly
         }
     }
 }

@@ -252,7 +252,8 @@ function Get-SetupCmArtifactIdentity {
             throw 'Unsupported artifact architecture verification mode.'
         }
         $expectedArchitecture = [string]$Source.architecture
-        if ($architecture -ine $expectedArchitecture -and
+        if ($architecture -ieq 'x86' -and
+            $expectedArchitecture -ieq 'x64' -and
             (Test-SetupCmSignedVersionResourceArchitecture `
                 -ExpectedArchitecture $expectedArchitecture `
                 -ProductName ([string]$versionInfo.ProductName) `

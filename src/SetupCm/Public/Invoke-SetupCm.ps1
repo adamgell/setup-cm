@@ -73,11 +73,24 @@ function Invoke-SetupCm {
                 } | Write-Output
             }
             'Health' {
-                Invoke-SetupCmStage -Name Health -EvidenceRoot $evidenceRoot `
-                    -Test { Test-SetupCmLabHealth -Config $config -EvidenceRoot $evidenceRoot } `
-                    -Apply {} `
-                    -Verify { Test-SetupCmLabHealth -Config $config -EvidenceRoot $evidenceRoot } |
-                    Write-Output
+                $healthContext = [pscustomobject]@{ State = $null }
+                Invoke-SetupCmStage -Name Health -EvidenceRoot $evidenceRoot -Test {
+                    $probe = Test-SetupCmLabHealth -Config $config `
+                        -EvidenceRoot $evidenceRoot -PassThru
+                    $healthContext.State = $probe
+                    if ($probe -is [string]) { [string]$probe } else { [string]$probe.State }
+                } -Apply {
+                    $failedChecks = @($healthContext.State.FailedChecks)
+                    $detail = if ($failedChecks.Count -gt 0) {
+                        $failedChecks -join ', '
+                    }
+                    else {
+                        'unknown check'
+                    }
+                    throw "Lab health is not compliant: $detail. Health is check-only; review health.json."
+                } -Verify {
+                    throw 'Health is check-only and cannot verify a repair.'
+                } | Write-Output
             }
             default { throw "Unknown SetupCm stage: $name" }
         }

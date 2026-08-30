@@ -489,6 +489,24 @@ Describe 'Get-SetupCmArtifactIdentity architecture proof' {
             $identity.PublisherValid | Should -BeTrue
         }
 
+        It 'does not relabel an x64 payload as x86 from version-resource text' {
+            Mock Resolve-SetupCmArtifactSignaturePath { 'C:\cache\vc_redist.x86.exe' }
+
+            $identity = Get-SetupCmArtifactIdentity -Path 'C:\cache\vc_redist.x86.exe' -Source @{
+                publisher = 'Microsoft Corporation'; architecture = 'x86'
+                architectureVerification = 'signedVersionResource'
+            } -SignatureProvider {} -VersionInfoProvider {
+                [pscustomobject]@{
+                    ProductVersion = '14.51.36247.0'; FileVersion = '14.51.36247.0'
+                    ProductName = 'Microsoft Visual C++ Redistributable (x86)'
+                    FileDescription = 'Microsoft Visual C++ Redistributable (x86)'
+                    OriginalFilename = 'VC_redist.x86.exe'
+                }
+            } -PeArchitectureProvider { 'x64' }
+
+            $identity.Architecture | Should -BeExactly 'x64'
+        }
+
         It 'rejects a generic signed x86 bootstrapper as x64 evidence' {
             Test-SetupCmSignedVersionResourceArchitecture -ExpectedArchitecture x64 `
                 -ProductName 'Microsoft Setup Bootstrapper' `

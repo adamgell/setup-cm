@@ -373,6 +373,26 @@ Describe 'Setup-CM marker evidence channel inventory' {
 Describe 'Setup-CM marker evidence channel creation provider' {
     InModuleScope SetupCm {
         BeforeAll {
+            function New-TestMarkerNtfsAce {
+                param(
+                    [Parameter(Mandatory)][string]$Sid,
+                    [Parameter(Mandatory)][int]$Rights,
+                    [Parameter(Mandatory)][int]$InheritanceFlags,
+                    [Parameter(Mandatory)][int]$PropagationFlags,
+                    [int]$AccessControlType = 0,
+                    [bool]$IsInherited = $false
+                )
+
+                [pscustomobject][ordered]@{
+                    Sid = $Sid
+                    Rights = $Rights
+                    InheritanceFlags = $InheritanceFlags
+                    PropagationFlags = $PropagationFlags
+                    AccessControlType = $AccessControlType
+                    IsInherited = $IsInherited
+                }
+            }
+
             if (-not (Get-Command Get-SetupCmMarkerDirectorySecurity `
                     -ErrorAction SilentlyContinue)) {
                 function Get-SetupCmMarkerDirectorySecurity {
@@ -639,7 +659,9 @@ Describe 'Setup-CM marker published evidence parser' {
         }
 
         It 'rejects non-ASCII JSON even when its UTF-8 encoding is valid' {
-            $json = $script:exactEvidenceJson.Replace('RING0IVY24-01', 'RING0IVY24-01é')
+            $nonAscii = [char]0x00E9
+            $json = $script:exactEvidenceJson.Replace(
+                'RING0IVY24-01', "RING0IVY24-01$nonAscii")
             $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($json)
 
             { ConvertFrom-SetupCmMarkerEvidenceJsonStrict -Bytes $bytes } |
