@@ -11,7 +11,11 @@ function ConvertTo-SetupCmHashtable {
     }
 
     if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
-        return @(foreach ($item in $Value) { ConvertTo-SetupCmHashtable -Value $item })
+        $items = [System.Collections.Generic.List[object]]::new()
+        foreach ($item in $Value) {
+            [void]$items.Add((ConvertTo-SetupCmHashtable -Value $item))
+        }
+        return ,([object[]]$items.ToArray())
     }
 
     if ($Value -is [pscustomobject]) {
@@ -42,7 +46,16 @@ function Read-SetupCmConfig {
     }
 
     $config = ConvertTo-SetupCmHashtable -Value (Get-Content -LiteralPath $Path -Raw | ConvertFrom-Yaml)
-    Assert-SetupCmConfig -Config $config
+    $config = Assert-SetupCmConfig -Config $config
+    foreach ($sourceName in $config.sources.Keys) {
+        $source = $config.sources[$sourceName]
+        if ($source -is [hashtable] -and
+            (-not $source.ContainsKey('name') -or
+                [string]::IsNullOrWhiteSpace([string]$source.name))) {
+            $source.name = [string]$sourceName
+        }
+    }
+    return $config
 }
 
 function Assert-SetupCmConfig {
@@ -84,6 +97,79 @@ function Assert-SetupCmConfig {
 
     if (-not $Config.ContainsKey('sql') -or -not $Config.sql.ContainsKey('sysAdminAccounts') -or @($Config.sql.sysAdminAccounts).Count -eq 0) {
         throw 'sql.sysAdminAccounts must include at least one Windows identity.'
+    }
+
+    if ($Config.ContainsKey('markerAcceptance') -and $Config.markerAcceptance.enabled) {
+        $marker = $Config.markerAcceptance
+        if (-not $Config.safety.isolatedLab -or -not $marker.labOnly) {
+            throw 'Enabled marker acceptance requires safety.isolatedLab=true and markerAcceptance.labOnly=true.'
+        }
+        $fixedValues = [ordered]@{
+            siteCode = 'LAB'
+            siteServerFqdn = 'LABZ1-CM01.test.gell.one'
+            targetFqdn = 'RING0IVY24-01.test.gell.one'
+            targetResourceId = 16777219
+        }
+        foreach ($name in $fixedValues.Keys) {
+            if (-not $marker.ContainsKey($name) -or [string]$marker[$name] -cne [string]$fixedValues[$name]) {
+                throw "markerAcceptance.$name must be '$($fixedValues[$name])'."
+            }
+        }
+    }
+
+    $isTemplate = $Config.ContainsKey('template') -and $Config['template']
+    if (-not $isTemplate) {
+        foreach ($sourceName in ($Config.sources.Keys | Sort-Object)) {
+            $source = $Config.sources[$sourceName]
+            if ($source -isnot [hashtable]) { continue }
+            foreach ($field in 'cacheFile', 'sha256', 'sizeBytes', 'version', 'architecture', 'publisher') {
+                if (-not $source.ContainsKey($field) -or [string]::IsNullOrWhiteSpace([string]$source[$field])) {
+                    throw "sources.$sourceName.$field is required."
+                }
+            }
+            try { $sizeBytes = [long]$source.sizeBytes } catch { $sizeBytes = 0 }
+            if ($sizeBytes -le 0) { throw "sources.$sourceName.sizeBytes must be greater than zero." }
+            if ([string]$source.sha256 -notmatch '^[0-9a-fA-F]{64}$') {
+                throw "sources.$sourceName.sha256 must be a 64-character hexadecimal value."
+            }
+            if ([string]$source.architecture -notin 'x64', 'x86', 'neutral') {
+                throw "sources.$sourceName.architecture must be x64, x86, or neutral."
+            }
+            $hasArchitecturePath = $source.ContainsKey('architectureRelativePath')
+            $hasArchitectureVerification = $source.ContainsKey('architectureVerification')
+            if ($hasArchitecturePath -and
+                [string]::IsNullOrWhiteSpace([string]$source.architectureRelativePath)) {
+                throw "sources.$sourceName.architectureRelativePath must not be empty."
+            }
+            if ($hasArchitectureVerification -and
+                [string]$source.architectureVerification -cne 'signedVersionResource') {
+                throw "sources.$sourceName.architectureVerification must be signedVersionResource."
+            }
+            if ($hasArchitecturePath -and $hasArchitectureVerification) {
+                throw "sources.$sourceName must select only one architecture proof."
+            }
+            if (($hasArchitecturePath -or $hasArchitectureVerification) -and
+                [string]$source.architecture -notin 'x64', 'x86') {
+                throw "sources.$sourceName architecture proof requires x64 or x86."
+            }
+            if ($hasArchitecturePath -and
+                [IO.Path]::GetExtension([string]$source.cacheFile) -ine '.iso') {
+                throw "sources.$sourceName.architectureRelativePath requires ISO media."
+            }
+            if ($hasArchitectureVerification -and
+                [IO.Path]::GetExtension([string]$source.cacheFile) -ine '.exe') {
+                throw "sources.$sourceName.architectureVerification requires an executable bootstrapper."
+            }
+            if ([IO.Path]::GetExtension([string]$source.cacheFile) -ieq '.iso' -and
+                (-not $source.ContainsKey('signatureRelativePath') -or
+                    [string]::IsNullOrWhiteSpace([string]$source.signatureRelativePath))) {
+                throw "sources.$sourceName.signatureRelativePath is required for ISO media."
+            }
+            if ([string]$sourceName -ieq 'mecm' -and
+                [string]$source.version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+                throw 'sources.mecm.version must be the native setup.exe ProductVersion, not a Current Branch label.'
+            }
+        }
     }
 
     return $Config

@@ -1,6 +1,9 @@
 # Platform Support Roadmap
 
-`setup-cm` was built and proven on Proxmox VE with ProxmoxVEAutopilot. The architecture is deliberately hypervisor-agnostic. This page outlines the planned platform support and what each platform needs to provide.
+`setup-cm` was built and proven on Proxmox VE with ProxmoxVEAutopilot. The
+architecture keeps provisioning separate, but v1 supports only the Proxmox
+LabZ1 reference path. Hyper-V and VMware are future projects, not current
+compatibility claims. This page records their design inputs.
 
 ## Current: Proxmox VE + ProxmoxVEAutopilot
 
@@ -24,7 +27,7 @@ Hyper-V is the most natural next platform. The Windows Server host already runs 
 | OS deployment | Existing WDS/MDT, or custom unattend.xml injection |
 | Domain joining | Unattend.xml or post-deployment script |
 | `setup-cm` execution (Agent) | Autopilot Agent already runs on any Windows host; controller endpoint is platform-agnostic |
-| `setup-cm` execution (local terminal) | Native — RDP or console into the VM |
+| `setup-cm` execution (local terminal) | PowerShell 7 over an authenticated management channel |
 
 The Autopilot Agent does not depend on Proxmox VE. It is a Windows service that polls a FastAPI controller. Running the controller on a Hyper-V host or a separate management VM is straightforward.
 
@@ -38,7 +41,7 @@ VMware Workstation is common for individual consultants and small labs. It lacks
 | OS deployment | VMware Tools + unattended installation, or template clones |
 | Domain joining | Unattend.xml or post-deployment script |
 | `setup-cm` execution (Agent) | Same as Hyper-V — Agent is platform-agnostic |
-| `setup-cm` execution (local terminal) | Native — VMware console or RDP |
+| `setup-cm` execution (local terminal) | PowerShell 7 over an authenticated management channel |
 
 For VMware Workstation, the local terminal model may be more practical initially, since Workstation is typically used interactively. The Agent model works if the controller is reachable from the Workstation VMs.
 
@@ -66,4 +69,6 @@ To add support for a new hypervisor or provisioning system:
 4. Choose your execution model: local terminal or Autopilot Agent
 5. Run the stages and preserve the evidence
 
-The `setup-cm` module itself does not need modification. The integration point is the provisioning layer and the staging mechanism.
+Do not assume the module needs no modification until that platform's tests say
+so. Each platform needs a separate design and two-run acceptance boundary; see
+[Future Projects](../development/future-projects.md).

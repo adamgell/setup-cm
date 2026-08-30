@@ -15,6 +15,8 @@
 
 # Operations
 
+- [Current LabZ1 Status](./operations/current-status.md)
+- [v1 Hands-Off Acceptance](./operations/v1-acceptance.md)
 - [Operator Runbook](./operations/runbook.md)
 - [Stages & Evidence](./operations/stages-and-evidence.md)
 - [Recovery & Resume](./operations/recovery.md)
@@ -43,4 +45,5 @@
 - [Design Documents](./development/design-documents.md)
 - [Implementation Plans](./development/implementation-plans.md)
 - [Testing](./development/testing.md)
+- [Future Projects](./development/future-projects.md)
 - [Handoff Notes](./development/handoffs.md)

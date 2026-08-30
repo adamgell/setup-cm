@@ -1,6 +1,11 @@
 # Overview & Quick Start
 
-`setup-cm` treats a lab MECM deployment as a sequence of small, verifiable stages. Each stage tests whether it is already compliant, applies only the required work, and verifies the result. Every run produces structured evidence.
+`setup-cm` treats a lab MECM deployment as a sequence of small, verifiable
+stages. The stage engine supports Test, Apply, Verify, and structured evidence.
+The complete release-candidate workflow now has real read-only probes and
+bounded repair. The LabZ1 live gate is accepted; routine operation should use
+its [read-only restart procedure](../operations/current-status.md), while the
+complete workflow remains available for proven owned-state repair.
 
 ## Architecture at a glance
 
@@ -8,7 +13,7 @@
 ProxmoxVEAutopilot / Autopilot Agent
   └─ provisions the isolated, domain-joined Windows hosts
        └─ setup-cm
-            Acquire → Sql → Mecm → Health
+            Acquire → Sql → Mecm → Marker → Health
                  └─ run evidence in the configured evidence root
 ```
 
@@ -16,8 +21,11 @@ ProxmoxVEAutopilot / Autopilot Agent
 
 ## Quick start
 
+These steps describe a new isolated lab. They are not the restart procedure for
+the already accepted LabZ1 site.
+
 1. Copy `config/lab.example.yaml` to `config/lab.local.yaml`. The local file is ignored by Git.
-2. Replace every placeholder with your isolated-lab details, approved source location, SHA-256 checksum, version, and license acknowledgement. See the [Configuration Reference](../configuration/reference.md).
+2. Replace every placeholder with your isolated-lab details, approved source location, byte length, SHA-256 checksum, version, architecture, and license acknowledgement. See the [Configuration Reference](../configuration/reference.md).
 3. Import the module and check readiness:
 
    ```powershell
@@ -25,18 +33,21 @@ ProxmoxVEAutopilot / Autopilot Agent
    Test-SetupCmPreflight -ConfigPath ./config/lab.local.yaml
    ```
 
-4. Run the guided workflow:
+4. Run the guided workflow. Marker-enabled runs require the full source commit:
 
    ```powershell
-   pwsh ./src/SetupCm/Public/Invoke-SetupCm.ps1 `
+   pwsh ./scripts/Invoke-SetupCm.ps1 `
      -ConfigPath ./config/lab.local.yaml `
-     -Mode Guided
+     -Mode Guided `
+     -SourceCommit '<FULL_40_CHARACTER_GIT_COMMIT>'
    ```
 
-For unattended agent execution, set `SETUPCM_CONFIG` to the staged configuration path and run:
+For unattended execution, stage private configuration separately, then set:
 
 ```powershell
-pwsh ./scripts/Invoke-SetupCm.ps1
+$env:SETUPCM_CONFIG = 'C:\ProgramData\SetupCm\config\lab.local.yaml'
+$env:SETUPCM_SOURCE_COMMIT = '<FULL_40_CHARACTER_GIT_COMMIT>'
+pwsh ./scripts/Invoke-SetupCm.ps1 -Mode Unattended
 ```
 
 See the [Operator Runbook](../operations/runbook.md) before operating the workflow.
@@ -46,8 +57,12 @@ See the [Operator Runbook](../operations/runbook.md) before operating the workfl
 | Stage | Purpose |
 | --- | --- |
 | `Acquire` | Obtains and verifies SQL Server and MECM installation media in the configured cache. |
-| `Sql` | Installs SQL Server prerequisites, SQL Server, and SQL network configuration. |
-| `Mecm` | Installs MECM prerequisites, ADK, Windows PE, ODBC Driver 18, and the primary site. |
-| `Health` | Checks core SQL and MECM health, site roles, boundaries, test-client state, and expected logs. |
+| `Sql` | Installs ODBC Driver 18, SQL Server prerequisites, SQL Server, and SQL network configuration. |
+| `Mecm` | Installs MECM prerequisites, ADK, Windows PE, and the primary site; it re-verifies ODBC Driver 18. |
+| `Marker` | Reconciles and verifies the fixed one-device LabZ1 marker deployment. |
+| `Health` | Rechecks SQL, MECM, Management Point, Distribution Point, and active-client state without repair. |
 
-Each selected stage records a JSON result named `stage-<stage>.json` in a unique run directory beneath `evidenceRoot`. The result records the stage name, state (`Succeeded`, `Skipped`, or `Failed`), timestamps, and a message. Preserve that directory when investigating or resuming a failed run.
+Each selected stage records a JSON result named `stage-<stage>.json` in a
+unique run directory beneath `evidenceRoot`. Exact compliance is `Skipped`
+with no Apply; conflicts stop before mutation. Preserve the whole directory
+when investigating or resuming a failed run.

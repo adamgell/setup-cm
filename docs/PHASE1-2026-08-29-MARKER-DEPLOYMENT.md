@@ -12,6 +12,11 @@ credentials, tokens, private URLs, raw log bodies, or generated client policy.
 All live checks were performed over SSH and bounded Configuration Manager
 provider queries; no VNC or visual acceptance was used.
 
+This record captures the pre-v1 bounded marker result. For current execution,
+use the [v1 hands-off acceptance](V1-ACCEPTANCE-2026-08-30.md) with the
+[Phase 0 safe restart point](PHASE0-2026-08-29-LAB-INVENTORY.md#safe-restart-point)
+and do not rerun bootstrap stages merely to refresh timestamps.
+
 ## Accepted scope and safety boundary
 
 - Application: `Setup-CM Phase 1 Marker`
@@ -174,6 +179,31 @@ reported compliant. Enforcement state `1001` is the expected no-op result after
 the corrected detector found an already-installed marker, per Microsoft's
 [Configuration Manager state-message reference](https://learn.microsoft.com/en-us/intune/configmgr/core/plan-design/hierarchy/state-messages);
 the original install reported enforcement state `1000`.
+
+## v1 authenticated evidence upgrade
+
+The release-candidate source now implements the authenticated direct-client
+proof required for the v1 rerun. It pins this accepted detector as the only
+approved predecessor and permits a policy-only in-place update to the new
+detector. The new detector keeps the exact marker hash as its installed signal
+and, after a match, publishes a strict six-field record to CM01's one-client
+hidden evidence share. No content file, package, distribution, collection,
+membership, or assignment update is part of that migration.
+
+Before live mutation, exact-archive acceptance at implementation commit
+`2d61457d918a49a6ef141da8684e4afed84c3ecf` passed 11 CM01 Windows tests with
+five client-only cases skipped, all 10 detector/publication cases on
+`RING0IVY24-01`, and the isolated read-only provider pre-migration test. The
+provider reported only `EvidenceChannel/Missing`,
+`DeploymentType/ApprovedDetectorUpgrade`, and
+`Client/ClientEvidencePending` as noncompliant. The live sequence then created
+the bounded channel, migrated the detector, corrected the target-file
+inheritance rule, and received an exact target-owned client record. Final
+source `33535c6a0e47bb0bb0f838eb990b0e9e9cb2ac95` passed 12 applicable
+CM01 Windows tests, all 10 client tests, the zero-action post-migration provider
+gate, one bounded stale-receipt refresh, and an immediate complete five-stage
+zero-action run. The full evidence and hashes are in
+[v1 hands-off acceptance](V1-ACCEPTANCE-2026-08-30.md).
 
 ## Operational notes
 

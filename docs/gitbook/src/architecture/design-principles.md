@@ -4,7 +4,12 @@
 
 ## 1. Desired-state stages, not scripts
 
-Each stage is a `Test` / `Apply` / `Verify` triplet. The stage engine only runs `Apply` when `Test` reports `NotCompliant`, and only runs `Verify` after `Apply` succeeds. This makes stages idempotent and safe to rerun.
+Each stage is a `Test` / `Apply` / `Verify` triplet. The stage engine only runs
+`Apply` when `Test` reports `NotCompliant`, and only runs `Verify` after Apply
+succeeds. That engine contract makes a stage idempotent only when its Test is a
+real state probe. Acquire, SQL, MECM, Marker, and Health now meet that standard;
+the final live gate runs the same exact source twice to prove it. See
+[Current LabZ1 Status](../operations/current-status.md).
 
 ## 2. Evidence is a first-class output
 
@@ -12,15 +17,24 @@ Every run writes structured JSON to a unique directory under `evidenceRoot`. Evi
 
 ## 3. Configuration is explicit and validated
 
-The YAML configuration is the single source of truth for a deployment. It is validated before any stage runs. Placeholder values are rejected when `template` is `false`. Safety guardrails (such as `isolatedLab` and `allowProductionTarget`) are enforced at validation time, not at runtime.
+The private YAML configuration declares operator-selectable deployment state.
+The Marker feature adds a compiled fixed LabZ1 contract, and release-critical
+evidence adds an exact source commit. Placeholder values are rejected when
+`template` is `false`; target and safety guardrails are rechecked before any
+provider action.
 
 ## 4. Media and secrets stay outside Git
 
-The repository contains only metadata: URIs, SHA-256 checksums, versions, and license acknowledgements. Actual installers, product keys, credentials, certificates, and generated evidence never enter version control.
+The committed template contains only safe example metadata. Private source
+locations, actual installers, product keys, credentials, certificates,
+working configuration, and generated evidence never enter version control.
 
 ## 5. Lab-first, with explicit safety gates
 
-The default topology is a single-box, isolated lab. The tool refuses to run against a non-isolated target unless the operator explicitly sets `allowProductionTarget: true`. This is a guardrail, not an endorsement of production use.
+The supported v1 topology is the single-box isolated LabZ1 environment. General
+configuration validation has an explicit production acknowledgement, but the
+Marker command and v1 acceptance remain fixed lab-only and do not support
+production targeting.
 
 ## 6. Provisioning is a separate concern
 

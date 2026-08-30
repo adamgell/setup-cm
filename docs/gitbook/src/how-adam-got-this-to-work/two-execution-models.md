@@ -10,9 +10,10 @@ The operator runs `setup-cm` directly on the Windows Server in a PowerShell 7 se
 Import-Module ./src/SetupCm/SetupCm.psd1 -Force
 Test-SetupCmPreflight -ConfigPath ./config/lab.local.yaml
 
-pwsh ./src/SetupCm/Public/Invoke-SetupCm.ps1 `
+pwsh ./scripts/Invoke-SetupCm.ps1 `
   -ConfigPath ./config/lab.local.yaml `
-  -Mode Guided
+  -Mode Guided `
+  -SourceCommit '<FULL_40_CHARACTER_GIT_COMMIT>'
 ```
 
 **When to use this:**
@@ -25,7 +26,8 @@ pwsh ./src/SetupCm/Public/Invoke-SetupCm.ps1 `
 - Guided mode pauses between stages for operator inspection
 - Full console output is visible immediately
 - The operator controls timing and can intervene between stages
-- Requires RDP or console access to the server
+- Works through an authenticated PowerShell/SSH session; visual console access
+  is not an acceptance dependency
 
 ## Model 2: Autopilot Agent (unattended)
 
@@ -34,7 +36,8 @@ The operator queues a typed work item through the ProxmoxVEAutopilot controller.
 ```powershell
 # On the server, staged by the provisioning layer:
 $env:SETUPCM_CONFIG = 'C:\Path\To\lab.local.yaml'
-pwsh ./scripts/Invoke-SetupCm.ps1
+$env:SETUPCM_SOURCE_COMMIT = '<FULL_40_CHARACTER_GIT_COMMIT>'
+pwsh ./scripts/Invoke-SetupCm.ps1 -Mode Unattended
 ```
 
 **When to use this:**
@@ -55,11 +58,14 @@ Regardless of the model, the stage engine behaves identically:
 
 - `Test` → `Apply` → `Verify` → `stage-<name>.json`
 - Idempotent skip when already compliant
-- Fail-fast with preserved evidence
+- Conflict stops before mutation; verification failure still fails the stage
+- Fail-fast with preserved sanitized evidence tied to the exact source commit
 - Resume by rerunning the failed stage and later dependents
 
 The operator chooses the model that fits the situation. The tool does not change.
 
 ## Future direction
 
-Both models are first-class citizens. The local terminal path is the fastest way to develop and debug. The Agent path is the way to scale and automate. New platforms (Hyper-V, VMware Workstation) will support both models: the same PowerShell module runs locally, and the same typed work contract runs through an Agent or equivalent executor.
+Both models are first-class execution paths for the supported LabZ1 topology.
+Other platforms or broader automation require their own design and acceptance
+boundary; see [Future Projects](../development/future-projects.md).

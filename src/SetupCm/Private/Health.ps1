@@ -3,12 +3,14 @@ function Test-SetupCmLabHealth {
     param(
         [Parameter(Mandatory)][hashtable]$Config,
         [Parameter(Mandatory)][string]$EvidenceRoot,
-        [hashtable]$Checks
+        [hashtable]$Checks,
+        [switch]$PassThru
     )
 
     if ($null -eq $Checks) {
         $Checks = @{
-            Sql = { (Test-SetupCmSql -InstanceName $Config.sql.instanceName) -eq 'Compliant' }
+            Sql = { (Get-SetupCmSqlDesiredState -Config $Config).State -eq 'Compliant' }
+            Mecm = { (Get-SetupCmMecmDesiredState -Config $Config).State -eq 'Compliant' }
             ManagementPoint = { Test-SetupCmManagementPoint }
             DistributionPoint = { Test-SetupCmDistributionPoint }
             Client = { Test-SetupCmClient -ComputerName $Config.testClient.name -SiteCode $Config.mecm.siteCode }
@@ -18,10 +20,17 @@ function Test-SetupCmLabHealth {
         }
     }
     $results = [ordered]@{}
-    foreach ($name in $Checks.Keys) { $results[$name] = [bool](& $Checks[$name]) }
+    foreach ($name in @($Checks.Keys | Sort-Object)) { $results[$name] = [bool](& $Checks[$name]) }
     Write-SetupCmEvidenceJson -EvidenceRoot $EvidenceRoot -Name 'health' -Value $results | Out-Null
-    if ($results.Values -contains $false) { return 'NotCompliant' }
-    'Compliant'
+    $failedChecks = @($results.Keys | Where-Object { -not $results[$_] })
+    $state = if ($failedChecks.Count -gt 0) { 'NotCompliant' } else { 'Compliant' }
+    if ($PassThru) {
+        return [pscustomobject]@{
+            State = $state
+            FailedChecks = $failedChecks
+        }
+    }
+    $state
 }
 
 function Test-SetupCmManagementPoint { if (-not $IsWindows) { return $false }; (Get-Service SMS_EXECUTIVE -ErrorAction SilentlyContinue).Status -eq 'Running' }

@@ -1,51 +1,118 @@
 # Stages & Evidence
 
-`setup-cm` executes four stages in order. Each stage is idempotent: it tests whether it is already compliant, applies only the required work, and verifies the result.
+`setup-cm` executes five desired-state stages. Each reads current state before
+deciding whether any owned action is necessary. The accepted LabZ1 two-run
+gate proved every exact stage skips without mutation when already compliant;
+see [v1 Hands-Off Acceptance](./v1-acceptance.md) before operating the live
+site.
 
 ## Stage lifecycle
 
-Every stage follows the same pattern:
+Every stage follows:
 
-1. **Test** — check whether the desired state already exists.
-2. **Apply** — perform the work only if the test reports `NotCompliant`.
-3. **Verify** — confirm the resulting state matches the intent.
-4. **Evidence** — write a structured JSON result to the run directory.
+1. **Test** — collect structured, read-only component state.
+2. **Apply** — run only for `NotCompliant`, and only for owned components.
+3. **Verify** — independently collect state again.
+4. **Evidence** — write a sanitized component artifact and stage result.
 
-## The four stages
+A `Compliant` test produces `Skipped` without invoking Apply. A `Conflict`
+stops before mutation. Apply success is not acceptance: Verify must return
+`Compliant`. Health has an empty Apply and is always read-only.
 
-| Stage | Purpose | Key actions |
+## The five stages
+
+| Stage | Read-only test | Bounded apply |
 | --- | --- | --- |
-| `Acquire` | Obtain and verify installation media. | Downloads or validates cached SQL Server, MECM, ADK, WinPE, ODBC, and VC++ redistributable installers. Verifies SHA-256 and Authenticode signatures. |
-| `Sql` | Install and configure SQL Server. | Installs Windows prerequisites, runs unattended SQL Server setup, configures network protocols, and verifies the service is running. |
-| `Mecm` | Install MECM prerequisites and primary site. | Installs VC++ runtimes, ADK, WinPE add-on, ODBC Driver 18, downloads MECM prerequisites, runs unattended primary-site setup, and configures MP/DP roles. |
-| `Health` | Validate the complete lab. | Checks SQL reachability, MECM site services, Management Point, Distribution Point, boundaries, test-client registration, and expected log files. |
+| `Acquire` | Verifies every configured artifact's license, byte length, SHA-256, version, architecture, publisher, and cache identity. | Acquires only missing or invalid artifacts under the approved source policy. |
+| `Sql` | Verifies ODBC Driver 18, Windows prerequisites, instance and services, startup state, TCP/listener/firewall, strict-TLS query reachability, owned configuration, VC++ x64/x86, and conditional `CM_LAB` reachability. | Installs a missing ODBC provider before the first database probe, installs an absent instance, or repairs only owned missing components; conflicting instance identity fails closed. |
+| `Mecm` | Verifies site/provider/database/role identity, services, prerequisites, ADK/WinPE/ODBC/VC++, content library, MP/DP, and the active non-obsolete client. | Installs an absent site or repairs only owned missing prerequisites or roles; it shares the ODBC installer with SQL, and an exact site never opens media or reruns setup. |
+| `Marker` | Verifies the fixed LabZ1 boundary, source and detector hashes, protected one-client evidence channel, authenticated direct marker proof, application, deployment type, content, distribution, one-device direct collection, required assignment, and per-device compliance. | Creates only a missing safe channel, performs only the approved predecessor detector update, and requests one bounded policy/evaluation cycle when direct evidence or current server state is pending. |
+| `Health` | Re-reads SQL, MECM, MP, DP, and active-client state. | None. |
 
-## Evidence format
+## Marker safety contract
 
-Each execution creates a unique directory under `evidenceRoot` (for example, `C:\ProgramData\SetupCm\artifacts\run-2026-08-03T14-22-10`). Every selected stage writes a file named `stage-<stage>.json`.
+Marker acceptance is fixed to:
 
-### Example `stage-Acquire.json`
+- site `LAB` on `LABZ1-CM01.test.gell.one`;
+- target `RING0IVY24-01.test.gell.one`, resource `16777219`;
+- application `Setup-CM Phase 1 Marker`;
+- deployment type `Install Setup-CM Phase 1 Marker`;
+- collection `Setup-CM Phase 1 Marker - RING0IVY24-01 Only`;
+- marker SHA-256
+  `3F44AA70B40C9E9095E69F1C57E98F6ACC06900788A2054E251BCC58179B6254`.
+
+The collection must have exactly one direct rule and one member, both for the
+accepted resource. No marker assignment may target another collection.
+Same-name conflicts, unexpected rules or files, broader membership, another
+assignment, or hash drift are `Conflict`, not repair opportunities.
+
+The hidden `SetupCmMarkerEvidence$` share points directly to the exact target
+directory and grants client write access only to `TEST\RING0IVY24-01$`.
+Published evidence has six exact fields, no client timestamp, a 2,048-byte
+limit, a 30-minute CM01 receipt freshness window, and two-minute future clock
+tolerance. Authenticated direct `C$` bytes are authoritative when available;
+otherwise a valid target-computer-owned receipt is reported as
+`DirectAuthenticatedClientEvidence`. A ConfigMgr server projection is not a
+direct-proof route.
+
+## Stage result files
+
+Every selected stage writes `stage-<stage>.json`:
 
 ```json
 {
-  "name": "Acquire",
-  "state": "Succeeded",
-  "startedAt": "2026-08-03T14:22:10.123Z",
-  "finishedAt": "2026-08-03T14:25:44.567Z",
-  "message": "All sources verified and cached."
+  "name": "Marker",
+  "state": "Skipped",
+  "startedAt": "2026-08-30T06:00:00.0000000Z",
+  "finishedAt": "2026-08-30T06:00:05.0000000Z",
+  "message": "Already compliant."
 }
 ```
 
-### State values
-
 | State | Meaning |
 | --- | --- |
-| `Succeeded` | The stage applied its work and verification passed. |
-| `Skipped` | The stage test found the target already compliant; no work was performed. |
-| `Failed` | The stage stopped. The `message` field identifies the immediate error. |
+| `Succeeded` | Apply ran and independent Verify returned `Compliant`. |
+| `Skipped` | Test returned `Compliant`; Apply did not run. |
+| `Failed` | Test found conflict, Apply failed, or Verify did not return `Compliant`. |
 
-## Why evidence matters
+## Component evidence
 
-- **Diagnosability** — every run gets its own evidence directory, including a result for each completed or failed stage.
-- **Safe recovery** — an operator can correct the reported prerequisite and rerun only the affected stage rather than restart blindly.
-- **Audit trail** — the evidence directory preserves what happened, when, and why, even after the VM is reset or reprovisioned.
+| File | Contents |
+| --- | --- |
+| `run.json` | Run ID, UTC start, and exact source commit when provided. Marker runs require it. |
+| `acquire-state.json` | Artifact component state without source URI or vault location. |
+| `acquisition.json` | Bounded identities and hashes for every artifact evaluated during Acquire Apply, distinguishing reused `Verified` entries from `AcquiredAndVerified` entries. |
+| `sql-state.json` | SQL component state and reasons. |
+| `mecm-state.json` | MECM component state and reasons. |
+| `marker-state.json` | Sanitized evidence-channel identity, direct-proof route, validated marker hash/length and receipt metadata, application/DT revisions, content/package/distribution, collection and membership, assignment/policy, per-device server compliance, evaluated time, and exact source commit. Raw ACL descriptors and policies are excluded. |
+| `health.json` | Fresh Boolean results for each read-only health check. |
+
+Marker provider state proves the exact detector and per-device compliance row.
+Release acceptance must independently corroborate the client's application
+revision and authenticated marker bytes. The successful routes are
+`DirectAuthenticatedFileRead` and `DirectAuthenticatedClientEvidence`; a
+server projection is not a substitute for either direct route.
+
+## Sanitization boundary
+
+Evidence serialization recursively removes sensitive keys and redacts
+credential-like values and private locations in strings. Never add source
+URLs, vault paths, credentials, tokens, private keys, generated policy XML, raw
+configuration, raw log bodies, or installer media to an evidence bundle.
+
+## Interpreting a no-op run
+
+A successful process exit is not sufficient. A genuine second-run no-op has:
+
+- all five stage results `Skipped`;
+- a fresh run ID and timestamps tied to the same exact source commit;
+- all component states `Compliant`;
+- no installer process, object creation, membership change, deployment
+  creation, policy repair, or content redistribution;
+- the same ConfigMgr identities and exact client marker hash;
+- all Health values `true`.
+
+This zero-action claim is for the immediate second acceptance run while the
+first record remains within its 30-minute freshness window. A later stale-proof
+run may request one bounded policy/evaluation cycle and wait for a new receipt,
+but it still must not reinstall, recreate, redistribute, or broaden scope.

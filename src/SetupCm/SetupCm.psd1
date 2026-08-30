@@ -1,12 +1,15 @@
 @{
     RootModule        = 'SetupCm.psm1'
-    ModuleVersion     = '0.1.0'
+    ModuleVersion     = '1.0.0'
     GUID              = '4b7621b6-e62f-4d87-ae98-e158424b2ec6'
     Author            = 'CMTrace Open'
     CompanyName       = 'CMTrace Open'
     Copyright         = '(c) 2026 CMTrace Open'
     PowerShellVersion = '7.0'
-    FunctionsToExport = @('Invoke-SetupCm', 'Invoke-SetupCmAcquire', 'Invoke-SetupCmClient', 'Test-SetupCmPreflight')
+    FunctionsToExport = @(
+        'Invoke-SetupCm', 'Invoke-SetupCmAcquire', 'Invoke-SetupCmClient',
+        'Invoke-SetupCmMarkerAcceptance', 'Test-SetupCmPreflight'
+    )
     CmdletsToExport   = @()
     VariablesToExport = @()
     AliasesToExport   = @()

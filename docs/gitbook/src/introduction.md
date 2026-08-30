@@ -1,7 +1,11 @@
 # Introduction
 
-> **Work in Progress**
-> This documentation is actively being developed alongside `setup-cm`. Content may be incomplete, outdated, or change without notice. Verify critical commands and procedures against the repository source.
+> **Accepted lab; v1 live acceptance complete**
+> The LabZ1 SQL/MECM/client baseline and one-device marker are accepted. The
+> first exact-source run refreshed only stale authenticated evidence; the
+> immediate second run skipped all five stages with zero action. Start with
+> [Current LabZ1 Status](./operations/current-status.md) before operating the
+> accepted environment.
 
 `setup-cm` automates a repeatable, evidence-backed Microsoft Configuration Manager (MECM, formerly SCCM) primary-site deployment for an **isolated lab**.
 

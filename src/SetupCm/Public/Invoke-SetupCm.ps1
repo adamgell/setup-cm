@@ -7,73 +7,91 @@ function Invoke-SetupCm {
         [ValidateSet('Guided', 'Unattended')]
         [string]$Mode = 'Guided',
 
-        [string[]]$Stage
+        [ValidateSet('Acquire', 'Sql', 'Mecm', 'Marker', 'Health')]
+        [string[]]$Stage,
+
+        [string]$SourceCommit
     )
 
     $config = Read-SetupCmConfig -Path $ConfigPath
-    $evidenceRoot = New-SetupCmRunEvidence -Root $config.evidenceRoot
-    $selected = if ($Stage) { $Stage } else { @('Acquire', 'Sql', 'Mecm', 'Health') }
+    $selected = if ($Stage) {
+        $Stage
+    }
+    elseif ($config.ContainsKey('markerAcceptance') -and $config.markerAcceptance.enabled) {
+        @('Acquire', 'Sql', 'Mecm', 'Marker', 'Health')
+    }
+    else {
+        @('Acquire', 'Sql', 'Mecm', 'Health')
+    }
+    if ($selected -contains 'Marker') {
+        $SourceCommit = Resolve-SetupCmRequiredSourceCommit -SourceCommit $SourceCommit
+    }
+    $evidenceRoot = New-SetupCmRunEvidence -Root $config.evidenceRoot -SourceCommit $SourceCommit
     foreach ($name in $selected) {
         switch ($name) {
             'Acquire' {
-                Invoke-SetupCmStage -Name Acquire -EvidenceRoot $evidenceRoot -Test { 'NotCompliant' } -Apply { Invoke-SetupCmAcquire -ConfigPath $ConfigPath -EvidenceRoot $evidenceRoot | Out-Null } -Verify { 'Compliant' } | Write-Output
+                Invoke-SetupCmStage -Name Acquire -EvidenceRoot $evidenceRoot `
+                    -Test { Test-SetupCmAcquire -Config $config -EvidenceRoot $evidenceRoot } `
+                    -Apply { Invoke-SetupCmAcquire -ConfigPath $ConfigPath -EvidenceRoot $evidenceRoot | Out-Null } `
+                    -Verify { Test-SetupCmAcquire -Config $config -EvidenceRoot $evidenceRoot } |
+                    Write-Output
             }
             'Sql' {
+                $sqlContext = [pscustomobject]@{ State = $null }
                 Invoke-SetupCmStage -Name Sql -EvidenceRoot $evidenceRoot -Test {
-                    if ((Test-SetupCmSql -InstanceName $config.sql.instanceName) -eq 'Compliant' -and (Test-SetupCmSqlNetwork -InstanceName $config.sql.instanceName) -eq 'Compliant') { 'Compliant' } else { 'NotCompliant' }
+                    $probe = Test-SetupCmSqlDesiredState -Config $config -EvidenceRoot $evidenceRoot -PassThru
+                    $sqlContext.State = $probe
+                    if ($probe -is [string]) { [string]$probe } else { [string]$probe.State }
                 } -Apply {
-                    if ((Test-SetupCmSql -InstanceName $config.sql.instanceName) -ne 'Compliant') {
-                        $media = Get-SetupCmArtifact -Source $config.sources.sqlServer -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
-                        Install-SetupCmWindowsPrerequisites
-                        Install-SetupCmSql -MediaPath $media.Path -Sql $config.sql
-                    }
-                    Enable-SetupCmSqlNetwork -InstanceName $config.sql.instanceName
+                    Repair-SetupCmSqlDesiredState -Config $config -State $sqlContext.State -EvidenceRoot $evidenceRoot
                 } -Verify {
-                    if ((Test-SetupCmSql -InstanceName $config.sql.instanceName) -eq 'Compliant' -and (Test-SetupCmSqlNetwork -InstanceName $config.sql.instanceName) -eq 'Compliant') { 'Compliant' } else { 'NotCompliant' }
+                    Test-SetupCmSqlDesiredState -Config $config -EvidenceRoot $evidenceRoot
                 } | Write-Output
             }
             'Mecm' {
-                Invoke-SetupCmStage -Name Mecm -EvidenceRoot $evidenceRoot -Test { 'NotCompliant' } -Apply {
-                    $vcRedistSources = @{ x64 = 'vcRedistX64'; x86 = 'vcRedistX86' }
-                    foreach ($architecture in 'x64', 'x86') {
-                        $sourceName = $vcRedistSources[$architecture]
-                        if (-not $config.sources.ContainsKey($sourceName)) {
-                            throw "sources.$sourceName is required before MECM prerequisite download."
-                        }
-                    }
-                    foreach ($architecture in 'x64', 'x86') {
-                        $sourceName = $vcRedistSources[$architecture]
-                        if ((Test-SetupCmMecmVcRedistArchitecture -Architecture $architecture) -ne 'Compliant') {
-                            Install-SetupCmMecmVcRedist -Source $config.sources[$sourceName] -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
-                        }
-                    }
-                    if ((Test-SetupCmMecmVcRedist) -ne 'Compliant') {
-                        throw 'Microsoft Visual C++ Redistributable x64 and x86 version 14.34 or later are required before MECM prerequisite download.'
-                    }
-                    $media = Get-SetupCmArtifact -Source $config.sources.mecm -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
-                    if (-not $config.sources.ContainsKey('adk')) {
-                        throw 'sources.adk is required before MECM installation.'
-                    }
-                    if ((Test-SetupCmMecmAdk) -ne 'Compliant') {
-                        Install-SetupCmMecmAdk -Source $config.sources.adk -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
-                    }
-                    if (-not $config.sources.ContainsKey('adkWinPe')) {
-                        throw 'sources.adkWinPe is required before MECM installation.'
-                    }
-                    if ((Test-SetupCmMecmWinPeAddOn) -ne 'Compliant') {
-                        Install-SetupCmMecmWinPeAddOn -Source $config.sources.adkWinPe -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
-                    }
-                    if (-not $config.sources.ContainsKey('odbcDriver18')) {
-                        throw 'sources.odbcDriver18 is required before MECM prerequisite download.'
-                    }
-                    if ((Test-SetupCmMecmOdbcDriver18) -ne 'Compliant') {
-                        Install-SetupCmMecmOdbcDriver18 -Source $config.sources.odbcDriver18 -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
-                    }
-                    Get-SetupCmMecmPrerequisites -MediaPath $media.Path -PrerequisitePath $config.mecm.prerequisitePath | Out-Null
-                    Install-SetupCmPrimarySite -MediaPath $media.Path -Mecm $config.mecm -EvidenceRoot $evidenceRoot | Out-Null
-                } -Verify { 'Compliant' } | Write-Output
+                $mecmContext = [pscustomobject]@{ State = $null }
+                Invoke-SetupCmStage -Name Mecm -EvidenceRoot $evidenceRoot -Test {
+                    $probe = Test-SetupCmMecmDesiredState -Config $config -EvidenceRoot $evidenceRoot -PassThru
+                    $mecmContext.State = $probe
+                    if ($probe -is [string]) { [string]$probe } else { [string]$probe.State }
+                } -Apply {
+                    Repair-SetupCmMecmDesiredState -Config $config -State $mecmContext.State -EvidenceRoot $evidenceRoot
+                } -Verify {
+                    Test-SetupCmMecmDesiredState -Config $config -EvidenceRoot $evidenceRoot
+                } | Write-Output
             }
-            'Health' { Invoke-SetupCmStage -Name Health -EvidenceRoot $evidenceRoot -Test { 'NotCompliant' } -Apply {} -Verify { Test-SetupCmLabHealth -Config $config -EvidenceRoot $evidenceRoot } | Write-Output }
+            'Marker' {
+                $markerContext = [pscustomobject]@{ State = $null }
+                Invoke-SetupCmStage -Name Marker -EvidenceRoot $evidenceRoot -Test {
+                    $probe = Test-SetupCmMarkerDesiredState -Config $config -EvidenceRoot $evidenceRoot -PassThru
+                    $markerContext.State = $probe
+                    [string]$probe.State
+                } -Apply {
+                    Repair-SetupCmMarkerDesiredState -Config $config -State $markerContext.State -EvidenceRoot $evidenceRoot
+                } -Verify {
+                    Test-SetupCmMarkerDesiredState -Config $config -EvidenceRoot $evidenceRoot
+                } | Write-Output
+            }
+            'Health' {
+                $healthContext = [pscustomobject]@{ State = $null }
+                Invoke-SetupCmStage -Name Health -EvidenceRoot $evidenceRoot -Test {
+                    $probe = Test-SetupCmLabHealth -Config $config `
+                        -EvidenceRoot $evidenceRoot -PassThru
+                    $healthContext.State = $probe
+                    if ($probe -is [string]) { [string]$probe } else { [string]$probe.State }
+                } -Apply {
+                    $failedChecks = @($healthContext.State.FailedChecks)
+                    $detail = if ($failedChecks.Count -gt 0) {
+                        $failedChecks -join ', '
+                    }
+                    else {
+                        'unknown check'
+                    }
+                    throw "Lab health is not compliant: $detail. Health is check-only; review health.json."
+                } -Verify {
+                    throw 'Health is check-only and cannot verify a repair.'
+                } | Write-Output
+            }
             default { throw "Unknown SetupCm stage: $name" }
         }
         if ($Mode -eq 'Guided') { Read-Host "Completed $name. Press Enter to continue" | Out-Null }

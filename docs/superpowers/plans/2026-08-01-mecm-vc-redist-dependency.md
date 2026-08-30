@@ -2,6 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Status (2026-08-30):** Complete. The safe source contract is on `main`,
+> the private LabZ1 source metadata was pinned during accepted bootstrap, and a
+> fresh read-only check confirms both runtime architectures exceed 14.34.
+
 **Goal:** Install and verify Microsoft VC++ v14 x64 and x86 runtimes before MECM downloads prerequisites or runs setup.
 
 **Architecture:** Extend the MECM prerequisite layer with per-architecture registry version checks and a generic verified installer runner. The MECM stage repairs only missing or outdated architectures, then blocks `Setupdl.exe` until both meet 14.34.
@@ -178,20 +182,27 @@ Expected: PASS with no failures.
 
 Document that the Agent validates and installs both runtime architectures before MECM prerequisite download.
 
-- [ ] **Step 2: Bootstrap and pin LABZ1 hashes privately**
+- [x] **Step 2: Bootstrap and pin LABZ1 hashes privately**
 
 Queue the MECM stage once with placeholder hashes. Read each cache file's SHA-256, Microsoft Authenticode status, publisher, and product version. Update only `C:\ProgramData\SetupCm\labz1.local.yaml` with validated values.
 
-- [ ] **Step 3: Prove the dependency baseline live**
+- [x] **Step 3: Prove the dependency baseline live**
 
 Queue the Agent MECM stage. Confirm both registry runtime keys report `Installed=1` and version 14.34 or later before a new MECM attempt.
 
-- [ ] **Step 4: Commit only safe automation artifacts**
+- [x] **Step 4: Commit only safe automation artifacts**
 
 ```bash
 git add src/SetupCm/Private/Mecm.ps1 src/SetupCm/Public/Invoke-SetupCm.ps1 tests/Unit/Mecm.Tests.ps1 config/lab.example.yaml docs/RUNBOOK.md docs/superpowers/plans/2026-08-01-mecm-vc-redist-dependency.md
 git commit -m "feat: install MECM VC++ prerequisites"
 ```
+
+Accepted private validation retained no source hashes in Git. At Phase 0 the
+MECM site and prerequisites passed their live gates. A 2026-08-30 read-only
+registry refresh reported x64 `v14.51.36247.00` and x86 `v14.44.35211.00`, both
+installed and above the required 14.34 floor. The reusable detection,
+installation, source template, tests, and runbook guidance are reachable from
+`main`.
 
 ## Plan self-review
 

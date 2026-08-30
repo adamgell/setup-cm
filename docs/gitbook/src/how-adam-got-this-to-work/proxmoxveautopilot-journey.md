@@ -38,6 +38,9 @@ The first successful end-to-end run used this sequence:
 8. The `Health` stage confirmed SQL, MP, DP, boundaries, and client registration
 
 The evidence directory from that first `Health` success is the baseline proof that the design works.
+This is historical bring-up order. The current release-candidate workflow adds
+the bounded `Marker` stage and performs read-before-apply desired-state checks
+for all five stages.
 
 ## What made it hard
 

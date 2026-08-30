@@ -19,9 +19,13 @@ sources:
     sha256: string
     publisher: string
     version: string
+    architecture: x64 | x86 | neutral
+    sizeBytes: integer
     licenseAccepted: boolean
     cacheFile: string
-    signatureRelativePath: string   # optional, for ISO media
+    signatureRelativePath: string   # required for ISO media
+    architectureRelativePath: string # optional signed ISO payload proof
+    architectureVerification: signedVersionResource # optional EXE bootstrapper proof
 sql:
   instanceName: string
   serviceAccount: string
@@ -38,6 +42,13 @@ mecm:
 testClient:
   name: string
   domain: string
+markerAcceptance:
+  enabled: boolean
+  labOnly: boolean
+  siteCode: string
+  siteServerFqdn: string
+  targetFqdn: string
+  targetResourceId: integer
 ```
 
 ## Required source names
@@ -58,6 +69,33 @@ The following source names are required for a full run:
 - `template: true` allows placeholder values; `template: false` (or omitted) requires real values.
 - `licenseAccepted` must be `true` for every source before acquisition runs.
 - `sha256` must be a 64-character hexadecimal string.
+- Every non-template source requires a positive `sizeBytes`, an expected
+  publisher, a native product version, and an `x64`, `x86`, or `neutral`
+  architecture. `sources.mecm.version` is the four-component `ProductVersion`
+  of its signed `setup.exe`, not a Current Branch label.
+- `architectureRelativePath` is ISO-only and validates the separate signed
+  payload's PE architecture. `architectureVerification: signedVersionResource`
+  is executable-only and accepts a signed x86 launcher for an x64 payload only
+  when signed version-resource identities unambiguously name `x64`. A source
+  may select at most one of these architecture proofs, and only when its
+  declared architecture is `x64` or `x86`.
 - `mecm.siteCode` must match `^[A-Z0-9]{3}$`.
 - `mecm.sqlServer` and `mecm.siteServerFqdn` must match the lab domain.
 - `testClient.name` and `testClient.domain` must identify a separate, domain-joined client.
+- Enabled marker acceptance requires `labOnly: true` and these exact values:
+  `siteCode: LAB`, `siteServerFqdn: LABZ1-CM01.test.gell.one`,
+  `targetFqdn: RING0IVY24-01.test.gell.one`, and
+  `targetResourceId: 16777219`.
+
+## Runtime-only inputs
+
+The private YAML path and source provenance are supplied outside the schema:
+
+| Input | Contract |
+| --- | --- |
+| `SETUPCM_CONFIG` or `-ConfigPath` | Path to the non-template YAML staged separately from source. |
+| `SETUPCM_SOURCE_COMMIT` or `-SourceCommit` | Full 40-character commit used to create the staged source archive; mandatory for Marker. |
+
+Neither value is copied into component evidence except the validated commit.
+The private configuration body, source URIs, and vault locations are never
+evidence fields.

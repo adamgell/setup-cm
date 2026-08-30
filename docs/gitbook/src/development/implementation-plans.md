@@ -7,8 +7,9 @@ Implementation plans are step-by-step, checkbox-tracked task lists used by agent
 | Plan | Date | Status | Tasks |
 | --- | --- | --- | --- |
 | [2026-07-30 Single-Box SCCM Core](../development/implementation-plans.md#2026-07-30-single-box-sccm-core) | 2026-07-30 | Complete | 8 tasks |
-| [2026-08-01 Agent MECM Client Install](../development/implementation-plans.md#2026-08-01-agent-mecm-client-install) | 2026-08-01 | Tasks 1–4 complete; Task 5 pending | 5 tasks |
-| [2026-08-01 MECM VC++ Redist Dependency](../development/implementation-plans.md#2026-08-01-mecm-vc-redist-dependency) | 2026-08-01 | Tasks 1–2 complete; Task 3 in progress | 3 tasks |
+| [2026-08-01 Agent MECM Client Install](../development/implementation-plans.md#2026-08-01-agent-mecm-client-install) | 2026-08-01 | Complete; live Task 5 accepted | 5 tasks |
+| [2026-08-01 MECM VC++ Redist Dependency](../development/implementation-plans.md#2026-08-01-mecm-vc-redist-dependency) | 2026-08-01 | Complete; live x64/x86 baseline accepted | 3 tasks |
+| [2026-08-30 Hands-Off Rerun and v1 Release](../development/implementation-plans.md#2026-08-30-hands-off-rerun-and-v1-release) | 2026-08-30 | Tasks 1–9 complete; Task 10 release finalization | 10 tasks |
 
 ---
 
@@ -37,9 +38,14 @@ See `docs/superpowers/plans/2026-07-30-single-box-sccm-core.md` for the full pla
 2. Server-side registration health gate — **complete**.
 3. Typed Autopilot Agent client work — **complete upstream**.
 4. Controller queue endpoint — **complete upstream**.
-5. Verify, deploy, and prove the live client path — **not started; needs revision**.
+5. Verify, deploy, and prove the live client path — **complete and accepted**.
 
 See `docs/superpowers/plans/2026-08-01-agent-mecm-client-install.md` for the full plan with checkboxes.
+
+Accepted evidence is in
+`docs/PHASE0-2026-08-29-LAB-INVENTORY.md`. The signed Agent completed the typed
+work on `RING0IVY24-01`; provider and SQL registration plus a fresh Health run
+agreed.
 
 ## 2026-08-01 MECM VC++ Redist Dependency
 
@@ -48,6 +54,26 @@ See `docs/superpowers/plans/2026-08-01-agent-mecm-client-install.md` for the ful
 **Tasks:**
 1. Pin runtime detection with Pester — **complete**.
 2. Pin verified installation and stage order — **complete**.
-3. Make the source contract reusable and validate the reference lab privately — **in progress**.
+3. Make the source contract reusable and validate the reference lab privately — **complete**.
 
 See `docs/superpowers/plans/2026-08-01-mecm-vc-redist-dependency.md` for the full plan with checkboxes.
+
+## 2026-08-30 Hands-Off Rerun and v1 Release
+
+**Goal:** Replace hardcoded compliance with real probes, automate bounded
+marker acceptance, prove two consecutive runs, and publish v1.
+
+**Tasks:**
+1. Reconcile current project status and historical handoffs — **complete**.
+2. Pin evidence and compliance contracts — **complete**.
+3. Make Acquire read-only before apply — **complete**.
+4. Implement SQL desired-state reconciliation — **complete**.
+5. Implement MECM and read-only Health probes — **complete**.
+6. Productize marker acceptance — **complete**.
+7. Document and package the v1 workflow — **complete**.
+8. Complete branch CI and review — **complete at the live-tested head**.
+9. Run Windows/provider integration and two live runs — **complete and accepted**.
+10. Record acceptance, merge, tag, release, publish docs, and clean up safely — **acceptance recorded; release finalization**.
+
+See `docs/superpowers/plans/2026-08-30-hands-off-rerun-v1.md` for the complete
+test-first execution plan.

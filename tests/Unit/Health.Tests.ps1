@@ -8,6 +8,104 @@ Describe 'Test-SetupCmLabHealth' {
             } |
                 Should -Be 'NotCompliant'
         }
+
+        It 'reports the exact failed checks for check-only orchestration' {
+            $result = Test-SetupCmLabHealth -Config @{} -EvidenceRoot $TestDrive -Checks @{
+                Sql = { $true }; Client = { $false }; ManagementPoint = { $false }
+            } -PassThru
+
+            $result.State | Should -BeExactly 'NotCompliant'
+            $result.FailedChecks | Should -BeExactly @('Client', 'ManagementPoint')
+        }
+
+        It 'writes fresh health evidence on every read-only evaluation' {
+            Mock Write-SetupCmEvidenceJson {}
+            $config = @{ sql = @{ instanceName = 'MSSQLSERVER' }; testClient = @{ name = 'CL01' } }
+            $checks = @{ Sql = { $true }; ManagementPoint = { $true }; DistributionPoint = { $true }; Client = { $true } }
+
+            Test-SetupCmLabHealth -Config $config -EvidenceRoot $TestDrive -Checks $checks |
+                Should -Be 'Compliant'
+            Test-SetupCmLabHealth -Config $config -EvidenceRoot $TestDrive -Checks $checks |
+                Should -Be 'Compliant'
+
+            Should -Invoke Write-SetupCmEvidenceJson -Times 2 -Exactly -ParameterFilter {
+                $Name -eq 'health' -and $EvidenceRoot -eq $TestDrive
+            }
+        }
+
+        It 'writes health check keys in deterministic ordinal order' {
+            $checks = @{}
+            $checks['Zulu'] = { $true }
+            $checks['Alpha'] = { $true }
+
+            Test-SetupCmLabHealth -Config @{} -EvidenceRoot $TestDrive -Checks $checks |
+                Should -Be 'Compliant'
+
+            $evidence = Get-Content -LiteralPath (Join-Path $TestDrive 'health.json') -Raw |
+                ConvertFrom-Json
+            @($evidence.PSObject.Properties.Name) | Should -Be @('Alpha', 'Zulu')
+        }
+
+        It 'uses the structured SQL and MECM desired-state probes in the default health checks' {
+            $config = @{
+                sql = @{ instanceName = 'MSSQLSERVER' }
+                mecm = @{ siteCode = 'LAB' }
+                testClient = @{ name = 'RING0IVY24-01' }
+            }
+            Mock Get-SetupCmSqlDesiredState { [pscustomobject]@{ State = 'Compliant'; Components = @() } }
+            Mock Get-SetupCmMecmDesiredState { [pscustomobject]@{ State = 'Compliant'; Components = @() } }
+            Mock Test-SetupCmManagementPoint { $true }
+            Mock Test-SetupCmDistributionPoint { $true }
+            Mock Test-SetupCmClient { $true }
+            Mock Test-SetupCmClientRegistration { $true }
+
+            Test-SetupCmLabHealth -Config $config -EvidenceRoot $TestDrive |
+                Should -Be 'Compliant'
+
+            Should -Invoke Get-SetupCmSqlDesiredState -Times 1 -Exactly
+            Should -Invoke Get-SetupCmMecmDesiredState -Times 1 -Exactly
+        }
+    }
+}
+
+Describe 'Invoke-SetupCm Health read-only orchestration' {
+    InModuleScope SetupCm {
+        BeforeEach {
+            $config = @{
+                evidenceRoot = $TestDrive
+                sql = @{ instanceName = 'MSSQLSERVER' }
+                mecm = @{ siteCode = 'LAB' }
+                testClient = @{ name = 'RING0IVY24-01' }
+            }
+            Mock Read-SetupCmConfig { $config }
+            Mock New-SetupCmRunEvidence { $TestDrive }
+        }
+
+        It 'skips an already healthy lab after one read-only Test evaluation' {
+            Mock Test-SetupCmLabHealth {
+                if (-not $PassThru) { throw 'Health orchestration omitted PassThru.' }
+                [pscustomobject]@{ State = 'Compliant'; FailedChecks = @() }
+            }
+
+            $result = Invoke-SetupCm -ConfigPath 'lab.yaml' -Mode Unattended -Stage Health
+
+            $result.state | Should -Be 'Skipped'
+            Should -Invoke Test-SetupCmLabHealth -Times 1 -Exactly
+        }
+
+        It 'fails a failed health state after one read-only evaluation' {
+            Mock Test-SetupCmLabHealth {
+                if (-not $PassThru) { throw 'Health orchestration omitted PassThru.' }
+                [pscustomobject]@{
+                    State = 'NotCompliant'
+                    FailedChecks = @('ClientRegistration')
+                }
+            }
+
+            { Invoke-SetupCm -ConfigPath 'lab.yaml' -Mode Unattended -Stage Health } |
+                Should -Throw '*ClientRegistration*'
+            Should -Invoke Test-SetupCmLabHealth -Times 1 -Exactly
+        }
     }
 }
 
@@ -24,7 +122,8 @@ Describe 'Test-SetupCmClientRegistration' {
         }
 
         It 'accepts an active, non-obsolete MECM resource without requiring ICMP or sqlcmd' {
-            Test-SetupCmClientRegistration -SiteCode LAB -ComputerName RING0IVY24-01 |
+            $computerName = 'RING0IVY24-01'
+            Test-SetupCmClientRegistration -SiteCode LAB -ComputerName $computerName |
                 Should -BeTrue
         }
     }
