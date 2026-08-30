@@ -12,3 +12,4 @@ cache/
 lab.local.yaml
 secrets/
 docs/gitbook/book/
+/testResults.xml
