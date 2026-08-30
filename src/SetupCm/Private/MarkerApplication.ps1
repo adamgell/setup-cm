@@ -21,6 +21,28 @@ function Get-SetupCmMarkerFixedContract {
         SourceRoot = $sourceRoot
         MarkerPath = 'C:\ProgramData\SetupCm\Phase1\marker.json'
         MarkerHash = '3F44AA70B40C9E9095E69F1C57E98F6ACC06900788A2054E251BCC58179B6254'
+        MarkerLength = 78
+        PreviousDetectorFile = [ordered]@{
+            Name = 'Test-SetupCmPhase1Marker.vbs'
+            Length = 1310
+            Hash = 'DFDDD8489C137940A06A4DD18630B0618E0BE5868559366D056352A0A88505AC'
+        }
+        EvidenceChannel = [ordered]@{
+            ShareName = 'SetupCmMarkerEvidence$'
+            ShareDescription = 'Setup-CM LabZ1 marker evidence for RING0IVY24-01'
+            LocalParent = 'C:\ProgramData\SetupCm\MarkerEvidence'
+            LocalPath = 'C:\ProgramData\SetupCm\MarkerEvidence\RING0IVY24-01'
+            FileName = 'marker-evidence.json'
+            UncPath = '\\LABZ1-CM01.test.gell.one\SetupCmMarkerEvidence$\marker-evidence.json'
+            ComputerAccount = 'TEST\RING0IVY24-01$'
+            SchemaVersion = 1
+            VerificationMethod = 'CertUtilSha256Exact'
+            MaximumBytes = 2048
+            FreshnessMinutes = 30
+            FutureToleranceMinutes = 2
+            PollSeconds = 15
+            ConvergenceSeconds = 900
+        }
         DetectorFile = [ordered]@{
             Name = 'Test-SetupCmPhase1Marker.vbs'
             Length = 1310
