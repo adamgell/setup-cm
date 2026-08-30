@@ -1785,13 +1785,15 @@ function Get-SetupCmMarkerDefaultProviders {
 
             Invoke-SetupCmMarkerSiteCommand -Config $Config -ScriptBlock {
                 $targetResourceId = [string]$Contract.TargetResourceId
+                $clientActionCommand = Get-Command Invoke-CMClientAction `
+                    -Module ConfigurationManager -ErrorAction Stop
                 $machinePolicyProvider = {
-                    Invoke-CMClientAction -DeviceId $targetResourceId `
+                    & $clientActionCommand -DeviceId $targetResourceId `
                         -ActionType ClientNotificationRequestMachinePolicyNow |
                         Out-Null
                 }.GetNewClosure()
                 $applicationEvaluationProvider = {
-                    Invoke-CMClientAction -DeviceId $targetResourceId `
+                    & $clientActionCommand -DeviceId $targetResourceId `
                         -ActionType ClientNotificationAppDeplEvalNow | Out-Null
                 }.GetNewClosure()
                 return Invoke-SetupCmMarkerClientPolicyEvaluation `

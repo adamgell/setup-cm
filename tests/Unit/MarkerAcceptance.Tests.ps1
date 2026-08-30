@@ -1021,6 +1021,10 @@ Describe 'Setup-CM marker acceptance desired state' {
             $requestText | Should -Match 'Wait-SetupCmMarkerPolicyPublication'
             $requestText | Should -Not -Match '\$snapshotProvider'
             $requestText | Should -Match 'Invoke-SetupCmMarkerClientPolicyEvaluation'
+            $requestText | Should -Match `
+                '\$clientActionCommand\s*=\s*Get-Command Invoke-CMClientAction'
+            $requestText | Should -Match '&\s*\$clientActionCommand\s+-DeviceId'
+            $requestText | Should -Not -Match '(?m)^\s*Invoke-CMClientAction\s+-DeviceId'
             $waitText | Should -Match 'Get-SetupCmMarkerPolicyPublicationSnapshot'
         }
 
