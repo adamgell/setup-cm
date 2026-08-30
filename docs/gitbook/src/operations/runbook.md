@@ -328,12 +328,23 @@ are, in order:
 1. Create or safely complete the exact protected directory and hidden share.
 2. Replace only the exact approved predecessor detector through
    `Set-CMScriptDeploymentType`; do not alter content or runtime properties.
-3. Request machine policy and application evaluation once.
+3. Wait up to five minutes for the current application and assignment policy
+   revisions/scope to agree and remain observed unchanged for 60 seconds.
+   Request machine policy once, wait a 30-second processing interval, then request
+   application evaluation once.
 4. Poll read-only state every 15 seconds for up to 15 minutes.
 
-The request start time becomes the minimum acceptable CM01 receipt time.
-Conflict stops immediately. Timeout fails with the final component state and
-does not make a second mutation attempt. Detector-only migration must not copy
+Each publication snapshot runs in a disposable read-only PowerShell process
+bounded by the lesser of 90 seconds and the time remaining in that one
+five-minute deadline; a hung ConfigMgr/CIM query is terminated and fails the
+run before notification. The publication wait also fails before notification
+if assignment scope or object cardinality changes. The UTC timestamp captured
+immediately after the one machine-policy request completes becomes the minimum
+acceptable CM01 receipt time. The 30-second interval is sequencing margin, not evidence of
+client policy receipt; only authenticated detector evidence and matching
+current client/server revision can complete convergence. Conflict stops
+immediately. Timeout fails with the final component state and does not make a
+second mutation attempt. Detector-only migration must not copy
 content, redistribute the application, recreate objects, change membership, or
 replace the assignment.
 

@@ -191,7 +191,17 @@ Describe 'Setup-CM marker acceptance desired state' {
                 $providers = @{}
                 foreach ($name in $names) {
                     $actionName = $name
-                    $providers[$name] = { [void]$Calls.Add($actionName) }.GetNewClosure()
+                    if ($name -ceq 'RequestClientPolicy') {
+                        $providers[$name] = {
+                            [void]$Calls.Add($actionName)
+                            [datetime]'2026-08-30T12:00:30Z'
+                        }.GetNewClosure()
+                    }
+                    else {
+                        $providers[$name] = {
+                            [void]$Calls.Add($actionName)
+                        }.GetNewClosure()
+                    }
                 }
                 return $providers
             }
@@ -526,11 +536,14 @@ Describe 'Setup-CM marker acceptance desired state' {
                 $capture.MinimumReceiptUtc = $MinimumReceiptUtc
                 $capture.Providers = $AllProviders
             }.GetNewClosure()
-            $minimum = [datetime]'2026-08-30T12:00:00Z'
+            $requestTimestamp = [datetime]'2026-08-30T12:00:30Z'
+            $repairProviders.RequestClientPolicy = {
+                [void]$calls.Add('RequestClientPolicy')
+                $requestTimestamp
+            }.GetNewClosure()
 
             Repair-SetupCmMarkerDesiredState -Config (New-TestMarkerConfig) `
-                -State $state -Providers $repairProviders `
-                -UtcNowProvider { $minimum }.GetNewClosure()
+                -State $state -Providers $repairProviders
 
             $calls | Should -BeExactly @(
                 'CreateEvidenceChannel',
@@ -539,9 +552,33 @@ Describe 'Setup-CM marker acceptance desired state' {
                 'WaitForConvergence'
             )
             ([datetime]$capture.MinimumReceiptUtc).ToUniversalTime().ToString('o') |
-                Should -BeExactly $minimum.ToUniversalTime().ToString('o')
+                Should -BeExactly $requestTimestamp.ToUniversalTime().ToString('o')
             [object]::ReferenceEquals($capture.Providers, $repairProviders) |
                 Should -BeTrue
+        }
+
+        It 'fails closed when the policy provider does not return its request timestamp' {
+            $providers = New-CompliantMarkerProviders
+            $inventory = & $providers.Inventory
+            $inventory.Client.InstallState = 'NotInstalled'
+            $inventory.Client.ResolvedState = 'NotInstalled'
+            $inventory.Client.MarkerHash = ''
+            $inventory.ServerCompliance = @()
+            $providers.Inventory = { $inventory }.GetNewClosure()
+            $state = Get-SetupCmMarkerDesiredState `
+                -Config (New-TestMarkerConfig) -Providers $providers
+            $calls = [System.Collections.Generic.List[string]]::new()
+            $repairProviders = New-RecordingMarkerRepairProviders -Calls $calls
+            $repairProviders.RequestClientPolicy = {
+                [void]$calls.Add('RequestClientPolicy')
+            }.GetNewClosure()
+
+            {
+                Repair-SetupCmMarkerDesiredState -Config (New-TestMarkerConfig) `
+                    -State $state -Providers $repairProviders
+            } | Should -Throw '*did not return a valid request timestamp*'
+
+            $calls | Should -BeExactly @('RequestClientPolicy')
         }
 
         It 'uses only detector script parameters for the approved policy upgrade' {
@@ -637,6 +674,321 @@ Describe 'Setup-CM marker acceptance desired state' {
                 'RequestClientPolicy',
                 'WaitForConvergence'
             )
+        }
+
+        It 'waits a full settle interval after an assignment-only revision catches up' {
+            $contract = Get-SetupCmMarkerFixedContract
+            $contract.ClientPolicy.PublicationSettleSeconds = 10
+            $contract.ClientPolicy.PublicationTimeoutSeconds = 30
+            $contract.ClientPolicy.PollSeconds = 5
+            $clock = [pscustomobject]@{
+                Now = [datetime]::SpecifyKind(
+                    [datetime]'2026-08-30T12:00:00',
+                    [System.DateTimeKind]::Utc
+                )
+            }
+            $snapshots = [System.Collections.Generic.Queue[object]]::new()
+            $snapshots.Enqueue([pscustomobject]@{
+                ApplicationCount = 1
+                AssignmentCount = 1
+                ApplicationIdentity = 'ScopeId_test/Application_test'
+                AssignmentIdentity = '16777217'
+                ApplicationRevision = 5
+                AssignmentRevision = 4
+                ApplicationLastModifiedUtc = $clock.Now
+                AssignmentCollectionName = $contract.CollectionName
+            })
+            $snapshots.Enqueue([pscustomobject]@{
+                ApplicationCount = 1
+                AssignmentCount = 1
+                ApplicationIdentity = 'ScopeId_test/Application_test'
+                AssignmentIdentity = '16777217'
+                ApplicationRevision = 5
+                AssignmentRevision = 5
+                ApplicationLastModifiedUtc = $clock.Now
+                AssignmentCollectionName = $contract.CollectionName
+            })
+            $snapshots.Enqueue([pscustomobject]@{
+                ApplicationCount = 1
+                AssignmentCount = 1
+                ApplicationIdentity = 'ScopeId_test/Application_test'
+                AssignmentIdentity = '16777217'
+                ApplicationRevision = 5
+                AssignmentRevision = 5
+                ApplicationLastModifiedUtc = $clock.Now
+                AssignmentCollectionName = $contract.CollectionName
+            })
+            $snapshots.Enqueue([pscustomobject]@{
+                ApplicationCount = 1
+                AssignmentCount = 1
+                ApplicationIdentity = 'ScopeId_test/Application_test'
+                AssignmentIdentity = '16777217'
+                ApplicationRevision = 5
+                AssignmentRevision = 5
+                ApplicationLastModifiedUtc = $clock.Now
+                AssignmentCollectionName = $contract.CollectionName
+            })
+            $delays = [System.Collections.Generic.List[int]]::new()
+
+            $result = Wait-SetupCmMarkerPolicyPublication -Contract $contract `
+                -SnapshotProvider { $snapshots.Dequeue() }.GetNewClosure() `
+                -UtcNowProvider { $clock.Now }.GetNewClosure() `
+                -DelayProvider {
+                    param($Seconds)
+                    [void]$delays.Add($Seconds)
+                    $clock.Now = $clock.Now.AddSeconds($Seconds)
+                }.GetNewClosure()
+
+            $result.ApplicationRevision | Should -Be 5
+            $result.AssignmentRevision | Should -Be 5
+            $delays | Should -BeExactly @(5, 5, 5)
+            $snapshots.Count | Should -Be 0
+        }
+
+        It 'fails closed when policy publication observes another assignment scope' {
+            $contract = Get-SetupCmMarkerFixedContract
+
+            {
+                Wait-SetupCmMarkerPolicyPublication -Contract $contract `
+                    -SnapshotProvider {
+                        [pscustomobject]@{
+                            ApplicationCount = 1
+                            AssignmentCount = 1
+                            ApplicationRevision = 5
+                            AssignmentRevision = 5
+                            ApplicationLastModifiedUtc = [datetime]::UtcNow.AddMinutes(-5)
+                            AssignmentCollectionName = 'All Systems'
+                        }
+                    }
+            } | Should -Throw '*assignment scope changed*'
+        }
+
+        It 'fails closed when a replacement assignment keeps the same revision and scope' {
+            $contract = Get-SetupCmMarkerFixedContract
+            $now = [datetime]::SpecifyKind(
+                [datetime]'2026-08-30T12:00:00',
+                [System.DateTimeKind]::Utc
+            )
+            $snapshots = [System.Collections.Generic.Queue[object]]::new()
+            foreach ($assignmentIdentity in '16777217', '16777218') {
+                $snapshots.Enqueue([pscustomobject]@{
+                    ApplicationCount = 1
+                    AssignmentCount = 1
+                    ApplicationIdentity = 'ScopeId_test/Application_test'
+                    AssignmentIdentity = $assignmentIdentity
+                    ApplicationRevision = 5
+                    AssignmentRevision = 5
+                    ApplicationLastModifiedUtc = $now.AddMinutes(-5)
+                    AssignmentCollectionName = $contract.CollectionName
+                })
+            }
+            $snapshotProvider = { $snapshots.Dequeue() }.GetNewClosure()
+            $clockProvider = { $now }.GetNewClosure()
+
+            {
+                Wait-SetupCmMarkerPolicyPublication -Contract $contract `
+                    -SnapshotProvider $snapshotProvider `
+                    -UtcNowProvider $clockProvider `
+                    -DelayProvider { param($Seconds) }
+            } | Should -Throw '*object identity changed*'
+            $snapshots.Count | Should -Be 0
+        }
+
+        It 'fails closed on policy publication cardinality drift: <Case>' -ForEach @(
+            @{ Case = 'missing application'; ApplicationCount = 0; AssignmentCount = 1 }
+            @{ Case = 'duplicate application'; ApplicationCount = 2; AssignmentCount = 1 }
+            @{ Case = 'missing assignment'; ApplicationCount = 1; AssignmentCount = 0 }
+            @{ Case = 'duplicate assignment'; ApplicationCount = 1; AssignmentCount = 2 }
+        ) {
+            $contract = Get-SetupCmMarkerFixedContract
+
+            {
+                Wait-SetupCmMarkerPolicyPublication -Contract $contract `
+                    -SnapshotProvider {
+                        [pscustomobject]@{
+                            ApplicationCount = $ApplicationCount
+                            AssignmentCount = $AssignmentCount
+                            ApplicationRevision = 5
+                            AssignmentRevision = 5
+                            ApplicationLastModifiedUtc = [datetime]::UtcNow.AddMinutes(-5)
+                            AssignmentCollectionName = $contract.CollectionName
+                        }
+                    }.GetNewClosure()
+            } | Should -Throw '*policy publication identity changed*'
+        }
+
+        It 'times policy publication out without sending a notification' {
+            $contract = Get-SetupCmMarkerFixedContract
+            $contract.ClientPolicy.PublicationSettleSeconds = 10
+            $contract.ClientPolicy.PublicationTimeoutSeconds = 10
+            $contract.ClientPolicy.PollSeconds = 5
+            $clock = [pscustomobject]@{
+                Now = [datetime]::SpecifyKind(
+                    [datetime]'2026-08-30T12:00:00',
+                    [System.DateTimeKind]::Utc
+                )
+            }
+            $delays = [System.Collections.Generic.List[int]]::new()
+            $snapshotProvider = {
+                [pscustomobject]@{
+                    ApplicationCount = 1
+                    AssignmentCount = 1
+                    ApplicationIdentity = 'ScopeId_test/Application_test'
+                    AssignmentIdentity = '16777217'
+                    ApplicationRevision = 5
+                    AssignmentRevision = 4
+                    ApplicationLastModifiedUtc = $clock.Now
+                    AssignmentCollectionName = $contract.CollectionName
+                }
+            }.GetNewClosure()
+            $clockProvider = { $clock.Now }.GetNewClosure()
+            $delayProvider = {
+                param($Seconds)
+                [void]$delays.Add($Seconds)
+                $clock.Now = $clock.Now.AddSeconds($Seconds)
+            }.GetNewClosure()
+
+            {
+                Wait-SetupCmMarkerPolicyPublication -Contract $contract `
+                    -SnapshotProvider $snapshotProvider `
+                    -UtcNowProvider $clockProvider `
+                    -DelayProvider $delayProvider
+            } | Should -Throw '*policy publication timed out after 10 seconds*'
+            $delays | Should -BeExactly @(5, 5)
+        }
+
+        It 'bounds every publication snapshot by the remaining overall deadline' {
+            $contract = Get-SetupCmMarkerFixedContract
+            $contract.ClientPolicy.PublicationSettleSeconds = 10
+            $contract.ClientPolicy.PublicationTimeoutSeconds = 10
+            $contract.ClientPolicy.PollSeconds = 5
+            $clock = [pscustomobject]@{
+                Now = [datetime]::SpecifyKind(
+                    [datetime]'2026-08-30T12:00:00',
+                    [System.DateTimeKind]::Utc
+                )
+            }
+            $snapshotTimeouts = [System.Collections.Generic.List[int]]::new()
+            $snapshotProvider = {
+                param($TimeoutMilliseconds)
+                [void]$snapshotTimeouts.Add($TimeoutMilliseconds)
+                [pscustomobject]@{
+                    ApplicationCount = 1
+                    AssignmentCount = 1
+                    ApplicationIdentity = 'ScopeId_test/Application_test'
+                    AssignmentIdentity = '16777217'
+                    ApplicationRevision = 5
+                    AssignmentRevision = 4
+                    ApplicationLastModifiedUtc = $clock.Now
+                    AssignmentCollectionName = $contract.CollectionName
+                }
+            }.GetNewClosure()
+            $clockProvider = { $clock.Now }.GetNewClosure()
+            $delayProvider = {
+                param($Seconds)
+                $clock.Now = $clock.Now.AddSeconds($Seconds)
+            }.GetNewClosure()
+
+            {
+                Wait-SetupCmMarkerPolicyPublication -Contract $contract `
+                    -SnapshotProvider $snapshotProvider `
+                    -UtcNowProvider $clockProvider `
+                    -DelayProvider $delayProvider
+            } | Should -Throw '*policy publication timed out after 10 seconds*'
+
+            $snapshotTimeouts | Should -BeExactly @(10000, 5000)
+        }
+
+        It 'caps one publication snapshot below the overall deadline' {
+            $contract = Get-SetupCmMarkerFixedContract
+            $snapshotTimeouts = [System.Collections.Generic.List[int]]::new()
+            $snapshotProvider = {
+                param($TimeoutMilliseconds)
+                [void]$snapshotTimeouts.Add($TimeoutMilliseconds)
+                throw 'stop after recording the bound'
+            }.GetNewClosure()
+
+            {
+                Wait-SetupCmMarkerPolicyPublication -Contract $contract `
+                    -SnapshotProvider $snapshotProvider
+            } | Should -Throw '*stop after recording the bound*'
+
+            $snapshotTimeouts | Should -BeExactly @(90000)
+        }
+
+        It 'gets a publication snapshot in an isolated read-only process with the supplied bound' {
+            $contract = Get-SetupCmMarkerFixedContract
+            $script:decodedMarkerSnapshot = ''
+            $script:markerSnapshotTimeout = 0
+
+            $snapshot = Get-SetupCmMarkerPolicyPublicationSnapshot `
+                -Contract $contract -TimeoutMilliseconds 4321 `
+                -ProcessProvider {
+                    param($EncodedCommand, $TimeoutMilliseconds)
+                    $script:decodedMarkerSnapshot = [Text.Encoding]::Unicode.GetString(
+                        [Convert]::FromBase64String($EncodedCommand)
+                    )
+                    $script:markerSnapshotTimeout = $TimeoutMilliseconds
+                    @'
+{"ApplicationCount":1,"AssignmentCount":1,"ApplicationIdentity":"ScopeId_test/Application_test","AssignmentIdentity":"16777217","ApplicationRevision":5,"AssignmentRevision":5,"ApplicationLastModifiedUtc":"2026-08-30T17:35:09Z","AssignmentCollectionName":"Setup-CM Phase 1 Marker - RING0IVY24-01 Only"}
+'@
+                }
+
+            $snapshot.ApplicationIdentity | Should -BeExactly 'ScopeId_test/Application_test'
+            $snapshot.AssignmentIdentity | Should -BeExactly '16777217'
+            $snapshot.ApplicationRevision | Should -Be 5
+            $snapshot.AssignmentRevision | Should -Be 5
+            $script:markerSnapshotTimeout | Should -Be 4321
+            $script:decodedMarkerSnapshot | Should -Match 'Get-CMApplication'
+            $script:decodedMarkerSnapshot | Should -Match 'Get-CMApplicationDeployment'
+            $script:decodedMarkerSnapshot | Should -Match 'Get-CimInstance'
+            $script:decodedMarkerSnapshot | Should -Not -Match 'New-CM|Set-CM|Remove-CM|Invoke-CMClientAction'
+        }
+
+        It 'fails closed on invalid isolated publication snapshot output' {
+            {
+                Get-SetupCmMarkerPolicyPublicationSnapshot `
+                    -Contract (Get-SetupCmMarkerFixedContract) `
+                    -TimeoutMilliseconds 1000 `
+                    -ProcessProvider { 'not-json' }
+            } | Should -Throw '*invalid output*'
+        }
+
+        It 'separates the paired machine-policy and application-evaluation notifications' {
+            $contract = Get-SetupCmMarkerFixedContract
+            $contract.ClientPolicy.EvaluationSettleSeconds = 30
+            $calls = [System.Collections.Generic.List[string]]::new()
+            $requestTimestamp = [datetime]'2026-08-30T12:00:30Z'
+
+            $minimumReceiptUtc = Invoke-SetupCmMarkerClientPolicyEvaluation `
+                -Contract $contract `
+                -MachinePolicyProvider { [void]$calls.Add('MachinePolicy') }.GetNewClosure() `
+                -ApplicationEvaluationProvider { [void]$calls.Add('ApplicationEvaluation') }.GetNewClosure() `
+                -UtcNowProvider {
+                    [void]$calls.Add('RequestTimestamp')
+                    $requestTimestamp
+                }.GetNewClosure() `
+                -DelayProvider {
+                    param($Seconds)
+                    [void]$calls.Add("Delay:$Seconds")
+                }.GetNewClosure()
+
+            $calls | Should -BeExactly @(
+                'MachinePolicy',
+                'RequestTimestamp',
+                'Delay:30',
+                'ApplicationEvaluation'
+            )
+            ([datetime]$minimumReceiptUtc).ToUniversalTime().ToString('o') |
+                Should -BeExactly $requestTimestamp.ToUniversalTime().ToString('o')
+        }
+
+        It 'routes the live client request through policy-publication and paired-notification guards' {
+            $requestText = (Get-SetupCmMarkerDefaultProviders).RequestClientPolicy.ToString()
+
+            $requestText | Should -Match 'Wait-SetupCmMarkerPolicyPublication'
+            $requestText | Should -Match 'Get-SetupCmMarkerPolicyPublicationSnapshot'
+            $requestText | Should -Match 'Invoke-SetupCmMarkerClientPolicyEvaluation'
         }
 
         It 'converges from pending to compliant with one 15-second read-only delay' {

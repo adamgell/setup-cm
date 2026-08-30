@@ -38,6 +38,11 @@ Describe 'Setup-CM marker evidence fixed contract' {
             $contract.EvidenceChannel.FutureToleranceMinutes | Should -Be 2
             $contract.EvidenceChannel.PollSeconds | Should -Be 15
             $contract.EvidenceChannel.ConvergenceSeconds | Should -Be 900
+            $contract.ClientPolicy.PublicationSettleSeconds | Should -Be 60
+            $contract.ClientPolicy.PublicationTimeoutSeconds | Should -Be 300
+            $contract.ClientPolicy.PublicationSnapshotTimeoutSeconds | Should -Be 90
+            $contract.ClientPolicy.PollSeconds | Should -Be 5
+            $contract.ClientPolicy.EvaluationSettleSeconds | Should -Be 30
         }
     }
 }

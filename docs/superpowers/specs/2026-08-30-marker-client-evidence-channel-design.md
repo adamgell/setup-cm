@@ -316,17 +316,38 @@ only the required actions in this order:
 
 1. Create or complete the exact protected evidence channel if needed.
 2. Upgrade the detector only from the exact approved predecessor.
-3. Request machine policy and application deployment evaluation once if the
+3. Wait read-only for the current application revision to match the assignment
+   policy revision and observe that exact revision/scope pair unchanged for 60
+   seconds, bounded by five minutes. Then request machine policy once, allow a
+   30-second processing interval, and request application deployment evaluation
+   once if the
    detector changed, direct evidence is missing/stale, or exact server state is
    pending.
 4. Poll read-only provider/client state every 15 seconds for up to 15 minutes.
 5. Succeed only when the evidence channel, direct client proof, and current
    ConfigMgr application/deployment revision all agree.
 
-The request timestamp becomes the minimum accepted CM01 receipt time whenever
-step 3 runs. A conflict discovered during polling stops immediately. Timeout
-leaves the stage failed with the final structured component states and performs
-no second mutation attempt.
+The publication wait covers both application and assignment-only changes and
+prevents the client from evaluating the previous detector revision while
+ConfigMgr policy generation or management-point visibility is still settling.
+Every snapshot executes in a disposable read-only PowerShell process and is
+bounded by the lesser of 90 seconds and the milliseconds remaining in the
+single five-minute deadline. A hung ConfigMgr/CIM query is terminated, so it
+cannot silently extend or bypass the outer publication timeout. The 30-second interval sequences the two
+notifications; it is not accepted as proof that the client received policy.
+The v1 network boundary exposes no safe direct client policy-receipt probe, so
+only a fresh authenticated detector record plus the current ConfigMgr
+client/server revision can satisfy convergence. If processing is still delayed,
+the run fails closed at timeout without another notification and a later run
+may make one new bounded request.
+The two notifications remain one bounded
+`RequestClientPolicy` adapter action; no second policy request is made. The
+UTC timestamp captured immediately after the machine-policy request completes
+is returned by the adapter and becomes the minimum accepted CM01 receipt time
+whenever step 3 runs. A scope/cardinality change or publication timeout fails before client
+notification. A conflict discovered during convergence polling stops
+immediately. Timeout leaves the stage failed with the final structured
+component states and performs no second mutation attempt.
 
 The immediate second acceptance run occurs within the 30-minute freshness
 window. It must classify every stage as already compliant and call no mutation

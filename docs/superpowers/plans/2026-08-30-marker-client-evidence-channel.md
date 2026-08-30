@@ -563,9 +563,19 @@ properties on this policy-only action. Split `detectorPolicyChanged` from
 The supported detector-only parameters are documented by
 [Microsoft Learn](https://learn.microsoft.com/en-us/powershell/module/configurationmanager/set-cmscriptdeploymenttype?view=sccm-ps).
 
-Capture `MinimumEvidenceReceiptUtc` immediately before the single provider call
-that requests both machine policy and application deployment evaluation, then
-invoke `WaitForConvergence` once. Extend
+The single provider call first waits up to five minutes for the exact
+application and assignment policy revisions/scope to agree and remain observed
+unchanged for 60 seconds. Run each read-only publication snapshot in a
+disposable PowerShell process bounded by the lesser of 90 seconds and the
+milliseconds remaining in that one deadline; terminate a hung ConfigMgr/CIM
+query and fail before notification. The provider then requests machine policy
+once, captures and returns `MinimumEvidenceReceiptUtc` immediately after that
+request completes, waits a 30-second processing interval, and
+requests application deployment evaluation once before invoking
+`WaitForConvergence` once. This avoids evaluating the predecessor revision while
+policy publication is still settling. The interval is sequencing margin, not
+receipt proof; only authenticated evidence and current client/server revision
+can end convergence successfully. Extend
 `Invoke-SetupCmMarkerProviderAction` with `-Arguments [object[]]`; the default
 wait provider accepts `($Config, $Contract, $MinimumEvidenceReceiptUtc,
 $AllProviders)` so polling reuses the same read-only provider set.
@@ -766,7 +776,12 @@ pwsh ./scripts/Invoke-SetupCm.ps1 `
 ```
 
 Permit only channel creation, detector policy update, one paired client
-policy/application evaluation request, and bounded convergence. Independently
+policy/application evaluation request, and bounded convergence. The paired
+request must pass the five-minute/60-second unchanged-revision/scope gate and
+keep 30 seconds between machine-policy retrieval and application evaluation.
+Do not treat the interval as receipt proof; require authenticated evidence and
+matching current client/server revision during convergence.
+Independently
 verify the share and NTFS ACLs, target SID/file owner, strict record and receipt
 time, current detector hash/revision, server compliance, unchanged payload/
 package/distribution/object identities, no installer process, and no client

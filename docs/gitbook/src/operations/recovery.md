@@ -63,10 +63,20 @@ inheritance is disabled, and every existing ACE is an expected safe subset.
 The repair never removes an unknown trustee or retargets a same-name share.
 
 `ClientEvidencePending` caused by a missing or older-than-30-minute record is
-repairable. The run records its request start time, requests machine policy and
-application evaluation once, then probes every 15 seconds for up to 15 minutes.
-A conflict stops immediately. Timeout records the final state and does not make
-a second mutation attempt in the same run.
+repairable. The run waits up to five minutes for the current
+application/assignment policy revisions and scope to agree and remain observed
+unchanged for 60 seconds. Each read-only publication snapshot runs in a
+disposable process bounded by the lesser of 90 seconds and the time left in that
+one deadline; a hung ConfigMgr/CIM query is terminated and fails before
+notification. The run then requests machine policy once, captures the UTC
+minimum evidence-receipt timestamp immediately after that request completes,
+waits a 30-second processing interval, and requests application evaluation
+once. The interval is sequencing margin, not
+client receipt proof; only fresh authenticated detector evidence and matching
+current client/server revision can complete convergence. It then
+probes every 15 seconds for up to 15 minutes. A scope/cardinality change fails
+before notification. A conflict stops immediately. Timeout records the final
+state and does not make a second mutation attempt in the same run.
 
 Malformed, duplicate-field, oversized, foreign-owned, future-dated, wrong-path,
 wrong-hash, or wrong-identity evidence is preserved for diagnosis and is not

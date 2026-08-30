@@ -43,6 +43,13 @@ function Get-SetupCmMarkerFixedContract {
             PollSeconds = 15
             ConvergenceSeconds = 900
         }
+        ClientPolicy = [ordered]@{
+            PublicationSettleSeconds = 60
+            PublicationTimeoutSeconds = 300
+            PublicationSnapshotTimeoutSeconds = 90
+            PollSeconds = 5
+            EvaluationSettleSeconds = 30
+        }
         DetectorFile = [ordered]@{
             Name = 'Test-SetupCmPhase1Marker.vbs'
             Length = 4075
@@ -729,6 +736,358 @@ function Invoke-SetupCmMarkerProviderAction {
     & $Providers[$Name] $Config $Contract @Arguments
 }
 
+function Get-SetupCmMarkerPolicyPublicationSnapshot {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$Contract,
+        [Parameter(Mandatory)]
+        [ValidateRange(1, 300000)]
+        [int]$TimeoutMilliseconds,
+        [scriptblock]$ProcessProvider = {
+            param($EncodedCommand, $ProcessTimeoutMilliseconds)
+
+            $powerShellPath = Join-Path $PSHOME 'pwsh.exe'
+            if (-not [IO.File]::Exists($powerShellPath)) {
+                throw 'PowerShell is unavailable for the isolated marker policy snapshot.'
+            }
+            $startInfo = [Diagnostics.ProcessStartInfo]::new()
+            $startInfo.FileName = $powerShellPath
+            $startInfo.ArgumentList.Add('-NoLogo')
+            $startInfo.ArgumentList.Add('-NoProfile')
+            $startInfo.ArgumentList.Add('-NonInteractive')
+            $startInfo.ArgumentList.Add('-EncodedCommand')
+            $startInfo.ArgumentList.Add($EncodedCommand)
+            $startInfo.UseShellExecute = $false
+            $startInfo.RedirectStandardOutput = $true
+            $startInfo.RedirectStandardError = $true
+
+            $process = [Diagnostics.Process]::new()
+            $process.StartInfo = $startInfo
+            try {
+                if (-not $process.Start()) {
+                    throw 'The isolated marker policy snapshot did not start.'
+                }
+                $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+                $stderrTask = $process.StandardError.ReadToEndAsync()
+                if (-not $process.WaitForExit($ProcessTimeoutMilliseconds)) {
+                    $process.Kill($true)
+                    $process.WaitForExit()
+                    [void]$stdoutTask.GetAwaiter().GetResult()
+                    [void]$stderrTask.GetAwaiter().GetResult()
+                    throw 'The isolated marker policy snapshot timed out.'
+                }
+                $stdout = $stdoutTask.GetAwaiter().GetResult().Trim()
+                [void]$stderrTask.GetAwaiter().GetResult()
+                if ($process.ExitCode -ne 0) {
+                    throw 'The isolated marker policy snapshot failed.'
+                }
+                return $stdout
+            }
+            finally {
+                $process.Dispose()
+            }
+        }
+    )
+
+    $fixedContract = Get-SetupCmMarkerFixedContract
+    foreach ($propertyName in 'SiteCode', 'ApplicationName', 'CollectionName') {
+        $actual = [string](Get-SetupCmMarkerValue `
+            -InputObject $Contract -Name $propertyName)
+        $expected = [string](Get-SetupCmMarkerValue `
+            -InputObject $fixedContract -Name $propertyName)
+        if ($actual -cne $expected) {
+            throw 'The marker policy snapshot requires the fixed lab-only contract.'
+        }
+    }
+
+    $payloadJson = [ordered]@{
+        SiteCode = [string]$Contract.SiteCode
+        ApplicationName = [string]$Contract.ApplicationName
+        CollectionName = [string]$Contract.CollectionName
+    } | ConvertTo-Json -Compress
+    $payload = [Convert]::ToBase64String(
+        [Text.Encoding]::UTF8.GetBytes($payloadJson)
+    )
+    $childScript = @'
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+$WarningPreference = 'SilentlyContinue'
+$InformationPreference = 'SilentlyContinue'
+if (-not $IsWindows) {
+    throw 'Marker policy snapshots require Windows on the accepted site server.'
+}
+$payloadJson = [Text.Encoding]::UTF8.GetString(
+    [Convert]::FromBase64String('__MARKER_POLICY_PAYLOAD__')
+)
+$payload = $payloadJson | ConvertFrom-Json -ErrorAction Stop
+$siteCode = [string]$payload.SiteCode
+$applicationName = [string]$payload.ApplicationName
+$collectionName = [string]$payload.CollectionName
+if ($siteCode -cne 'LAB' -or
+    $applicationName -cne 'Setup-CM Phase 1 Marker' -or
+    $collectionName -cne 'Setup-CM Phase 1 Marker - RING0IVY24-01 Only') {
+    throw 'The marker policy snapshot payload is outside the fixed lab boundary.'
+}
+if ([string]::IsNullOrWhiteSpace($env:SMS_ADMIN_UI_PATH)) {
+    throw 'SMS_ADMIN_UI_PATH is required to locate the ConfigurationManager module.'
+}
+$modulePath = Join-Path $env:SMS_ADMIN_UI_PATH '..\ConfigurationManager.psd1'
+Import-Module $modulePath -Force -ErrorAction Stop
+$provider = Get-CimInstance -Namespace 'root\SMS' `
+    -ClassName SMS_ProviderLocation -ErrorAction Stop |
+    Where-Object {
+        [bool]$_.ProviderForLocalSite -and [string]$_.SiteCode -ieq $siteCode
+    } |
+    Select-Object -First 1
+if ($null -eq $provider) {
+    throw "No local SMS Provider exists for site $siteCode."
+}
+$drive = Get-PSDrive -Name $siteCode -PSProvider CMSite `
+    -ErrorAction SilentlyContinue
+if ($null -eq $drive) {
+    New-PSDrive -Name $siteCode -PSProvider CMSite `
+        -Root ([string]$provider.Machine) | Out-Null
+}
+elseif ([string]$drive.Root -ine [string]$provider.Machine) {
+    throw "The existing $siteCode CMSite drive targets a different provider."
+}
+
+Push-Location ($siteCode + ':')
+try {
+    $namespace = "root\SMS\site_$siteCode"
+    $applications = @(Get-CMApplication -Name $applicationName `
+        -Fast -ErrorAction Stop)
+    $assignments = @(Get-CMApplicationDeployment -Name $applicationName `
+        -ErrorAction Stop)
+    $escapedCollectionName = $collectionName.Replace("'", "''")
+    $collections = @(Get-CimInstance -Namespace $namespace `
+        -ClassName SMS_Collection -Filter "Name = '$escapedCollectionName'" `
+        -ErrorAction Stop)
+    $application = $applications | Select-Object -First 1
+    $assignment = $assignments | Select-Object -First 1
+    $collection = $collections | Select-Object -First 1
+    $assignmentRevision = if ($null -eq $assignment) {
+        0
+    }
+    else {
+        [int](([string]$assignment.AssignedCI_UniqueID -split '/')[-1])
+    }
+    $assignmentCollectionName = if (
+        $collections.Count -eq 1 -and
+        $null -ne $assignment -and
+        [string]$assignment.TargetCollectionID -ceq `
+            [string]$collection.CollectionID
+    ) {
+        $collectionName
+    }
+    else { '' }
+
+    [pscustomobject][ordered]@{
+        ApplicationCount = $applications.Count
+        AssignmentCount = $assignments.Count
+        ApplicationIdentity = if ($null -eq $application) {
+            ''
+        }
+        else { [string]$application.ModelName }
+        AssignmentIdentity = if ($null -eq $assignment) {
+            ''
+        }
+        else { [string]$assignment.AssignmentID }
+        ApplicationRevision = if ($null -eq $application) {
+            0
+        }
+        else { [int]$application.CIVersion }
+        AssignmentRevision = $assignmentRevision
+        ApplicationLastModifiedUtc = if ($null -eq $application) {
+            $null
+        }
+        else {
+            ([datetime]$application.DateLastModified).ToUniversalTime().ToString('o')
+        }
+        AssignmentCollectionName = $assignmentCollectionName
+    } | ConvertTo-Json -Compress
+}
+finally {
+    Pop-Location
+}
+'@.Replace('__MARKER_POLICY_PAYLOAD__', $payload)
+    $encodedCommand = [Convert]::ToBase64String(
+        [Text.Encoding]::Unicode.GetBytes($childScript)
+    )
+    $rawResult = [string](& $ProcessProvider $encodedCommand $TimeoutMilliseconds)
+    if ([string]::IsNullOrWhiteSpace($rawResult) -or $rawResult.Length -gt 4096) {
+        throw 'The isolated marker policy snapshot returned invalid output.'
+    }
+    try {
+        $result = $rawResult | ConvertFrom-Json -ErrorAction Stop
+        if ($result -is [array]) {
+            throw 'Array output is not accepted.'
+        }
+        foreach ($propertyName in @(
+                'ApplicationCount',
+                'AssignmentCount',
+                'ApplicationIdentity',
+                'AssignmentIdentity',
+                'ApplicationRevision',
+                'AssignmentRevision',
+                'ApplicationLastModifiedUtc',
+                'AssignmentCollectionName'
+            )) {
+            if ($null -eq $result.PSObject.Properties[$propertyName]) {
+                throw "Missing snapshot property $propertyName."
+            }
+        }
+        $snapshot = [pscustomobject][ordered]@{
+            ApplicationCount = [int]$result.ApplicationCount
+            AssignmentCount = [int]$result.AssignmentCount
+            ApplicationIdentity = [string]$result.ApplicationIdentity
+            AssignmentIdentity = [string]$result.AssignmentIdentity
+            ApplicationRevision = [int]$result.ApplicationRevision
+            AssignmentRevision = [int]$result.AssignmentRevision
+            ApplicationLastModifiedUtc = $result.ApplicationLastModifiedUtc
+            AssignmentCollectionName = [string]$result.AssignmentCollectionName
+        }
+    }
+    catch {
+        throw 'The isolated marker policy snapshot returned invalid output.'
+    }
+    return $snapshot
+}
+
+function Wait-SetupCmMarkerPolicyPublication {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$Contract,
+        [Parameter(Mandatory)][scriptblock]$SnapshotProvider,
+        [scriptblock]$UtcNowProvider = {
+            (Get-Date).ToUniversalTime()
+        },
+        [scriptblock]$DelayProvider = {
+            param($Seconds)
+            Start-Sleep -Seconds $Seconds
+        }
+    )
+
+    $startedAt = ([datetime](& $UtcNowProvider)).ToUniversalTime()
+    $deadline = $startedAt.AddSeconds(
+        [int]$Contract.ClientPolicy.PublicationTimeoutSeconds)
+    $expectedApplicationIdentity = ''
+    $expectedAssignmentIdentity = ''
+    $stableKey = ''
+    $stableSinceUtc = $null
+    while ($true) {
+        $snapshotStartedAt = ([datetime](& $UtcNowProvider)).ToUniversalTime()
+        if ($snapshotStartedAt -ge $deadline) {
+            throw "Marker policy publication timed out after $($Contract.ClientPolicy.PublicationTimeoutSeconds) seconds."
+        }
+        $remainingMilliseconds = [int][Math]::Max(
+            1,
+            [Math]::Min(
+                [int]$Contract.ClientPolicy.PublicationSnapshotTimeoutSeconds * 1000,
+                [Math]::Ceiling(
+                    ($deadline - $snapshotStartedAt).TotalMilliseconds
+                )
+            )
+        )
+        $snapshot = & $SnapshotProvider $remainingMilliseconds
+        $now = ([datetime](& $UtcNowProvider)).ToUniversalTime()
+        if ($now -ge $deadline) {
+            throw "Marker policy publication timed out after $($Contract.ClientPolicy.PublicationTimeoutSeconds) seconds."
+        }
+        $applicationCount = [int](Get-SetupCmMarkerValue `
+            -InputObject $snapshot -Name ApplicationCount -DefaultValue 0)
+        $assignmentCount = [int](Get-SetupCmMarkerValue `
+            -InputObject $snapshot -Name AssignmentCount -DefaultValue 0)
+        if ($applicationCount -ne 1 -or $assignmentCount -ne 1) {
+            throw 'Marker policy publication identity changed while waiting.'
+        }
+
+        $assignmentCollectionName = [string](Get-SetupCmMarkerValue `
+            -InputObject $snapshot -Name AssignmentCollectionName)
+        if ($assignmentCollectionName -cne [string]$Contract.CollectionName) {
+            throw 'Marker policy publication assignment scope changed while waiting.'
+        }
+
+        $applicationIdentity = [string](Get-SetupCmMarkerValue `
+            -InputObject $snapshot -Name ApplicationIdentity)
+        $assignmentIdentity = [string](Get-SetupCmMarkerValue `
+            -InputObject $snapshot -Name AssignmentIdentity)
+        if ([string]::IsNullOrWhiteSpace($applicationIdentity) -or
+            [string]::IsNullOrWhiteSpace($assignmentIdentity)) {
+            throw 'Marker policy publication object identity is unavailable.'
+        }
+        if ([string]::IsNullOrEmpty($expectedApplicationIdentity)) {
+            $expectedApplicationIdentity = $applicationIdentity
+            $expectedAssignmentIdentity = $assignmentIdentity
+        }
+        elseif ($applicationIdentity -cne $expectedApplicationIdentity -or
+            $assignmentIdentity -cne $expectedAssignmentIdentity) {
+            throw 'Marker policy publication object identity changed while waiting.'
+        }
+
+        $applicationRevision = [int](Get-SetupCmMarkerValue `
+            -InputObject $snapshot -Name ApplicationRevision -DefaultValue 0)
+        $assignmentRevision = [int](Get-SetupCmMarkerValue `
+            -InputObject $snapshot -Name AssignmentRevision -DefaultValue 0)
+        $lastModifiedValue = Get-SetupCmMarkerValue `
+            -InputObject $snapshot -Name ApplicationLastModifiedUtc
+        if ($applicationRevision -le 0 -or $null -eq $lastModifiedValue) {
+            throw 'Marker policy publication metadata is unavailable.'
+        }
+        try {
+            $lastModifiedUtc = ([datetime]$lastModifiedValue).ToUniversalTime()
+        }
+        catch {
+            throw 'Marker policy publication metadata is invalid.'
+        }
+
+        if ($assignmentRevision -eq $applicationRevision) {
+            $currentStableKey = '{0}|{1}|{2}|{3}|{4}|{5}' -f
+                $applicationIdentity,
+                $assignmentIdentity,
+                $applicationRevision,
+                $assignmentRevision,
+                $lastModifiedUtc.ToString('o'),
+                $assignmentCollectionName
+            if ($currentStableKey -cne $stableKey) {
+                $stableKey = $currentStableKey
+                $stableSinceUtc = $now
+            }
+            $settledAt = ([datetime]$stableSinceUtc).AddSeconds(
+                [int]$Contract.ClientPolicy.PublicationSettleSeconds)
+            if ($now -ge $settledAt) { return $snapshot }
+        }
+        else {
+            $stableKey = ''
+            $stableSinceUtc = $null
+        }
+        & $DelayProvider ([int]$Contract.ClientPolicy.PollSeconds)
+    }
+}
+
+function Invoke-SetupCmMarkerClientPolicyEvaluation {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$Contract,
+        [Parameter(Mandatory)][scriptblock]$MachinePolicyProvider,
+        [Parameter(Mandatory)][scriptblock]$ApplicationEvaluationProvider,
+        [scriptblock]$UtcNowProvider = {
+            (Get-Date).ToUniversalTime()
+        },
+        [scriptblock]$DelayProvider = {
+            param($Seconds)
+            Start-Sleep -Seconds $Seconds
+        }
+    )
+
+    & $MachinePolicyProvider | Out-Null
+    $minimumEvidenceReceiptUtc = `
+        ([datetime](& $UtcNowProvider)).ToUniversalTime()
+    & $DelayProvider ([int]$Contract.ClientPolicy.EvaluationSettleSeconds)
+    & $ApplicationEvaluationProvider | Out-Null
+    return $minimumEvidenceReceiptUtc
+}
+
 function Wait-SetupCmMarkerConvergence {
     [CmdletBinding()]
     param(
@@ -786,10 +1145,7 @@ function Repair-SetupCmMarkerDesiredState {
         [Parameter(Mandatory)][hashtable]$Config,
         [Parameter(Mandatory)]$State,
         [string]$EvidenceRoot,
-        [hashtable]$Providers,
-        [scriptblock]$UtcNowProvider = {
-            (Get-Date).ToUniversalTime()
-        }
+        [hashtable]$Providers
     )
 
     if ($State.State -eq 'Conflict' -or @($State.Components | Where-Object State -eq 'Conflict').Count -gt 0) {
@@ -885,8 +1241,19 @@ function Repair-SetupCmMarkerDesiredState {
     if ($evidenceChannelChanged -or $detectorPolicyChanged -or
         $deploymentCreated -or $client.State -eq 'NotCompliant' -or
         $server.State -eq 'NotCompliant') {
-        $minimumEvidenceReceiptUtc = ([datetime](& $UtcNowProvider)).ToUniversalTime()
-        Invoke-SetupCmMarkerProviderAction -Providers $Providers -Name RequestClientPolicy -Config $Config -Contract $contract
+        $requestTimestamp = Invoke-SetupCmMarkerProviderAction `
+            -Providers $Providers -Name RequestClientPolicy `
+            -Config $Config -Contract $contract
+        try {
+            if ($null -eq $requestTimestamp) {
+                throw 'No timestamp was returned.'
+            }
+            $minimumEvidenceReceiptUtc = `
+                ([datetime]$requestTimestamp).ToUniversalTime()
+        }
+        catch {
+            throw 'The marker policy provider did not return a valid request timestamp.'
+        }
         Invoke-SetupCmMarkerProviderAction -Providers $Providers `
             -Name WaitForConvergence -Config $Config -Contract $contract `
             -Arguments @($minimumEvidenceReceiptUtc, $Providers)
@@ -1408,11 +1775,29 @@ function Get-SetupCmMarkerDefaultProviders {
         }
         RequestClientPolicy = {
             param($Config, $Contract)
+            $snapshotProvider = {
+                param($TimeoutMilliseconds)
+                Get-SetupCmMarkerPolicyPublicationSnapshot -Contract $Contract `
+                    -TimeoutMilliseconds $TimeoutMilliseconds
+            }.GetNewClosure()
+            Wait-SetupCmMarkerPolicyPublication -Contract $Contract `
+                -SnapshotProvider $snapshotProvider | Out-Null
+
             Invoke-SetupCmMarkerSiteCommand -Config $Config -ScriptBlock {
-                Invoke-CMClientAction -DeviceId ([string]$Contract.TargetResourceId) `
-                    -ActionType ClientNotificationRequestMachinePolicyNow | Out-Null
-                Invoke-CMClientAction -DeviceId ([string]$Contract.TargetResourceId) `
-                    -ActionType ClientNotificationAppDeplEvalNow | Out-Null
+                $targetResourceId = [string]$Contract.TargetResourceId
+                $machinePolicyProvider = {
+                    Invoke-CMClientAction -DeviceId $targetResourceId `
+                        -ActionType ClientNotificationRequestMachinePolicyNow |
+                        Out-Null
+                }.GetNewClosure()
+                $applicationEvaluationProvider = {
+                    Invoke-CMClientAction -DeviceId $targetResourceId `
+                        -ActionType ClientNotificationAppDeplEvalNow | Out-Null
+                }.GetNewClosure()
+                return Invoke-SetupCmMarkerClientPolicyEvaluation `
+                    -Contract $Contract `
+                    -MachinePolicyProvider $machinePolicyProvider `
+                    -ApplicationEvaluationProvider $applicationEvaluationProvider
             }
         }
         WaitForConvergence = {
