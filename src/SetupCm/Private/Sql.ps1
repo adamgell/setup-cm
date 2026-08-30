@@ -134,6 +134,11 @@ function Get-SetupCmSqlConnectionServer {
     [CmdletBinding()]
     param([Parameter(Mandatory)][hashtable]$Config)
 
+    if (-not $Config.ContainsKey('sql') -or $Config.sql -isnot [hashtable] -or
+        -not $Config.sql.ContainsKey('instanceName') -or
+        [string]::IsNullOrWhiteSpace([string]$Config.sql.instanceName)) {
+        throw 'sql.instanceName is required for SQL connectivity.'
+    }
     if (-not $Config.ContainsKey('mecm') -or $Config.mecm -isnot [hashtable]) {
         throw 'mecm.sqlServer or mecm.siteServerFqdn is required for SQL connectivity.'
     }

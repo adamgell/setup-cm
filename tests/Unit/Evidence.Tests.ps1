@@ -50,6 +50,17 @@ Describe 'Write-SetupCmEvidenceJson' {
             $message | Should -Be 'Password=<redacted>; Token=<redacted>; Pwd=<redacted>'
         }
 
+        It 'redacts API key assignments and HTTP header forms in free text' {
+            $path = Write-SetupCmEvidenceJson -EvidenceRoot $TestDrive -Name 'api-key-text' -Value @{
+                message = 'apiKey="two words"; X-Api-Key: header-secret; API_KEY=third-secret'
+            }
+
+            $json = Get-Content -LiteralPath $path -Raw
+            $message = ($json | ConvertFrom-Json).message
+            $json | Should -Not -Match 'two words|header-secret|third-secret'
+            $message | Should -Be 'apiKey=<redacted>; X-Api-Key: <redacted>; API_KEY=<redacted>'
+        }
+
         It 'removes composite sensitive keys while preserving safe path and status fields' {
             $sensitiveValues = 1..6 | ForEach-Object { "sensitive-value-$_" }
             $value = [ordered]@{

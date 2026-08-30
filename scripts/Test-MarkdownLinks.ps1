@@ -180,6 +180,16 @@ foreach ($markdownFile in $markdownFiles) {
             }
             [void]$destinations.Add([string]$referenceDefinitions[$label])
         }
+        foreach ($match in [regex]::Matches(
+            $line,
+            '(?<![!\\\]])\[(?<label>[^\]\[]+)\](?!\s*(?:\(|\[))'
+        )) {
+            $labelText = $match.Groups['label'].Value
+            $label = ConvertTo-MarkdownReferenceLabel -Label $labelText
+            if ($referenceDefinitions.ContainsKey($label)) {
+                [void]$destinations.Add([string]$referenceDefinitions[$label])
+            }
+        }
 
         foreach ($destination in $destinations) {
             if ([string]::IsNullOrWhiteSpace($destination) -or

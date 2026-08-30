@@ -76,6 +76,10 @@ the review host, extract it into a new commit-specific directory, and verify
 the expected source layout before using any relative command:
 
 ```powershell
+if ([string]::IsNullOrWhiteSpace($env:SETUPCM_SOURCE_COMMIT) -or
+    $env:SETUPCM_SOURCE_COMMIT -notmatch '^[0-9a-fA-F]{40}$') {
+    throw 'SETUPCM_SOURCE_COMMIT must identify the exact staged commit.'
+}
 $archivePath = Join-Path 'C:\ProgramData\SetupCm\staging' `
   "setup-cm-$($env:SETUPCM_SOURCE_COMMIT).tar"
 $expectedArchiveHash = '<RECORDED_64_CHARACTER_SHA256>'

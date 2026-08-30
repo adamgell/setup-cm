@@ -119,6 +119,18 @@ Describe 'New-SetupCmSqlConnection' {
             } | Should -Throw '*mecm.sqlServer or mecm.siteServerFqdn*'
             Should -Invoke Add-Type -Times 0 -Exactly
         }
+
+        It 'fails with a bounded configuration error before loading SQL dependencies when the instance name is missing' {
+            Mock Add-Type {}
+
+            {
+                New-SetupCmSqlConnection -Config @{
+                    sql = @{}
+                    mecm = @{ siteServerFqdn = 'LABZ1-CM01.test.gell.one' }
+                } -Database 'master'
+            } | Should -Throw '*sql.instanceName*'
+            Should -Invoke Add-Type -Times 0 -Exactly
+        }
     }
 }
 

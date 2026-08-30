@@ -84,6 +84,7 @@ Describe 'Test-MarkdownLinks script' {
         $content | Should -Match 'tar\.exe -xf \$archivePath -C \$temporarySourceRoot'
         $content | Should -Match 'Move-Item -LiteralPath \$temporarySourceRoot -Destination \$sourceRoot'
         $content | Should -Match 'Remove-Item -LiteralPath \$temporarySourceRoot -Recurse -Force'
+        $content | Should -Match '(?s)\[string\]::IsNullOrWhiteSpace\(\$env:SETUPCM_SOURCE_COMMIT\).*?\$archivePath = Join-Path'
     }
 
     It 'resolves reference-style local links whose definitions follow their usage' {
@@ -98,6 +99,17 @@ Describe 'Test-MarkdownLinks script' {
 
         $result.State | Should -BeExactly 'Passed'
         $result.LocalLinksChecked | Should -Be 1
+    }
+
+    It 'validates a shortcut reference whose definition points to a missing file' {
+        Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') -Value @'
+[Missing]
+
+[Missing]: missing.md
+'@
+
+        { & $linkScript -RepositoryRoot $TestDrive -Path index.md } |
+            Should -Throw '*missing.md*'
     }
 
     It 'fails when a reference-style definition names a missing local target' {
