@@ -98,7 +98,7 @@ Describe 'New-SetupCmSqlConnection' {
                 $connection.Database | Should -Be 'master'
                 $connection.ConnectionString | Should -Match 'Integrated Security=True'
                 $connection.ConnectionString | Should -Match 'Encrypt=True'
-                $connection.ConnectionString | Should -Match 'TrustServerCertificate=True'
+                $connection.ConnectionString | Should -Match 'TrustServerCertificate=False'
             }
             finally {
                 if ($null -ne $connection) { $connection.Dispose() }

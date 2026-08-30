@@ -19,7 +19,20 @@ A failed stage does not require a full restart. The stage engine and evidence fo
 2. Review the failed `stage-<name>.json` and corresponding component-state
    artifact to identify the immediate error.
 3. Correct the stated prerequisite, source, configuration, or host condition.
-4. Rerun the failed stage and any later dependent stages:
+4. Rerun the failed stage and only its later dependent stages, preserving
+   canonical relative order:
+
+   | Failed stage | Rerun stages |
+   | --- | --- |
+   | `Acquire` | `Acquire,Sql,Mecm,Marker,Health` |
+   | `Sql` | `Sql,Mecm,Marker,Health` |
+   | `Mecm` | `Mecm,Marker,Health` |
+   | `Marker` | `Marker,Health` |
+   | `Health` | `Health` |
+
+   The first four rows include `Marker` and therefore require the same exact
+   `SourceCommit`; a `Health`-only recovery does not. For example, after a
+   `Sql` failure:
 
    ```powershell
    pwsh ./scripts/Invoke-SetupCm.ps1 `

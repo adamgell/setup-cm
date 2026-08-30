@@ -1,5 +1,27 @@
 Import-Module "$PSScriptRoot/../../src/SetupCm/SetupCm.psd1" -Force
 
+Describe 'MECM source safety' {
+    It 'does not assign to the read-only Host automatic variable' {
+        $tokens = $null
+        $parseErrors = $null
+        $path = "$PSScriptRoot/../../src/SetupCm/Private/Mecm.ps1"
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            $path,
+            [ref]$tokens,
+            [ref]$parseErrors
+        )
+
+        $parseErrors | Should -HaveCount 0
+        $hostAssignments = @($ast.FindAll({
+            param($node)
+            $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+                $node.Left -is [System.Management.Automation.Language.VariableExpressionAst] -and
+                $node.Left.VariablePath.UserPath -ieq 'Host'
+        }, $true))
+        $hostAssignments | Should -HaveCount 0
+    }
+}
+
 Describe 'New-SetupCmPrimarySiteScript' {
     InModuleScope SetupCm {
         It 'generates a current-branch standalone-primary answer file' {

@@ -471,8 +471,8 @@ function Get-SetupCmMecmDesiredState {
 
     $expectedServer = ([string]$Config.mecm.siteServerFqdn).TrimEnd('.')
     try {
-        $host = & $Providers.Host
-        $actualFqdn = [string](Get-SetupCmMecmObjectValue -InputObject $host -Name Fqdn)
+        $hostState = & $Providers.Host
+        $actualFqdn = [string](Get-SetupCmMecmObjectValue -InputObject $hostState -Name Fqdn)
         if (-not (Test-SetupCmMecmServerIdentity -Actual $actualFqdn -Expected $expectedServer)) {
             [void]$components.Add((New-SetupCmMecmComponent -Name TargetHost -State Conflict -Reason HostMismatch -Details @{
                 Expected = $expectedServer; Actual = $actualFqdn

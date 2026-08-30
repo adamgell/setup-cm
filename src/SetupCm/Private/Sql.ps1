@@ -152,7 +152,7 @@ function New-SetupCmSqlConnection {
     $builder['Initial Catalog'] = $Database
     $builder['Integrated Security'] = $true
     $builder['Encrypt'] = $true
-    $builder['TrustServerCertificate'] = $true
+    $builder['TrustServerCertificate'] = $false
     $builder['Connect Timeout'] = 10
     $builder['Application Name'] = 'setup-cm'
     return [System.Data.SqlClient.SqlConnection]::new($builder.ConnectionString)

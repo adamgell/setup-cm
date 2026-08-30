@@ -234,12 +234,12 @@ Describe 'Invoke-SetupCmAcquire' {
 
         It 'reacquires only the affected artifact' {
             $config = @{
-                cacheRoot = 'C:\cache'
+                cacheRoot = Join-Path $TestDrive 'cache'
                 evidenceRoot = $TestDrive
                 sources = @{
-                    sqlServer = @{ name = 'sqlServer' }
-                    mecm = @{ name = 'mecm' }
-                    adk = @{ name = 'adk' }
+                    sqlServer = @{ name = 'sqlServer'; cacheFile = 'sql.iso' }
+                    mecm = @{ name = 'mecm'; cacheFile = 'mecm.iso' }
+                    adk = @{ name = 'adk'; cacheFile = 'adk.exe' }
                 }
             }
             Mock Read-SetupCmConfig { $config }
@@ -247,7 +247,10 @@ Describe 'Invoke-SetupCmAcquire' {
                 if ($Source.name -eq 'mecm') {
                     return [pscustomobject]@{ Name = 'mecm'; State = 'NotCompliant'; Reason = 'Sha256Mismatch' }
                 }
-                [pscustomobject]@{ Name = $Source.name; State = 'Compliant'; Reason = 'Verified' }
+                [pscustomobject]@{
+                    Name = $Source.name; State = 'Compliant'; Reason = 'Verified'
+                    Sha256 = ('a' * 64); SizeBytes = 1; Version = '1.0'; Architecture = 'x64'
+                }
             }
             Mock Get-SetupCmArtifact {
                 [pscustomobject]@{ Name = $Source.name; Path = 'cached'; Sha256 = 'hash' }
@@ -256,6 +259,52 @@ Describe 'Invoke-SetupCmAcquire' {
             $result = @(Invoke-SetupCmAcquire -ConfigPath 'lab.yaml' -EvidenceRoot $TestDrive)
 
             $result | Should -HaveCount 3
+            Should -Invoke Get-SetupCmArtifact -Times 1 -Exactly -ParameterFilter { $Source.name -eq 'mecm' }
+        }
+
+        It 'normalizes reused and acquired artifacts to the same bounded evidence shape' {
+            $cacheRoot = Join-Path $TestDrive 'cache'
+            $config = @{
+                cacheRoot = $cacheRoot
+                evidenceRoot = $TestDrive
+                sources = @{
+                    sqlServer = @{ name = 'sqlServer'; cacheFile = 'sql.iso' }
+                    mecm = @{ name = 'mecm'; cacheFile = 'mecm.iso' }
+                }
+            }
+            Mock Read-SetupCmConfig { $config }
+            Mock Get-SetupCmArtifactState {
+                if ($Source.name -eq 'sqlServer') {
+                    return [pscustomobject]@{
+                        Name = 'sqlServer'; State = 'Compliant'; Reason = 'Verified'
+                        CacheFile = 'sql.iso'; Sha256 = ('a' * 64); SizeBytes = 1024
+                        Version = '16.0.1000.6'; Architecture = 'x64'
+                    }
+                }
+                [pscustomobject]@{ Name = 'mecm'; State = 'NotCompliant'; Reason = 'Missing' }
+            }
+            Mock Get-SetupCmArtifact {
+                [pscustomobject]@{
+                    Name = 'mecm'; State = 'Compliant'; Reason = 'AcquiredAndVerified'
+                    Path = (Join-Path $cacheRoot 'mecm.iso'); Sha256 = ('b' * 64); SizeBytes = 2048
+                    Version = '2503'; Architecture = 'x64'; VerifiedAt = '2026-08-30T00:00:00.0000000Z'
+                }
+            }
+
+            $result = @(Invoke-SetupCmAcquire -ConfigPath 'lab.yaml' -EvidenceRoot $TestDrive)
+            $evidence = @(Get-Content -LiteralPath (Join-Path $TestDrive 'acquisition.json') -Raw |
+                ConvertFrom-Json)
+            $reused = @($result | Where-Object Name -eq 'sqlServer')[0]
+            $reusedEvidence = @($evidence | Where-Object Name -eq 'sqlServer')[0]
+
+            $result | Should -HaveCount 2
+            $reused.Path | Should -Be (Join-Path $cacheRoot 'sql.iso')
+            $reused.PSObject.Properties.Name | Should -Contain 'Path'
+            $reused.PSObject.Properties.Name | Should -Not -Contain 'CacheFile'
+            $reusedEvidence.PSObject.Properties.Name | Should -Contain 'Path'
+            $reusedEvidence.PSObject.Properties.Name | Should -Not -Contain 'CacheFile'
+            @($result | Where-Object { $_.PSObject.Properties.Name -notcontains 'Path' }) |
+                Should -HaveCount 0
             Should -Invoke Get-SetupCmArtifact -Times 1 -Exactly -ParameterFilter { $Source.name -eq 'mecm' }
         }
 

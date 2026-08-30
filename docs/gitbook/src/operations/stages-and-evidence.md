@@ -71,7 +71,7 @@ Every selected stage writes `stage-<stage>.json`:
 | --- | --- |
 | `run.json` | Run ID, UTC start, and exact source commit when provided. Marker runs require it. |
 | `acquire-state.json` | Artifact component state without source URI or vault location. |
-| `acquisition.json` | Bounded identities and hashes for artifacts actually applied. |
+| `acquisition.json` | Bounded identities and hashes for every artifact evaluated during Acquire Apply, distinguishing reused `Verified` entries from `AcquiredAndVerified` entries. |
 | `sql-state.json` | SQL component state and reasons. |
 | `mecm-state.json` | MECM component state and reasons. |
 | `marker-state.json` | Application/DT revisions, content/package/distribution, collection and membership, assignment/policy, projected client detection fields, per-device server compliance, evaluated time, and exact source commit. |

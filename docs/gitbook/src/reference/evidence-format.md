@@ -43,7 +43,7 @@ Every selected stage writes `stage-<stage>.json`:
 | File | Produced by | Purpose |
 | --- | --- | --- |
 | `acquire-state.json` | Acquire Test/Verify | Per-artifact compliance, reason, size, hash, version, and architecture. |
-| `acquisition.json` | Acquire Apply | Bounded identity and hash metadata for artifacts actually acquired. |
+| `acquisition.json` | Acquire Apply | Bounded identity and hash metadata for every artifact evaluated during Apply, distinguishing reused `Verified` entries from `AcquiredAndVerified` entries. |
 | `sql-state.json` | SQL Test/Verify | Overall state plus SQL component state and reasons. |
 | `mecm-state.json` | MECM Test/Verify | Overall state plus site, role, prerequisite, service, content-library, and client components. |
 | `marker-state.json` | Marker Test/Verify | Exact boundary, payload, application/DT, content/distribution, collection/member, assignment/policy, client projection, and per-device server compliance. |

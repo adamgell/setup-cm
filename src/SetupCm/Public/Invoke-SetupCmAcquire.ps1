@@ -15,7 +15,19 @@ function Invoke-SetupCmAcquire {
         foreach ($source in (Get-SetupCmNormalizedSources -Sources $config.sources)) {
             $state = Get-SetupCmArtifactState -Source $source -CacheRoot $config.cacheRoot
             switch ($state.State) {
-                'Compliant' { $state }
+                'Compliant' {
+                    [pscustomobject]@{
+                        Name = $source.name
+                        State = 'Compliant'
+                        Reason = 'Verified'
+                        Path = Join-Path $config.cacheRoot $source.cacheFile
+                        Sha256 = $state.Sha256
+                        SizeBytes = [long]$state.SizeBytes
+                        Version = $state.Version
+                        Architecture = $state.Architecture
+                        VerifiedAt = (Get-Date).ToUniversalTime().ToString('o')
+                    }
+                }
                 'NotCompliant' {
                     Get-SetupCmArtifact -Source $source -CacheRoot $config.cacheRoot -EvidenceRoot $EvidenceRoot
                 }

@@ -21,7 +21,7 @@
 
 **Date:** 2026-08-02
 **Branch:** `codex/mecm-vc-redist`
-**Worktree:** `.worktrees/codex-mecm-vc-redist` (repo root: `/Users/Adam.Gell/repo/setup-cm`)
+**Worktree:** `.worktrees/codex-mecm-vc-redist` (under the repository root)
 
 This document lives on `main`. The work it describes does not — everything below
 is in the worktree above, which is where you should `cd` before running any
@@ -33,14 +33,14 @@ readable only from the worktree:
 - Plan: `.worktrees/codex-mecm-vc-redist/docs/superpowers/plans/2026-08-01-agent-mecm-client-install.md`
 - Design: `.worktrees/codex-mecm-vc-redist/docs/superpowers/specs/2026-08-01-agent-mecm-client-install-design.md`
 
-Or from any directory, without switching branches:
+Or from the repository root, without switching branches:
 
 ```bash
-git -C /Users/Adam.Gell/repo/setup-cm show \
+git show \
   codex/mecm-vc-redist:docs/superpowers/plans/2026-08-01-agent-mecm-client-install.md
 ```
 
-The sibling repo referenced throughout is `/Users/Adam.Gell/repo/ProxmoxVEAutopilot`.
+The sibling repo referenced throughout is `../ProxmoxVEAutopilot`.
 
 ## State
 
@@ -84,7 +84,7 @@ structure and folding the VC++ / ADK / Windows PE / ODBC 18 detail into its
 read since it was hand-merged rather than taken from either side:
 
 ```bash
-git -C /Users/Adam.Gell/repo/setup-cm diff main:docs/RUNBOOK.md \
+git diff main:docs/RUNBOOK.md \
   codex/mecm-vc-redist:docs/RUNBOOK.md
 ```
 

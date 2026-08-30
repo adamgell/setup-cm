@@ -33,8 +33,8 @@ Describe 'Test-SetupCmLabHealth' {
                 Should -Be 'Compliant'
 
             $evidence = Get-Content -LiteralPath (Join-Path $TestDrive 'health.json') -Raw |
-                ConvertFrom-Json -AsHashtable
-            @($evidence.Keys) | Should -Be @('Alpha', 'Zulu')
+                ConvertFrom-Json
+            @($evidence.PSObject.Properties.Name) | Should -Be @('Alpha', 'Zulu')
         }
 
         It 'uses the structured SQL and MECM desired-state probes in the default health checks' {

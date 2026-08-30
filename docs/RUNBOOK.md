@@ -149,7 +149,9 @@ whole directory. A complete run contains:
   `stage-Marker.json`, and `stage-Health.json`;
 - `acquire-state.json`, `sql-state.json`, `mecm-state.json`,
   `marker-state.json`, and `health.json`;
-- `acquisition.json` only when artifact application ran.
+- `acquisition.json` only when Acquire Apply ran; it includes every evaluated
+  artifact, distinguishing reused `Verified` entries from newly acquired
+  `AcquiredAndVerified` entries.
 
 Evidence omits source URIs, vault paths, credentials, tokens, private keys, raw
 policies, and raw log bodies. Before accepting a run, independently compare
@@ -161,8 +163,20 @@ installed application state.
 1. Preserve the failed evidence directory.
 2. Read `stage-<name>.json` and the corresponding component-state artifact.
 3. Correct only the proven prerequisite, source, or owned component.
-4. Rerun the failed stage and its dependent stages from the same commit. For
-   example:
+4. Rerun the failed stage and only its later dependent stages from the same
+   commit, preserving canonical relative order:
+
+   | Failed stage | Rerun stages |
+   | --- | --- |
+   | `Acquire` | `Acquire,Sql,Mecm,Marker,Health` |
+   | `Sql` | `Sql,Mecm,Marker,Health` |
+   | `Mecm` | `Mecm,Marker,Health` |
+   | `Marker` | `Marker,Health` |
+   | `Health` | `Health` |
+
+   The first four rows include `Marker` and therefore require the same exact
+   `SourceCommit`; a `Health`-only recovery does not. For example, after a
+   `Sql` failure:
 
    ```powershell
    pwsh ./scripts/Invoke-SetupCm.ps1 `

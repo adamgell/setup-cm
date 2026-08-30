@@ -9,7 +9,7 @@ Implementation plans are step-by-step, checkbox-tracked task lists used by agent
 | [2026-07-30 Single-Box SCCM Core](../development/implementation-plans.md#2026-07-30-single-box-sccm-core) | 2026-07-30 | Complete | 8 tasks |
 | [2026-08-01 Agent MECM Client Install](../development/implementation-plans.md#2026-08-01-agent-mecm-client-install) | 2026-08-01 | Complete; live Task 5 accepted | 5 tasks |
 | [2026-08-01 MECM VC++ Redist Dependency](../development/implementation-plans.md#2026-08-01-mecm-vc-redist-dependency) | 2026-08-01 | Complete; live x64/x86 baseline accepted | 3 tasks |
-| [2026-08-30 Hands-Off Rerun and v1 Release](../development/implementation-plans.md#2026-08-30-hands-off-rerun-and-v1-release) | 2026-08-30 | Task 1 complete; core-stage work next | 10 tasks |
+| [2026-08-30 Hands-Off Rerun and v1 Release](../development/implementation-plans.md#2026-08-30-hands-off-rerun-and-v1-release) | 2026-08-30 | Tasks 1–7 complete; Task 8 review in progress | 10 tasks |
 
 ---
 
@@ -70,8 +70,8 @@ marker acceptance, prove two consecutive runs, and publish v1.
 4. Implement SQL desired-state reconciliation — **complete**.
 5. Implement MECM and read-only Health probes — **complete**.
 6. Productize marker acceptance — **complete**.
-7. Document and package the v1 workflow — **in progress**.
-8. Complete branch CI and review — **pending**.
+7. Document and package the v1 workflow — **complete**.
+8. Complete branch CI and review — **in progress**.
 9. Run Windows/provider integration and two live runs — **pending**.
 10. Record acceptance, merge, tag, release, publish docs, and clean up safely — **pending**.
 
