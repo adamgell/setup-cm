@@ -37,6 +37,457 @@ Describe 'Setup-CM marker evidence fixed contract' {
     }
 }
 
+Describe 'Setup-CM marker evidence channel desired state' {
+    InModuleScope SetupCm {
+        BeforeAll {
+            function New-TestMarkerNtfsAce {
+                param(
+                    [Parameter(Mandatory)][string]$Sid,
+                    [Parameter(Mandatory)][int]$Rights,
+                    [Parameter(Mandatory)][int]$InheritanceFlags,
+                    [Parameter(Mandatory)][int]$PropagationFlags,
+                    [int]$AccessControlType = 0,
+                    [bool]$IsInherited = $false
+                )
+
+                [pscustomobject][ordered]@{
+                    Sid = $Sid
+                    Rights = $Rights
+                    InheritanceFlags = $InheritanceFlags
+                    PropagationFlags = $PropagationFlags
+                    AccessControlType = $AccessControlType
+                    IsInherited = $IsInherited
+                }
+            }
+
+            function New-TestMarkerShareAce {
+                param(
+                    [Parameter(Mandatory)][string]$Sid,
+                    [Parameter(Mandatory)][ValidateSet('Full', 'Change', 'Read')]
+                    [string]$AccessRight,
+                    [int]$AccessControlType = 0
+                )
+
+                [pscustomobject][ordered]@{
+                    Sid = $Sid
+                    AccessRight = $AccessRight
+                    AccessControlType = $AccessControlType
+                }
+            }
+
+            function New-TestMarkerEvidenceChannelInventory {
+                param(
+                    [bool]$ParentExists = $true,
+                    [bool]$TargetExists = $true,
+                    [bool]$ShareExists = $true,
+                    [bool]$EvidenceExists = $false
+                )
+
+                $administratorsSid = 'S-1-5-32-544'
+                $systemSid = 'S-1-5-18'
+                $targetSid = 'S-1-5-21-1-2-3-1001'
+                $administrativeAces = @(
+                    New-TestMarkerNtfsAce -Sid $administratorsSid -Rights 2032127 `
+                        -InheritanceFlags 3 -PropagationFlags 0
+                    New-TestMarkerNtfsAce -Sid $systemSid -Rights 2032127 `
+                        -InheritanceFlags 3 -PropagationFlags 0
+                )
+
+                [pscustomobject][ordered]@{
+                    TargetComputerSid = $targetSid
+                    AdministratorsSid = $administratorsSid
+                    SystemSid = $systemSid
+                    ProbeError = ''
+                    Parent = [pscustomobject][ordered]@{
+                        Exists = $ParentExists
+                        IsDirectory = $true
+                        IsReparsePoint = $false
+                        OwnerSid = $administratorsSid
+                        AclProtected = $true
+                        Aces = @($administrativeAces)
+                    }
+                    Target = [pscustomobject][ordered]@{
+                        Exists = $TargetExists
+                        IsDirectory = $true
+                        IsReparsePoint = $false
+                        OwnerSid = $administratorsSid
+                        AclProtected = $true
+                        Aces = @(
+                            $administrativeAces
+                            New-TestMarkerNtfsAce -Sid $targetSid -Rights 1179819 `
+                                -InheritanceFlags 0 -PropagationFlags 0
+                            New-TestMarkerNtfsAce -Sid $targetSid -Rights 1245631 `
+                                -InheritanceFlags 1 -PropagationFlags 2
+                        )
+                    }
+                    Share = [pscustomobject][ordered]@{
+                        Exists = $ShareExists
+                        Path = 'C:\ProgramData\SetupCm\MarkerEvidence\RING0IVY24-01'
+                        Description = 'Setup-CM LabZ1 marker evidence for RING0IVY24-01'
+                        CachingMode = 'None'
+                        Aces = @(
+                            New-TestMarkerShareAce -Sid $administratorsSid -AccessRight Full
+                            New-TestMarkerShareAce -Sid $targetSid -AccessRight Change
+                        )
+                    }
+                    Evidence = [pscustomobject][ordered]@{
+                        Exists = $EvidenceExists
+                        IsDirectory = $false
+                        IsReparsePoint = $false
+                        OwnerSid = if ($EvidenceExists) { $targetSid } else { '' }
+                        AclExact = $true
+                    }
+                }
+            }
+        }
+
+        It 'accepts the exact protected channel even when the evidence file is absent' {
+            $assessment = Get-SetupCmMarkerEvidenceChannelAssessment `
+                -Contract (Get-SetupCmMarkerFixedContract) `
+                -Inventory (New-TestMarkerEvidenceChannelInventory)
+
+            $assessment.State | Should -BeExactly 'Compliant'
+            $assessment.Reason | Should -BeExactly 'Exact'
+        }
+
+        It 'classifies a fully absent channel as missing' {
+            $inventory = New-TestMarkerEvidenceChannelInventory `
+                -ParentExists $false -TargetExists $false -ShareExists $false
+
+            $assessment = Get-SetupCmMarkerEvidenceChannelAssessment `
+                -Contract (Get-SetupCmMarkerFixedContract) -Inventory $inventory
+
+            $assessment.State | Should -BeExactly 'NotCompliant'
+            $assessment.Reason | Should -BeExactly 'Missing'
+        }
+
+        It 'classifies an exact protected administrative subset as safely incomplete' {
+            $inventory = New-TestMarkerEvidenceChannelInventory `
+                -TargetExists $false -ShareExists $false
+
+            $assessment = Get-SetupCmMarkerEvidenceChannelAssessment `
+                -Contract (Get-SetupCmMarkerFixedContract) -Inventory $inventory
+
+            $assessment.State | Should -BeExactly 'NotCompliant'
+            $assessment.Reason | Should -BeExactly 'IncompleteOwnedChannel'
+        }
+
+        It 'fails closed when the existing share points at another path' {
+            $inventory = New-TestMarkerEvidenceChannelInventory
+            $inventory.Share.Path = 'C:\Other\MarkerEvidence'
+
+            $assessment = Get-SetupCmMarkerEvidenceChannelAssessment `
+                -Contract (Get-SetupCmMarkerFixedContract) -Inventory $inventory
+
+            $assessment.State | Should -BeExactly 'Conflict'
+            $assessment.Reason | Should -BeExactly 'SharePathConflict'
+        }
+
+        It 'fails closed on an unsafe ACL shape: <Name>' -ForEach @(
+            @{ Name = 'inherited ACE'; Mutation = 'Inherited' }
+            @{ Name = 'deny ACE'; Mutation = 'Deny' }
+            @{ Name = 'broad trustee'; Mutation = 'Broad' }
+            @{ Name = 'unknown trustee'; Mutation = 'Unknown' }
+            @{ Name = 'duplicate ACE'; Mutation = 'Duplicate' }
+            @{ Name = 'excessive rights'; Mutation = 'Excessive' }
+        ) {
+            $inventory = New-TestMarkerEvidenceChannelInventory
+            switch ($Mutation) {
+                'Inherited' { $inventory.Parent.Aces[0].IsInherited = $true }
+                'Deny' { $inventory.Target.Aces[2].AccessControlType = 1 }
+                'Broad' {
+                    $inventory.Share.Aces += New-TestMarkerShareAce `
+                        -Sid 'S-1-1-0' -AccessRight Change
+                }
+                'Unknown' {
+                    $inventory.Parent.Aces += New-TestMarkerNtfsAce `
+                        -Sid 'S-1-5-21-9-9-9-9999' -Rights 1 `
+                        -InheritanceFlags 0 -PropagationFlags 0
+                }
+                'Duplicate' { $inventory.Target.Aces += $inventory.Target.Aces[2].PSObject.Copy() }
+                'Excessive' { $inventory.Target.Aces[2].Rights = 2032127 }
+            }
+
+            $assessment = Get-SetupCmMarkerEvidenceChannelAssessment `
+                -Contract (Get-SetupCmMarkerFixedContract) -Inventory $inventory
+
+            $assessment.State | Should -BeExactly 'Conflict'
+            $assessment.Reason | Should -BeExactly 'EvidenceAclConflict'
+        }
+
+        It 'fails closed on evidence-channel identity drift: <Name>' -ForEach @(
+            @{ Name = 'wrong parent owner'; Mutation = 'ParentOwner' }
+            @{ Name = 'wrong target owner'; Mutation = 'TargetOwner' }
+            @{ Name = 'unresolved target SID'; Mutation = 'UnresolvedTarget' }
+            @{ Name = 'parent reparse point'; Mutation = 'ParentReparse' }
+            @{ Name = 'target reparse point'; Mutation = 'TargetReparse' }
+            @{ Name = 'evidence reparse point'; Mutation = 'EvidenceReparse' }
+        ) {
+            $inventory = New-TestMarkerEvidenceChannelInventory
+            switch ($Mutation) {
+                'ParentOwner' { $inventory.Parent.OwnerSid = 'S-1-5-21-9-9-9-9999' }
+                'TargetOwner' { $inventory.Target.OwnerSid = 'S-1-5-21-9-9-9-9999' }
+                'UnresolvedTarget' { $inventory.TargetComputerSid = '' }
+                'ParentReparse' { $inventory.Parent.IsReparsePoint = $true }
+                'TargetReparse' { $inventory.Target.IsReparsePoint = $true }
+                'EvidenceReparse' {
+                    $inventory.Evidence.Exists = $true
+                    $inventory.Evidence.OwnerSid = $inventory.TargetComputerSid
+                    $inventory.Evidence.IsReparsePoint = $true
+                }
+            }
+
+            $assessment = Get-SetupCmMarkerEvidenceChannelAssessment `
+                -Contract (Get-SetupCmMarkerFixedContract) -Inventory $inventory
+
+            $assessment.State | Should -BeExactly 'Conflict'
+            $assessment.Reason | Should -BeExactly 'EvidenceIdentityConflict'
+        }
+    }
+}
+
+Describe 'Setup-CM marker evidence channel inventory' {
+    InModuleScope SetupCm {
+        BeforeAll {
+            if (-not (Get-Command Resolve-SetupCmMarkerSid -ErrorAction SilentlyContinue)) {
+                function Resolve-SetupCmMarkerSid { param([string]$AccountName) }
+            }
+            if (-not (Get-Command Get-SetupCmMarkerDirectoryInventory `
+                    -ErrorAction SilentlyContinue)) {
+                function Get-SetupCmMarkerDirectoryInventory { param([string]$Path) }
+            }
+            if (-not (Get-Command Get-SetupCmMarkerEvidenceFileInventory `
+                    -ErrorAction SilentlyContinue)) {
+                function Get-SetupCmMarkerEvidenceFileInventory {
+                    param([string]$Path, [string]$TargetComputerSid, [int]$MaximumBytes)
+                }
+            }
+            if (-not (Get-Command Get-SetupCmMarkerShareInventory `
+                    -ErrorAction SilentlyContinue)) {
+                function Get-SetupCmMarkerShareInventory {
+                    param([string]$Name)
+                }
+            }
+        }
+
+        BeforeEach {
+            $script:parentInventory = [pscustomobject]@{ Exists = $true; Label = 'Parent' }
+            $script:targetInventory = [pscustomobject]@{ Exists = $true; Label = 'Target' }
+            $script:evidenceInventory = [pscustomobject]@{ Exists = $false; Label = 'Evidence' }
+            $script:shareInventory = [pscustomobject]@{ Exists = $true; Label = 'Share' }
+            Mock Resolve-SetupCmMarkerSid { 'S-1-5-21-1-2-3-1001' }
+            Mock Get-SetupCmMarkerDirectoryInventory {
+                if ($Path -eq 'C:\ProgramData\SetupCm\MarkerEvidence') {
+                    return $script:parentInventory
+                }
+                $script:targetInventory
+            }
+            Mock Get-SetupCmMarkerEvidenceFileInventory { $script:evidenceInventory }
+            Mock Get-SetupCmMarkerShareInventory { $script:shareInventory }
+        }
+
+        It 'assembles normalized inventory from only the fixed channel paths and identity' {
+            $contract = Get-SetupCmMarkerFixedContract
+
+            $inventory = Get-SetupCmMarkerEvidenceChannelInventory -Contract $contract
+
+            $inventory.TargetComputerSid | Should -BeExactly 'S-1-5-21-1-2-3-1001'
+            $inventory.AdministratorsSid | Should -BeExactly 'S-1-5-32-544'
+            $inventory.SystemSid | Should -BeExactly 'S-1-5-18'
+            $inventory.ProbeError | Should -BeNullOrEmpty
+            $inventory.Parent.Label | Should -BeExactly 'Parent'
+            $inventory.Target.Label | Should -BeExactly 'Target'
+            $inventory.Share.Label | Should -BeExactly 'Share'
+            $inventory.Evidence.Label | Should -BeExactly 'Evidence'
+            Should -Invoke Resolve-SetupCmMarkerSid -Times 1 -Exactly -ParameterFilter {
+                $AccountName -eq 'TEST\RING0IVY24-01$'
+            }
+            Should -Invoke Get-SetupCmMarkerDirectoryInventory -Times 1 -Exactly `
+                -ParameterFilter { $Path -eq 'C:\ProgramData\SetupCm\MarkerEvidence' }
+            Should -Invoke Get-SetupCmMarkerDirectoryInventory -Times 1 -Exactly `
+                -ParameterFilter {
+                    $Path -eq 'C:\ProgramData\SetupCm\MarkerEvidence\RING0IVY24-01'
+                }
+            Should -Invoke Get-SetupCmMarkerEvidenceFileInventory -Times 1 -Exactly `
+                -ParameterFilter {
+                    $Path -eq 'C:\ProgramData\SetupCm\MarkerEvidence\RING0IVY24-01\marker-evidence.json' -and
+                    $TargetComputerSid -eq 'S-1-5-21-1-2-3-1001' -and
+                    $MaximumBytes -eq 2048
+                }
+            Should -Invoke Get-SetupCmMarkerShareInventory -Times 1 -Exactly `
+                -ParameterFilter { $Name -eq 'SetupCmMarkerEvidence$' }
+        }
+
+        It 'bounds identity resolution failures without returning the exception text' {
+            Mock Resolve-SetupCmMarkerSid { throw 'private directory and domain details' }
+
+            $inventory = Get-SetupCmMarkerEvidenceChannelInventory `
+                -Contract (Get-SetupCmMarkerFixedContract)
+
+            $inventory.TargetComputerSid | Should -BeNullOrEmpty
+            $inventory.ProbeError | Should -BeExactly 'InventoryUnavailable'
+            ($inventory | ConvertTo-Json -Depth 8) | Should -Not -Match 'private directory'
+            Should -Invoke Get-SetupCmMarkerDirectoryInventory -Times 0 -Exactly
+            Should -Invoke Get-SetupCmMarkerShareInventory -Times 0 -Exactly
+        }
+    }
+}
+
+Describe 'Setup-CM marker evidence channel creation provider' {
+    InModuleScope SetupCm {
+        BeforeAll {
+            if (-not (Get-Command Get-SetupCmMarkerDirectorySecurity `
+                    -ErrorAction SilentlyContinue)) {
+                function Get-SetupCmMarkerDirectorySecurity {
+                    param([string]$Role, [string]$TargetComputerSid)
+                }
+            }
+            if (-not (Get-Command Set-Acl -ErrorAction SilentlyContinue)) {
+                function Set-Acl {
+                    [CmdletBinding()]
+                    param([string]$LiteralPath, $AclObject)
+                }
+            }
+            if (-not (Get-Command New-SmbShare -ErrorAction SilentlyContinue)) {
+                function New-SmbShare {
+                    param(
+                        [string]$Name,
+                        [string]$Path,
+                        [string]$Description,
+                        [string]$CachingMode,
+                        [string]$FullAccess,
+                        [string]$ChangeAccess,
+                        [string]$ErrorAction
+                    )
+                }
+            }
+        }
+
+        BeforeEach {
+            $script:sequence = [System.Collections.Generic.List[string]]::new()
+            $script:inventoryCalls = 0
+            $script:initialState = 'NotCompliant'
+            $script:initialReason = 'Missing'
+            $script:initialInventory = [pscustomobject]@{
+                Tag = 'Initial'
+                TargetComputerSid = 'S-1-5-21-1-2-3-1001'
+                Parent = [pscustomobject]@{ Exists = $false }
+                Target = [pscustomobject]@{ Exists = $false }
+                Share = [pscustomobject]@{ Exists = $false }
+            }
+            $script:finalInventory = [pscustomobject]@{ Tag = 'Final' }
+
+            Mock Get-SetupCmMarkerEvidenceChannelInventory {
+                $script:inventoryCalls++
+                if ($script:inventoryCalls -eq 1) { return $script:initialInventory }
+                $script:finalInventory
+            }
+            Mock Get-SetupCmMarkerEvidenceChannelAssessment {
+                if ($Inventory.Tag -eq 'Final') {
+                    return [pscustomobject]@{ State = 'Compliant'; Reason = 'Exact' }
+                }
+                [pscustomobject]@{
+                    State = $script:initialState
+                    Reason = $script:initialReason
+                }
+            }
+            Mock New-Item {
+                [void]$script:sequence.Add("New:$Path")
+                [pscustomobject]@{ FullName = $Path }
+            }
+            Mock Get-SetupCmMarkerDirectorySecurity {
+                [void]$script:sequence.Add("Build:$Role")
+                [pscustomobject]@{
+                    Role = $Role
+                    TargetComputerSid = $TargetComputerSid
+                }
+            }
+            Mock Set-Acl {
+                $scope = if ($LiteralPath -like '*RING0IVY24-01') { 'Target' } else { 'Parent' }
+                [void]$script:sequence.Add("Set:$scope")
+            }
+            Mock New-SmbShare {
+                [void]$script:sequence.Add('Share')
+                [pscustomobject]@{ Name = $Name }
+            }
+            Mock Remove-Item {}
+        }
+
+        It 'creates the parent ACL, target ACL, and exact hidden share in order' {
+            $result = New-SetupCmMarkerEvidenceChannel `
+                -Contract (Get-SetupCmMarkerFixedContract)
+
+            $expectedSequence =
+                'New:C:\ProgramData\SetupCm\MarkerEvidence|Build:Parent|Set:Parent|' +
+                'New:C:\ProgramData\SetupCm\MarkerEvidence\RING0IVY24-01|' +
+                'Build:Target|Set:Target|Share'
+            $result.Changed | Should -BeTrue
+            $result.State | Should -BeExactly 'Compliant'
+            ($script:sequence -join '|') | Should -BeExactly $expectedSequence
+            Should -Invoke Get-SetupCmMarkerDirectorySecurity -Times 2 -Exactly `
+                -ParameterFilter {
+                    $TargetComputerSid -eq 'S-1-5-21-1-2-3-1001' -and
+                    $Role -in 'Parent', 'Target'
+                }
+            Should -Invoke New-SmbShare -Times 1 -Exactly -ParameterFilter {
+                $Name -eq 'SetupCmMarkerEvidence$' -and
+                $Path -eq 'C:\ProgramData\SetupCm\MarkerEvidence\RING0IVY24-01' -and
+                $Description -eq 'Setup-CM LabZ1 marker evidence for RING0IVY24-01' -and
+                $CachingMode -eq 'None' -and
+                $FullAccess -eq 'BUILTIN\Administrators' -and
+                $ChangeAccess -eq 'TEST\RING0IVY24-01$' -and
+                $FullAccess -notin 'Everyone', 'Authenticated Users', 'Domain Computers' -and
+                $ChangeAccess -notin 'Everyone', 'Authenticated Users', 'Domain Computers'
+            }
+            Should -Invoke Get-SetupCmMarkerEvidenceChannelInventory -Times 2 -Exactly
+        }
+
+        It 'does not mutate an already compliant channel' {
+            $script:initialState = 'Compliant'
+            $script:initialReason = 'Exact'
+
+            $result = New-SetupCmMarkerEvidenceChannel `
+                -Contract (Get-SetupCmMarkerFixedContract)
+
+            $result.Changed | Should -BeFalse
+            $result.State | Should -BeExactly 'Compliant'
+            Should -Invoke New-Item -Times 0 -Exactly
+            Should -Invoke Set-Acl -Times 0 -Exactly
+            Should -Invoke New-SmbShare -Times 0 -Exactly
+            Should -Invoke Get-SetupCmMarkerEvidenceChannelInventory -Times 1 -Exactly
+        }
+
+        It 'refuses a conflicting channel without mutation' {
+            $script:initialState = 'Conflict'
+            $script:initialReason = 'EvidenceAclConflict'
+
+            { New-SetupCmMarkerEvidenceChannel `
+                    -Contract (Get-SetupCmMarkerFixedContract) } |
+                Should -Throw '*EvidenceAclConflict*'
+
+            Should -Invoke New-Item -Times 0 -Exactly
+            Should -Invoke Set-Acl -Times 0 -Exactly
+            Should -Invoke New-SmbShare -Times 0 -Exactly
+        }
+
+        It 'leaves a failed safe partial in place without creating a share or deleting paths' {
+            Mock Set-Acl {
+                $scope = if ($LiteralPath -like '*RING0IVY24-01') { 'Target' } else { 'Parent' }
+                [void]$script:sequence.Add("Set:$scope")
+                if ($scope -eq 'Target') { throw 'injected target ACL failure' }
+            }
+
+            { New-SetupCmMarkerEvidenceChannel `
+                    -Contract (Get-SetupCmMarkerFixedContract) } |
+                Should -Throw '*injected target ACL failure*'
+
+            Should -Invoke New-SmbShare -Times 0 -Exactly
+            Should -Invoke Remove-Item -Times 0 -Exactly
+            ($script:sequence -join '|') | Should -Not -Match 'Everyone|Authenticated|Domain Computers'
+        }
+    }
+}
+
 Describe 'Setup-CM marker published evidence parser' {
     InModuleScope SetupCm {
         BeforeAll {

@@ -79,7 +79,7 @@ mdBook.
   returning `State`, `Reason`, `MarkerHash`, `MarkerLength`,
   `MarkerHashVerification`, `ReceiptTimeUtc`, and `OwnerSid`.
 
-- [ ] **Step 1: Add the fixed evidence contract and write parser tests**
+- [x] **Step 1: Add the fixed evidence contract and write parser tests**
 
 Extend `Get-SetupCmMarkerFixedContract` with this shape:
 
@@ -126,7 +126,7 @@ Add parameterized rejection cases for 2,049 bytes, non-ASCII/invalid UTF-8,
 non-object roots, duplicate properties, unknown/missing properties, wrong JSON
 types, comments, trailing commas, and trailing non-whitespace bytes.
 
-- [ ] **Step 2: Run the parser tests and verify RED**
+- [x] **Step 2: Run the parser tests and verify RED**
 
 Run:
 
@@ -137,7 +137,7 @@ Invoke-Pester ./tests/Unit/MarkerEvidenceChannel.Tests.ps1 -Output Detailed -CI
 Expected: fail because `ConvertFrom-SetupCmMarkerEvidenceJsonStrict` does not
 exist.
 
-- [ ] **Step 3: Implement the strict bounded parser**
+- [x] **Step 3: Implement the strict bounded parser**
 
 Use a throwing UTF-8 decoder and `System.Text.Json.JsonDocument`; enumerate
 properties before conversion so duplicate and unknown names cannot be hidden:
@@ -189,7 +189,7 @@ function ConvertFrom-SetupCmMarkerEvidenceJsonStrict {
 Catch `JsonException`, `DecoderFallbackException`, and invalid typed getters at
 the assessment boundary and map them to conflict; do not silently coerce.
 
-- [ ] **Step 4: Add and implement semantic/receipt assessment tests**
+- [x] **Step 4: Add and implement semantic/receipt assessment tests**
 
 Use normalized inventory rather than touching Windows APIs:
 
@@ -219,7 +219,7 @@ length/method/schema, and an injected read failure. Map missing/stale to
 `NotCompliant/ClientEvidencePending`; map malformed, foreign, future, reparse,
 and contradictory content to `Conflict` with a specific reason.
 
-- [ ] **Step 5: Run focused tests GREEN and commit**
+- [x] **Step 5: Run focused tests GREEN and commit**
 
 Run:
 
@@ -254,14 +254,14 @@ git commit -m "feat: validate marker client evidence"
   -Inventory [object]`, and
   `New-SetupCmMarkerEvidenceChannel -Contract [object]`.
 
-- [ ] **Step 1: Write channel-state tests for exact, missing, partial, and conflict**
+- [x] **Step 1: Write channel-state tests for exact, missing, partial, and conflict**
 
 Represent every trustee by SID and every NTFS ACE by numeric rights,
 inheritance, propagation, and access type. Pin these masks:
 
 ```powershell
 $directoryRights = 1179819 # List/CreateFiles/Traverse/ReadEA/ReadAttr/ReadPerm/Sync
-$modifyRights = 197055
+$modifyAndSynchronizeRights = 1245631
 $fullControl = 2032127
 ```
 
@@ -277,12 +277,12 @@ Build an exact inventory and assert `Compliant/Exact`. Add cases proving:
   `Conflict/EvidenceIdentityConflict`; and
 - the evidence file may be absent while the channel itself is compliant.
 
-- [ ] **Step 2: Run channel-state tests RED**
+- [x] **Step 2: Run channel-state tests RED**
 
 Run the focused file and require failures for the missing assessment and
 creation functions.
 
-- [ ] **Step 3: Implement normalized inventory and exact comparison**
+- [x] **Step 3: Implement normalized inventory and exact comparison**
 
 Normalize Windows identities before comparison:
 
@@ -301,14 +301,14 @@ effective file ACL, and `LastWriteTimeUtc`; and use `Get-SmbShare` plus
 `Get-SmbShareAccess` for exact share state. Do not place raw security
 descriptors in the assessment details that later reach evidence.
 
-- [ ] **Step 4: Write creation-provider tests before implementation**
+- [x] **Step 4: Write creation-provider tests before implementation**
 
 Mock `New-Item`, `Set-Acl`, `New-SmbShare`, and identity translation. Assert the
 creation sequence is parent ACL, target ACL, then share; assert no call grants
 `Everyone`, `Authenticated Users`, or `Domain Computers`; and assert a failure
 before share creation leaves no broad grant or delete call.
 
-- [ ] **Step 5: Implement the protected parent, target, and hidden share**
+- [x] **Step 5: Implement the protected parent, target, and hidden share**
 
 Construct explicit `DirectorySecurity` objects with inheritance disabled:
 
@@ -324,7 +324,8 @@ $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::ne
 ```
 
 On the target directory add exactly one this-folder-only target ACE with mask
-`1179819` and one object-inherit/inherit-only target ACE with mask `197055`.
+`1179819` and one object-inherit/inherit-only target ACE with the Windows
+canonical `Modify` plus `Synchronize` mask `1245631`.
 Create the share last:
 
 ```powershell
@@ -340,13 +341,13 @@ New-SmbShare -Name $Contract.EvidenceChannel.ShareName `
 Verify by reacquiring normalized inventory and requiring `Compliant`; do not
 remove or rewrite an existing conflicting share/ACE.
 
-- [ ] **Step 6: Add non-mutating Windows integration coverage**
+- [x] **Step 6: Add non-mutating Windows integration coverage**
 
 On Windows, test strict SID/ACL normalization against a temporary protected
 directory owned by the test. Do not create the fixed live share in this test;
 the live first-run gate owns that mutation. Skip only when not Windows.
 
-- [ ] **Step 7: Run focused tests GREEN and commit**
+- [x] **Step 7: Run focused tests GREEN and commit**
 
 Run unit plus Windows integration where available, then commit:
 
