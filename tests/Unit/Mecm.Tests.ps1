@@ -558,6 +558,22 @@ Describe 'Get-SetupCmMecmDefaultProviders' {
             $site.Exists | Should -BeFalse
             $site.ResidualState | Should -BeTrue
         }
+
+        It 'escapes backslashes and apostrophes in the client WQL filter value' {
+            $script:clientFilter = $null
+            Mock Get-CimInstance {
+                $script:clientFilter = $Filter
+                @()
+            } -ParameterFilter { $ClassName -eq 'SMS_R_System' }
+            $providers = Get-SetupCmMecmDefaultProviders
+
+            @(& $providers.ClientProvider @{
+                mecm = @{ siteCode = 'LAB' }
+                testClient = @{ name = "RING\O'IVY" }
+            }) | Should -HaveCount 0
+
+            $script:clientFilter | Should -Be "Name = 'RING\\O\'IVY'"
+        }
     }
 }
 

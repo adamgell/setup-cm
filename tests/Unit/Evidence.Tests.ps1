@@ -39,6 +39,34 @@ Describe 'Write-SetupCmEvidenceJson' {
             ($json | ConvertFrom-Json).message | Should -Be 'Download failed from <redacted-uri>'
         }
 
+        It 'removes composite sensitive keys while preserving safe path and status fields' {
+            $sensitiveValues = 1..6 | ForEach-Object { "sensitive-value-$_" }
+            $value = [ordered]@{
+                databasePassword = $sensitiveValues[0]
+                refreshTokenValue = $sensitiveValues[1]
+                thirdPartyApiKey = $sensitiveValues[2]
+                sqlConnectionString = $sensitiveValues[3]
+                artifactSourceUri = $sensitiveValues[4]
+                vaultSourcePath = $sensitiveValues[5]
+                artifactPath = 'C:\SetupCm\cache\mecm.iso'
+                securityState = 'Compliant'
+            }
+
+            $path = Write-SetupCmEvidenceJson -EvidenceRoot $TestDrive -Name 'composite-keys' -Value $value
+            $json = Get-Content -LiteralPath $path -Raw
+            $parsed = $json | ConvertFrom-Json
+
+            $json | Should -Not -Match 'sensitive-value'
+            $parsed.PSObject.Properties.Name | Should -Not -Contain 'databasePassword'
+            $parsed.PSObject.Properties.Name | Should -Not -Contain 'refreshTokenValue'
+            $parsed.PSObject.Properties.Name | Should -Not -Contain 'thirdPartyApiKey'
+            $parsed.PSObject.Properties.Name | Should -Not -Contain 'sqlConnectionString'
+            $parsed.PSObject.Properties.Name | Should -Not -Contain 'artifactSourceUri'
+            $parsed.PSObject.Properties.Name | Should -Not -Contain 'vaultSourcePath'
+            $parsed.artifactPath | Should -Be 'C:\SetupCm\cache\mecm.iso'
+            $parsed.securityState | Should -Be 'Compliant'
+        }
+
         It 'preserves safe arrays and component fields' {
             $value = [ordered]@{
                 state = 'Compliant'

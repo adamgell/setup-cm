@@ -48,7 +48,20 @@ function Test-SetupCmSensitiveEvidenceKey {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Name)
 
-    $Name -match '(?i)^(?:password|pwd|(?:client[_-]?)?secret|(?:(?:access|refresh|id)[_-]?)?token|authorization|credential|private[_-]?key|source[_-]?uri|uri|vault[_-]?path|sas(?:url|value|token)?|api[_-]?key)$'
+    $normalized = [regex]::Replace($Name, '[_\-\s]', '').ToLowerInvariant()
+    if ($normalized -match '(?:password|secret|token|authorization|credential|apikey|privatekey|connectionstring|connstring)') {
+        return $true
+    }
+    if ($normalized -match '(?:uri|url)$') {
+        return $true
+    }
+    if ($normalized -match '(?:source|vault)path$') {
+        return $true
+    }
+    if ($normalized -match '(?:pwd|sas(?:url|value|token)?)$') {
+        return $true
+    }
+    return $false
 }
 
 function ConvertTo-SetupCmSanitizedEvidenceString {

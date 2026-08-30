@@ -379,7 +379,7 @@ function Get-SetupCmMecmDefaultProviders {
         ClientProvider = {
             param($Config)
             $name = [string]$Config.testClient.name
-            $escapedName = $name.Replace("'", "''")
+            $escapedName = $name.Replace('\', '\\').Replace("'", "\'")
             @(Get-CimInstance -Namespace "root\SMS\site_$($Config.mecm.siteCode)" -ClassName SMS_R_System `
                 -Filter "Name = '$escapedName'" -ErrorAction Stop |
                 ForEach-Object {
