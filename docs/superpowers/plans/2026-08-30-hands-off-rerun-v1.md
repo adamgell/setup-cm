@@ -179,20 +179,21 @@ branch provider/cmdlets, CIM/WMI, Microsoft ODBC Driver 18 through
       marker boundary, evidence schema, and private-config/source-commit inputs.
 - [x] Record every optional integration as a separate future project.
 - [x] Add a deterministic local-link checker if one is not already available.
-- [x] Run all portable tests, link checks, mdBook, and diff/secret scans: 170/170
-      unit tests passed, 43 Markdown files and 85 local links resolved, mdBook
+- [x] Run all portable tests, link checks, mdBook, and diff/secret scans: 389/389
+      unit tests passed, 45 Markdown files and 89 local links resolved, mdBook
       and actionlint passed, and parser/PSScriptAnalyzer reported zero errors.
 - [x] Commit: `docs: define the v1 operator workflow`.
 
 ## Task 8: Review the implementation before live mutation
 
 - [x] Push the branch and open one PR against `main` (PR #5).
-- [ ] Require Pester CI and mdBook/local documentation gates to pass.
-- [ ] Review the complete diff for targeting, evidence leakage, installer skip
+- [x] Require Pester CI and mdBook/local documentation gates to pass.
+- [x] Review the complete diff for targeting, evidence leakage, installer skip
       logic, object duplication, and unsupported repair paths.
-- [ ] Reproduce each actionable reviewer finding, fix test-first, and rerun
+- [x] Reproduce each actionable reviewer finding, fix test-first, and rerun
       affected plus full suites.
-- [ ] Fix the exact source revision for live acceptance.
+- [x] Fix the exact source revision for live acceptance:
+      `33535c6a0e47bb0bb0f838eb990b0e9e9cb2ac95`.
 
 ## Task 9: Run Windows/provider integration and two live runs
 
@@ -201,28 +202,28 @@ and live sequence in
 [`2026-08-30-marker-client-evidence-channel.md`](2026-08-30-marker-client-evidence-channel.md).
 Complete that plan before continuing the remaining Task 9 gates.
 
-- [ ] Reconfirm Proxmox owner/running state, controller health and Agent
+- [x] Reconfirm Proxmox owner/running state, controller health and Agent
       identity, CM01/site/provider/database, client resource identity, and the
       one-device marker deployment before staging source.
-- [ ] Stage a `git archive` of the exact branch commit on CM01; verify byte hash
+- [x] Stage a `git archive` of the exact branch commit on CM01; verify byte hash
       and update only the ignored private configuration metadata required by
       the new source contract.
 - [x] Run Windows-only detector/core-stage/provider integration tests from the
-      exact `2d61457d918a49a6ef141da8684e4afed84c3ecf` archive: 11 CM01 tests
+      exact `33535c6a0e47bb0bb0f838eb990b0e9e9cb2ac95` archive: 12 CM01 tests
       passed with five target-only skips, all 10 target detector/publication
-      tests passed, and the isolated provider pre-migration test passed with no
+      tests passed, and the isolated post-migration provider test passed with no
       mutation.
-- [ ] Run `Acquire,Sql,Mecm,Marker,Health` once. Permit only bounded missing-state
+- [x] Run `Acquire,Sql,Mecm,Marker,Health` once. Permit only bounded missing-state
       repair; independently verify all resulting state and evidence.
-- [ ] Snapshot installer logs/process evidence and ConfigMgr object identities.
-- [ ] Run the identical command again from the identical commit.
-- [ ] Instrument every mutation or side-effect adapter during the second run
+- [x] Snapshot installer logs/process evidence and ConfigMgr object identities.
+- [x] Run the identical command again from the identical commit.
+- [x] Instrument every mutation or side-effect adapter during the second run
       and require exactly zero calls for existing-object updates,
       acquisition/download/copy, SQL repair/bootstrap, MECM
       prerequisite/site/content mutation, and Marker
       application/deployment/membership repair. Preserve the skipped/already
       compliant stage checks as evidence rather than omitting them.
-- [ ] Verify both bundles are sanitized, fresh, hash them, and remove temporary
+- [x] Verify both bundles are sanitized, fresh, hash them, and remove temporary
       staging/query files.
 
 ## Task 10: Record acceptance, merge, and publish v1
@@ -232,7 +233,7 @@ Complete that plan before continuing the remaining Task 9 gates.
 - Add: `docs/V1-ACCEPTANCE-2026-08-30.md`
 - Update: README, mdBook current status, plan checkboxes, and release notes
 
-- [ ] Commit the sanitized two-run record with exact commit, evidence IDs and
+- [x] Commit the sanitized two-run record with exact commit, evidence IDs and
       hashes, provider/client agreement, and safe restart command.
 - [ ] Push, rerun final PR CI/review, and merge only when clean and approved.
 - [ ] Verify local main, origin/main, PR head, and merge ancestry.

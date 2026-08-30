@@ -2,8 +2,9 @@
 
 `setup-cm` executes five desired-state stages. Each reads current state before
 deciding whether any owned action is necessary. The accepted LabZ1 two-run
-release gate is still pending; see [Current LabZ1 Status](./current-status.md)
-before operating the live site.
+gate proved every exact stage skips without mutation when already compliant;
+see [v1 Hands-Off Acceptance](./v1-acceptance.md) before operating the live
+site.
 
 ## Stage lifecycle
 

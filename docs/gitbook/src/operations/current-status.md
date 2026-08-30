@@ -1,9 +1,10 @@
 # Current LabZ1 Status
 
 The LabZ1 baseline and one-device marker deployment are accepted. All five
-release-candidate stages now have real desired-state probes, and applicable
-mutating stages have bounded repair. The reviewed two-run live gate, merge, and
-v1 publication remain in progress.
+v1 stages have real desired-state probes, and applicable mutating stages have
+bounded repair. The reviewed first exact-source run refreshed only stale
+authenticated evidence; the immediate second run skipped all five stages with
+zero action. Neither run invoked an installer or changed a ConfigMgr object.
 
 ## Accepted current state
 
@@ -23,6 +24,8 @@ client-install Task 5 completed through the signed Autopilot Agent path.
   authoritative baseline and safe-restart record.
 - `docs/PHASE1-2026-08-29-MARKER-DEPLOYMENT.md` proves the required marker is
   compliant exclusively on `RING0IVY24-01`.
+- `docs/V1-ACCEPTANCE-2026-08-30.md` fixes the live-tested source, native and
+  provider gate counts, two run IDs, and all acceptance hashes.
 - `docs/HANDOFF-2026-08-02-agent-mecm-client-install.md` is preserved and
   prominently marked as superseded historical context.
 
@@ -32,23 +35,19 @@ Confirm the LabZ1 resources, controller, Agents, provider, SQL inventory, and
 one-device marker collection through deterministic remote checks. On the
 currently accepted source, run only `Health` unless a specific missing
 component is proven. Do not replay the full bootstrap solely for new
-timestamps. The release-candidate Acquire, SQL, MECM, Marker, and Health probes
-must pass review and then be run twice from one exact source commit before the
-full workflow becomes the accepted restart path.
+timestamps. The full Acquire, SQL, MECM, Marker, and Health workflow is now an
+accepted no-op path from exact reviewed source, but routine validation should
+remain the smaller read-only Health command.
 
-The authenticated marker-evidence implementation is complete in source. At
-implementation commit `2d61457d918a49a6ef141da8684e4afed84c3ecf`, an exact
-Git archive passed 11 CM01 Windows tests with five target-only tests skipped,
-all 10 detector/publication tests on `RING0IVY24-01`, and the isolated read-only
-provider pre-migration test. That provider gate reported only the expected
-`EvidenceChannel/Missing`, `DeploymentType/ApprovedDetectorUpgrade`, and
-`Client/ClientEvidencePending` states and invoked no mutation adapter.
-
-The live channel creation, approved detector migration, post-migration
-zero-action provider gate, and two complete workflow runs are still pending.
-Run CM01 SQL/provider acceptance as the authorized domain operator; the local
-Administrator identity is not the accepted secured SQL/SMS provider context.
-These development gates do not replace the final two-run evidence.
+Live-tested commit `33535c6a0e47bb0bb0f838eb990b0e9e9cb2ac95` passed 12
+applicable CM01 Windows tests with five client-only skips, all 10
+detector/publication tests on `RING0IVY24-01`, and the read-only post-migration
+provider test. Formal run `20260830-203712-76f13d67` refreshed only the stale
+authenticated receipt; run `20260830-204052-d3c589a6` then skipped all five
+stages with zero action. Each produced 11 sanitized artifacts with all six
+Health checks true. The marker evidence directory contains only the exact
+target-owned receipt. See the [v1 acceptance record](./v1-acceptance.md) for
+the hashes and BITS ambient-state note.
 
 Production, co-management, Patch My PC, reporting expansion, distributed
 roles, extra clients, tenant integrations, and client-wide security-policy

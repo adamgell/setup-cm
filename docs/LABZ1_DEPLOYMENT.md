@@ -1,7 +1,8 @@
 # LabZ1 Deployment Target
 
-**Status:** Accepted baseline and marker deployment; five-stage idempotent
-implementation complete; reviewed v1 two-run live gate pending.
+**Status:** Accepted v1 baseline — the first reviewed five-stage run refreshed
+only stale authenticated evidence, and the immediate second run skipped all
+five stages with zero object, installer, or policy action.
 
 This is the current LabZ1 inventory. The earlier plan to provision
 `LABZ1-CMCLIENT01` was not the path used for final acceptance and is retained
@@ -50,6 +51,11 @@ remain unchanged and are not marker targets or v1 acceptance clients.
    three expected repairable states: missing evidence channel, approved
    predecessor detector, and pending client evidence. It performed no
    mutation.
+6. [v1 hands-off acceptance](V1-ACCEPTANCE-2026-08-30.md) fixes execution
+   source `33535c6a0e47bb0bb0f838eb990b0e9e9cb2ac95`, records the native
+   Windows and post-migration provider gates, and proves one bounded
+   stale-receipt refresh followed by a complete five-stage zero-action run,
+   with no object or installer mutation.
 
 ## Safe restart point
 
@@ -66,12 +72,12 @@ remain unchanged and are not marker targets or v1 acceptance clients.
 5. Verify the Phase 1 collection still has exactly one direct member and the
    marker assignment targets no other collection.
 
-Do not replay the complete bootstrap merely for new timestamps. The
-release-candidate source now has exact Acquire, SQL, MECM, Marker, and Health
-probes, but it must pass PR review and then run twice from one exact source
-commit before it replaces the read-only accepted restart path. Follow the
-[hands-off rerun v1 plan](superpowers/plans/2026-08-30-hands-off-rerun-v1.md)
-and the exact command in the [runbook](RUNBOOK.md).
+Do not replay bootstrap installers merely for new timestamps. Routine checks
+remain read-only Health runs. The complete Acquire, SQL, MECM, Marker, and
+Health workflow is accepted as a no-op from exact reviewed source and may be
+used for a full confirmation or a proven owned-component repair. Follow the
+safe command in the [v1 acceptance record](V1-ACCEPTANCE-2026-08-30.md) and
+the operating boundary in the [runbook](RUNBOOK.md).
 
 Capabilities intentionally excluded from this gate are tracked in
 [Future projects](FUTURE-PROJECTS.md).

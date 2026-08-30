@@ -6,11 +6,12 @@ domain-joined Windows Server and a separate test client. Read the
 first.
 
 > [!IMPORTANT]
-> The accepted LabZ1 baseline is already installed. The five-stage
-> release-candidate implementation is idempotent, but its reviewed two-run live
-> acceptance is still pending. Until that gate starts, use the read-only
-> restart command below and the accepted
-> [Phase 0 record](PHASE0-2026-08-29-LAB-INVENTORY.md).
+> The accepted LabZ1 baseline is already installed. The five-stage workflow
+> passed its reviewed live gate: the first run refreshed only stale evidence,
+> and the immediate second run skipped all five stages with zero action.
+> Routine validation should still use the smaller read-only restart command
+> below. See the
+> [v1 acceptance record](V1-ACCEPTANCE-2026-08-30.md).
 
 ## Required boundary
 

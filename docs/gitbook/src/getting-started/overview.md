@@ -3,9 +3,9 @@
 `setup-cm` treats a lab MECM deployment as a sequence of small, verifiable
 stages. The stage engine supports Test, Apply, Verify, and structured evidence.
 The complete release-candidate workflow now has real read-only probes and
-bounded repair. The accepted LabZ1 environment must still use its
-[read-only restart procedure](../operations/current-status.md) until the
-reviewed two-run live gate begins.
+bounded repair. The LabZ1 live gate is accepted; routine operation should use
+its [read-only restart procedure](../operations/current-status.md), while the
+complete workflow remains available for proven owned-state repair.
 
 ## Architecture at a glance
 

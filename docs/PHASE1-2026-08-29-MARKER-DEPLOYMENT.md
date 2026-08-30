@@ -12,8 +12,8 @@ credentials, tokens, private URLs, raw log bodies, or generated client policy.
 All live checks were performed over SSH and bounded Configuration Manager
 provider queries; no VNC or visual acceptance was used.
 
-This record proves the bounded marker result, not whole-workflow idempotence.
-Until the hands-off rerun v1 plan is accepted, use it with the
+This record captures the pre-v1 bounded marker result. For current execution,
+use the [v1 hands-off acceptance](V1-ACCEPTANCE-2026-08-30.md) with the
 [Phase 0 safe restart point](PHASE0-2026-08-29-LAB-INVENTORY.md#safe-restart-point)
 and do not rerun bootstrap stages merely to refresh timestamps.
 
@@ -196,10 +196,14 @@ five client-only cases skipped, all 10 detector/publication cases on
 `RING0IVY24-01`, and the isolated read-only provider pre-migration test. The
 provider reported only `EvidenceChannel/Missing`,
 `DeploymentType/ApprovedDetectorUpgrade`, and
-`Client/ClientEvidencePending` as noncompliant. The live channel and detector
-migration, post-migration provider proof, and immediate zero-action second run
-remain pending; this section does not replace the historical Phase 1 acceptance
-above.
+`Client/ClientEvidencePending` as noncompliant. The live sequence then created
+the bounded channel, migrated the detector, corrected the target-file
+inheritance rule, and received an exact target-owned client record. Final
+source `33535c6a0e47bb0bb0f838eb990b0e9e9cb2ac95` passed 12 applicable
+CM01 Windows tests, all 10 client tests, the zero-action post-migration provider
+gate, one bounded stale-receipt refresh, and an immediate complete five-stage
+zero-action run. The full evidence and hashes are in
+[v1 hands-off acceptance](V1-ACCEPTANCE-2026-08-30.md).
 
 ## Operational notes
 

@@ -1,7 +1,8 @@
 # Authenticated Marker Client Evidence Channel Design
 
-**Status:** Approved and implemented in the reviewed source on 2026-08-30;
-live LabZ1 migration and two-run acceptance pending.
+**Status:** Approved, implemented, and accepted live on 2026-08-30. The final
+two-run evidence is in
+[v1 hands-off acceptance](../../V1-ACCEPTANCE-2026-08-30.md).
 
 ## Purpose
 

@@ -6,10 +6,10 @@ domain-joined Windows Server and a separate test client. Read
 [Configuration Reference](../configuration/reference.md) first.
 
 > **Current LabZ1 note:** The accepted baseline is already installed. The
-> five-stage release-candidate implementation is idempotent, but its reviewed
-> two-run live acceptance is still pending. Until that gate starts, use the
-> read-only restart command below and
-> [Current LabZ1 Status](./current-status.md).
+> first reviewed run refreshed only stale authenticated evidence; the immediate
+> second run skipped all five stages with zero action. Routine validation
+> should still use the smaller read-only restart command below. See
+> [v1 Hands-Off Acceptance](./v1-acceptance.md).
 
 ## Required boundary
 

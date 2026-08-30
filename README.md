@@ -1,11 +1,12 @@
 # setup-cm
 
-> **Current status — accepted lab, v1 live rerun gate pending**
+> **Current status — v1 live acceptance complete**
 > The LabZ1 SQL/MECM/client baseline and its one-device required marker
 > deployment are accepted. Idempotent probes and bounded reconciliation now
-> exist for the complete five-stage workflow. The reviewed two-run live gate,
-> merge, and v1 release are still pending, so follow the accepted restart
-> records rather than replaying bootstrap stages merely for newer timestamps.
+> exist for the complete five-stage workflow. The first exact-source run
+> refreshed only a stale authenticated receipt; the immediate second run
+> skipped all five stages with zero action. Once published, the `v1.0.0` tag
+> and GitHub release will be the authoritative publication identity.
 
 `setup-cm` automates a repeatable, evidence-backed Microsoft Configuration Manager (MECM, formerly SCCM) primary-site deployment for an **isolated lab**.
 
@@ -24,21 +25,23 @@ older planned `LABZ1-CMCLIENT01` identity is obsolete for current acceptance.
   is the authoritative server/client restart record.
 - [Phase 1 marker acceptance](docs/PHASE1-2026-08-29-MARKER-DEPLOYMENT.md)
   proves the required marker is compliant exclusively on `RING0IVY24-01`.
+- [v1 hands-off acceptance](docs/V1-ACCEPTANCE-2026-08-30.md) records the
+  exact source, native Windows/provider gates, bounded receipt refresh,
+  zero-action second run, and evidence hashes.
 - [LabZ1 deployment target](docs/LABZ1_DEPLOYMENT.md) summarizes the current
-  inventory, safe restart point, and remaining v1 work.
+  inventory and safe restart point.
 
-Until the two-run gate is accepted, use current read-only Health and
-provider/client checks on the accepted lab. The release-candidate workflow now
-tests exact Acquire, SQL, MECM, Marker, and Health state before applying and
-fails closed on unsupported or conflicting identity.
+Routine checks should still use read-only Health and provider/client probes.
+The accepted workflow tests exact Acquire, SQL, MECM, Marker, and Health state
+before applying and fails closed on unsupported or conflicting identity.
 
 The release-candidate Marker stage also has an implemented, fixed authenticated
 evidence channel: the exact client computer account publishes a strict
 six-field record to a one-client hidden share on CM01 after verifying the local
 marker hash. An authenticated `C$` read remains authoritative when available;
-otherwise the CM01 receipt provides the direct client proof. The implementation
-and exact Windows tests are complete, but the live share creation, approved
-detector upgrade, and two-run acceptance are still pending.
+otherwise the CM01 receipt provides the direct client proof. The live channel,
+detector revision, target-file inheritance, and zero-action rerun behavior are
+accepted on `RING0IVY24-01`.
 
 ## Why this exists
 
@@ -140,9 +143,10 @@ sanitized evidence. Exact compliance produces `Skipped` and performs no Apply.
 A conflict fails before mutation. Health is always read-only. Each selected
 stage records `stage-<stage>.json` in a unique run directory beneath
 `evidenceRoot`; component probes write their state artifacts alongside it.
-Preserve that directory when investigating or resuming a failed run. The
-accepted LabZ1 restart procedure currently selects `Health` only; the reviewed
-two-run no-op acceptance remains the final live v1 gate.
+Preserve that directory when investigating or resuming a failed run. Routine
+LabZ1 validation selects `Health` only. The full five-stage workflow is also
+accepted as a no-op from exact reviewed source and should be used only for a
+full confirmation or a proven owned-component repair.
 
 ## Documentation
 

@@ -16,6 +16,7 @@
 # Operations
 
 - [Current LabZ1 Status](./operations/current-status.md)
+- [v1 Hands-Off Acceptance](./operations/v1-acceptance.md)
 - [Operator Runbook](./operations/runbook.md)
 - [Stages & Evidence](./operations/stages-and-evidence.md)
 - [Recovery & Resume](./operations/recovery.md)

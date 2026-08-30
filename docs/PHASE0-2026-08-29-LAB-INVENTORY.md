@@ -15,6 +15,11 @@ The follow-on [Phase 1 marker record](PHASE1-2026-08-29-MARKER-DEPLOYMENT.md)
 is also accepted. It adds one required, lab-only application deployment without
 changing this baseline identity.
 
+The later [v1 hands-off acceptance](V1-ACCEPTANCE-2026-08-30.md) supersedes
+the historical apply-only rerun limitation: it proves the complete five-stage
+workflow twice from exact source with every compliant stage skipped, zero
+mutation actions, and zero installers.
+
 ## Accepted scope
 
 The accepted target is one isolated single-box MECM lab:

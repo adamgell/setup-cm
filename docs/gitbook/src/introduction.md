@@ -1,9 +1,9 @@
 # Introduction
 
-> **Accepted lab; v1 live rerun gate pending**
+> **Accepted lab; v1 live acceptance complete**
 > The LabZ1 SQL/MECM/client baseline and one-device marker are accepted. The
-> five-stage idempotent implementation is complete; reviewed two-run live and
-> v1 release acceptance are still in progress. Start with
+> first exact-source run refreshed only stale authenticated evidence; the
+> immediate second run skipped all five stages with zero action. Start with
 > [Current LabZ1 Status](./operations/current-status.md) before operating the
 > accepted environment.
 
