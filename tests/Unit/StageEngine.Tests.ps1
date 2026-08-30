@@ -11,6 +11,18 @@ Describe 'Invoke-SetupCmStage' {
             $result.state | Should -Be 'Skipped'
         }
 
+        It 'emits only the stage result when Apply writes success output' {
+            $result = @(Invoke-SetupCmStage -Name 'Sample' `
+                    -Test { 'NotCompliant' } `
+                    -Apply { [pscustomobject]@{ Changed = $true } } `
+                    -Verify { 'Compliant' } `
+                    -EvidenceRoot $TestDrive)
+
+            $result | Should -HaveCount 1
+            $result[0].name | Should -BeExactly 'Sample'
+            $result[0].state | Should -BeExactly 'Succeeded'
+        }
+
         It 'does not run Verify after Apply throws' {
             {
                 Invoke-SetupCmStage -Name 'Sample' -Test { 'NotCompliant' } -Apply { throw 'blocked' } -Verify { throw 'must not run' } -EvidenceRoot $TestDrive

@@ -34,7 +34,7 @@ function Invoke-SetupCmStage {
             default { throw "$Name returned unsupported compliance state '$testState'." }
         }
 
-        & $Apply
+        & $Apply | Out-Null
         $verifyState = & $Verify
         if ($verifyState -ne 'Compliant') {
             throw "$Name verification failed."
