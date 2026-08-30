@@ -196,6 +196,11 @@ branch provider/cmdlets, CIM/WMI, Microsoft ODBC Driver 18 through
 
 ## Task 9: Run Windows/provider integration and two live runs
 
+The marker client-proof blocker is resolved by the test-first implementation
+and live sequence in
+[`2026-08-30-marker-client-evidence-channel.md`](2026-08-30-marker-client-evidence-channel.md).
+Complete that plan before continuing the remaining Task 9 gates.
+
 - [ ] Reconfirm Proxmox owner/running state, controller health and Agent
       identity, CM01/site/provider/database, client resource identity, and the
       one-device marker deployment before staging source.
