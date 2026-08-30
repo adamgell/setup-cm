@@ -200,6 +200,133 @@ function Add-SetupCmSqlNVarCharParameter {
     return $parameter
 }
 
+function Invoke-SetupCmWindowsFeatureOperation {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('Query', 'Install')]
+        [string]$Operation,
+
+        [Parameter(Mandatory)]
+        [string[]]$FeatureName,
+
+        [scriptblock]$ProcessProvider = {
+            param($EncodedCommand, $TimeoutMilliseconds)
+
+            $powerShellPath = Join-Path $env:SystemRoot `
+                'System32\WindowsPowerShell\v1.0\powershell.exe'
+            if (-not [IO.File]::Exists($powerShellPath)) {
+                throw 'Windows PowerShell is unavailable for the isolated feature operation.'
+            }
+            $startInfo = [Diagnostics.ProcessStartInfo]::new()
+            $startInfo.FileName = $powerShellPath
+            $startInfo.ArgumentList.Add('-NoLogo')
+            $startInfo.ArgumentList.Add('-NoProfile')
+            $startInfo.ArgumentList.Add('-NonInteractive')
+            $startInfo.ArgumentList.Add('-EncodedCommand')
+            $startInfo.ArgumentList.Add($EncodedCommand)
+            $startInfo.UseShellExecute = $false
+            $startInfo.RedirectStandardOutput = $true
+            $startInfo.RedirectStandardError = $true
+
+            $process = [Diagnostics.Process]::new()
+            $process.StartInfo = $startInfo
+            try {
+                if (-not $process.Start()) {
+                    throw 'The isolated Windows feature operation did not start.'
+                }
+                $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+                $stderrTask = $process.StandardError.ReadToEndAsync()
+                if (-not $process.WaitForExit($TimeoutMilliseconds)) {
+                    $process.Kill($true)
+                    $process.WaitForExit()
+                    [void]$stdoutTask.GetAwaiter().GetResult()
+                    [void]$stderrTask.GetAwaiter().GetResult()
+                    throw 'The isolated Windows feature operation timed out.'
+                }
+                $stdout = $stdoutTask.GetAwaiter().GetResult().Trim()
+                [void]$stderrTask.GetAwaiter().GetResult()
+                if ($process.ExitCode -ne 0) {
+                    throw 'The isolated Windows feature operation failed.'
+                }
+                return $stdout
+            }
+            finally {
+                $process.Dispose()
+            }
+        }
+    )
+
+    # ServerManager is Windows PowerShell-only. Auto-importing it into this
+    # PowerShell 7 runspace creates WinPSCompatSession and can make a later
+    # ConfigurationManager CMSite drive land in the wrong runspace.
+    if (-not $IsWindows) {
+        throw 'Windows feature operations can only run on Windows Server.'
+    }
+    $features = @($FeatureName | ForEach-Object { [string]$_ })
+    if ($features.Count -eq 0 -or @($features | Where-Object {
+            $_ -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'
+        }).Count -gt 0) {
+        throw 'Each Windows feature name must be a bounded feature token.'
+    }
+
+    $featureJson = ConvertTo-Json -InputObject ([object[]]$features) -Compress
+    $featurePayload = [Convert]::ToBase64String(
+        [Text.Encoding]::UTF8.GetBytes($featureJson)
+    )
+    $childScript = @'
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+$WarningPreference = 'SilentlyContinue'
+$InformationPreference = 'SilentlyContinue'
+$featureJson = [Text.Encoding]::UTF8.GetString(
+    [Convert]::FromBase64String('__FEATURE_PAYLOAD__')
+)
+$featureNames = [string[]]($featureJson | ConvertFrom-Json)
+'@.Replace('__FEATURE_PAYLOAD__', $featurePayload)
+    $operationScript = if ($Operation -ceq 'Query') {
+        @'
+    $installed = @(Get-WindowsFeature -Name $featureNames -ErrorAction Stop |
+        Where-Object Installed | ForEach-Object Name)
+    ConvertTo-Json -InputObject ([object[]]$installed) -Compress
+'@
+    }
+    else {
+        @'
+    $result = Install-WindowsFeature -Name $featureNames `
+        -IncludeManagementTools -ErrorAction Stop
+    [pscustomobject]@{ Success = [bool]$result.Success } |
+        ConvertTo-Json -Compress
+'@
+    }
+    $childScript += [Environment]::NewLine + $operationScript
+    $encodedCommand = [Convert]::ToBase64String(
+        [Text.Encoding]::Unicode.GetBytes($childScript)
+    )
+    $timeoutMilliseconds = if ($Operation -ceq 'Query') { 120000 } else { 1800000 }
+    $rawResult = [string](& $ProcessProvider $encodedCommand $timeoutMilliseconds)
+    if ([string]::IsNullOrWhiteSpace($rawResult)) {
+        throw 'The isolated Windows feature operation returned no result.'
+    }
+    try {
+        $result = $rawResult | ConvertFrom-Json -ErrorAction Stop
+    }
+    catch {
+        throw 'The isolated Windows feature operation returned invalid output.'
+    }
+
+    if ($Operation -ceq 'Query') {
+        $installedFeatures = @($result | ForEach-Object { [string]$_ })
+        if (@($installedFeatures | Where-Object { $_ -notin $features }).Count -gt 0) {
+            throw 'The isolated Windows feature query returned an unexpected feature.'
+        }
+        return $installedFeatures
+    }
+    if (-not [bool]$result.Success) {
+        throw 'The isolated Windows feature installation did not report success.'
+    }
+}
+
 function Get-SetupCmSqlDefaultProviders {
     [CmdletBinding()]
     param()
@@ -218,9 +345,8 @@ function Get-SetupCmSqlDefaultProviders {
         }
         WindowsFeatures = {
             param($RequiredFeatures)
-            @(Get-WindowsFeature -Name $RequiredFeatures -ErrorAction Stop |
-                Where-Object Installed |
-                Select-Object -ExpandProperty Name)
+            @(Invoke-SetupCmWindowsFeatureOperation -Operation Query `
+                -FeatureName $RequiredFeatures)
         }
         Instance = {
             param($InstanceName)
@@ -758,7 +884,7 @@ function Install-SetupCmWindowsPrerequisites {
     [CmdletBinding()]
     param([string[]]$FeatureName = @('NET-Framework-Features', 'BITS', 'Web-Server'))
     if (-not $IsWindows) { throw 'Windows prerequisites can only be installed on Windows Server.' }
-    foreach ($feature in $FeatureName) { Install-WindowsFeature -Name $feature -IncludeManagementTools | Out-Null }
+    Invoke-SetupCmWindowsFeatureOperation -Operation Install -FeatureName $FeatureName
 }
 
 function Install-SetupCmSql {

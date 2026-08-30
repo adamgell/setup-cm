@@ -161,6 +161,92 @@ Describe 'Add-SetupCmSqlNVarCharParameter' {
     }
 }
 
+Describe 'Invoke-SetupCmWindowsFeatureOperation' {
+    InModuleScope SetupCm {
+        BeforeEach {
+            $script:IsWindows = $true
+        }
+
+        It 'queries installed feature names in an isolated Windows PowerShell process' {
+            $script:decodedFeatureQuery = ''
+            $script:featureQueryTimeout = 0
+
+            $installed = @(Invoke-SetupCmWindowsFeatureOperation -Operation Query `
+                -FeatureName @('NET-Framework-Features', 'BITS', 'Web-Server') `
+                -ProcessProvider {
+                    param($EncodedCommand, $TimeoutMilliseconds)
+                    $script:decodedFeatureQuery = [Text.Encoding]::Unicode.GetString(
+                        [Convert]::FromBase64String($EncodedCommand)
+                    )
+                    $script:featureQueryTimeout = $TimeoutMilliseconds
+                    '["Web-Server","BITS"]'
+                })
+
+            $installed | Should -BeExactly @('Web-Server', 'BITS')
+            $script:decodedFeatureQuery | Should -Match 'Get-WindowsFeature'
+            $script:decodedFeatureQuery | Should -Not -Match 'Install-WindowsFeature'
+            $script:featureQueryTimeout | Should -Be 120000
+        }
+
+        It 'accepts canonical feature-name casing from Server Manager' {
+            $installed = @(Invoke-SetupCmWindowsFeatureOperation -Operation Query `
+                -FeatureName @('web-server') -ProcessProvider {
+                    '["Web-Server"]'
+                })
+
+            $installed | Should -BeExactly @('Web-Server')
+        }
+
+        It 'preserves an empty installed-feature result as an empty collection' {
+            $installed = @(Invoke-SetupCmWindowsFeatureOperation -Operation Query `
+                -FeatureName @('Web-Server') -ProcessProvider { '[]' })
+
+            $installed | Should -HaveCount 0
+        }
+
+        It 'installs only the requested features in an isolated Windows PowerShell process' {
+            $script:decodedFeatureInstall = ''
+            $script:featureInstallTimeout = 0
+
+            Invoke-SetupCmWindowsFeatureOperation -Operation Install `
+                -FeatureName @('Web-Server') -ProcessProvider {
+                    param($EncodedCommand, $TimeoutMilliseconds)
+                    $script:decodedFeatureInstall = [Text.Encoding]::Unicode.GetString(
+                        [Convert]::FromBase64String($EncodedCommand)
+                    )
+                    $script:featureInstallTimeout = $TimeoutMilliseconds
+                    '{"Success":true}'
+                }
+
+            $script:decodedFeatureInstall | Should -Match 'Install-WindowsFeature'
+            $script:decodedFeatureInstall | Should -Match 'IncludeManagementTools'
+            $script:featureInstallTimeout | Should -Be 1800000
+        }
+
+        It 'rejects an unsafe feature token before starting a child process' {
+            $script:processCalled = $false
+
+            {
+                Invoke-SetupCmWindowsFeatureOperation -Operation Query `
+                    -FeatureName @('Web-Server;Restart-Computer') -ProcessProvider {
+                        $script:processCalled = $true
+                    }
+            } | Should -Throw '*feature name*'
+
+            $script:processCalled | Should -BeFalse
+        }
+
+        It 'fails closed when an isolated install does not report success' {
+            {
+                Invoke-SetupCmWindowsFeatureOperation -Operation Install `
+                    -FeatureName @('Web-Server') -ProcessProvider {
+                        '{"Success":false}'
+                    }
+            } | Should -Throw '*did not report success*'
+        }
+    }
+}
+
 Describe 'Get-SetupCmSqlDefaultProviders' {
     InModuleScope SetupCm {
         BeforeAll {
@@ -183,6 +269,21 @@ Describe 'Get-SetupCmSqlDefaultProviders' {
             $providers = Get-SetupCmSqlDefaultProviders
 
             { & $providers.Site } | Should -Throw '*invalid namespace*'
+        }
+
+        It 'isolates the Server Manager feature query from the parent runspace' {
+            Mock Invoke-SetupCmWindowsFeatureOperation {
+                @('NET-Framework-Features', 'BITS')
+            }
+            $providers = Get-SetupCmSqlDefaultProviders
+
+            @(& $providers.WindowsFeatures @(
+                'NET-Framework-Features', 'BITS', 'Web-Server'
+            )) | Should -BeExactly @('NET-Framework-Features', 'BITS')
+            Should -Invoke Invoke-SetupCmWindowsFeatureOperation -Times 1 -Exactly `
+                -ParameterFilter {
+                    $Operation -eq 'Query' -and @($FeatureName).Count -eq 3
+                }
         }
     }
 }
