@@ -17,14 +17,16 @@ Invoke-SetupCm [-ConfigPath] <string> [[-Mode] <string>]
 | --- | --- | --- | --- |
 | `ConfigPath` | `string` | — | Path to the validated private YAML configuration. |
 | `Mode` | `string` | `Guided` | `Guided` pauses after each stage; `Unattended` does not. |
-| `Stage` | `string[]` | Config-dependent | Operator-selected subset of `Acquire`, `Sql`, `Mecm`, `Marker`, and `Health`. List selected stages in canonical relative order. Enabled marker acceptance defaults to all five; otherwise Marker is omitted. |
+| `Stage` | `string[]` | Config-dependent | Operator-selected subset of `Acquire`, `Sql`, `Mecm`, `Marker`, and `Health`. A validated lab-only marker configuration with the fixed LabZ1 identities defaults to all five and requires a full `SourceCommit`; a marker-disabled configuration omits Marker. |
 | `SourceCommit` | `string` | `SETUPCM_SOURCE_COMMIT` | Full 40-character commit for evidence provenance. Required whenever Marker is selected. |
 
 The canonical order is `Acquire` → `Sql` → `Mecm` → `Marker` → `Health`.
 The command does not reorder an explicit subset, so operators must preserve
 that relative order. Select `Marker` only when `markerAcceptance.enabled` and
-`markerAcceptance.labOnly` are both `true`; it also requires the exact fixed
-LabZ1 identities and a full source commit.
+`markerAcceptance.labOnly` are both `true`, the exact fixed LabZ1 identities
+validate, and a full source commit is available. An enabled marker
+configuration without that commit fails before stage execution rather than
+silently omitting the required Marker stage.
 
 Operational example:
 

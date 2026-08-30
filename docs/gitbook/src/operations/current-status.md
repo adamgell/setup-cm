@@ -1,8 +1,9 @@
 # Current LabZ1 Status
 
 The LabZ1 baseline and one-device marker deployment are accepted. All five
-release-candidate stages now have real desired-state probes and bounded repair;
-the reviewed two-run live gate, merge, and v1 publication remain in progress.
+release-candidate stages now have real desired-state probes, and applicable
+mutating stages have bounded repair. The reviewed two-run live gate, merge, and
+v1 publication remain in progress.
 
 ## Accepted current state
 

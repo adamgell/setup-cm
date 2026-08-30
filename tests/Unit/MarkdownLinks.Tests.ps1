@@ -128,6 +128,16 @@ Describe 'Test-MarkdownLinks script' {
         $result.LocalLinksChecked | Should -Be 1
     }
 
+    It 'validates a four-space continuation link without a preceding blank line' {
+        Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') -Value @'
+A normal paragraph continues here:
+    [Missing](missing.md)
+'@
+
+        { & $linkScript -RepositoryRoot $TestDrive -Path index.md } |
+            Should -Throw '*missing.md*'
+    }
+
     It 'ignores escaped inline links and images while validating an unescaped link' {
         Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') -Value @'
 \[Escaped link](missing-link.md)
@@ -169,7 +179,7 @@ Describe 'Test-MarkdownLinks script' {
         $content | Should -Match "\\A\[0-9a-fA-F\]\{40\}\\z"
     }
 
-    It 'documents the deliberate PowerShell 7.0 compatibility floor in <Runbook>' -ForEach @(
+    It 'separates the PowerShell 7.0 runtime floor from the Pester 6 test floor in <Runbook>' -ForEach @(
         @{ Runbook = 'docs/RUNBOOK.md' }
         @{ Runbook = 'docs/gitbook/src/operations/runbook.md' }
     ) {
@@ -178,7 +188,8 @@ Describe 'Test-MarkdownLinks script' {
         $content | Should -Match 'PowerShell 7\.0 or later'
         $content | Should -Match '(?s)`ProcessStartInfo\.ArgumentList`\s+is available in \.NET Core 3\.1'
         $content | Should -Match '(?s)`TimeoutSec`\s+on PowerShell 7\.0-7\.3'
-        $content | Should -Match '(?s)Pester 6\.0\.0.*declares PowerShell 5\.1'
+        $content | Should -Match '(?s)Pester 6\.0\.0.*PowerShell 7\.4 or later'
+        $content | Should -Match '(?s)Windows PowerShell 5\.1.*does not imply.*Core 7\.0-7\.3'
     }
 
     It 'documents and verifies an exact read-only ACL for private configuration in <Runbook>' -ForEach @(

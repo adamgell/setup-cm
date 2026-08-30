@@ -1,6 +1,9 @@
 # Testing
 
-`setup-cm` uses Pester 6 for unit tests and a live-lab integration suite for end-to-end validation.
+`setup-cm` uses Pester 6 for unit tests and a live-lab integration suite for
+end-to-end validation. Run this repository's Pester suite with PowerShell 7.4
+or later. Pester 6 also supports Windows PowerShell 5.1, but the SetupCm module
+itself requires PowerShell 7.
 
 ## Unit tests
 

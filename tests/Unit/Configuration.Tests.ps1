@@ -46,7 +46,9 @@ Describe 'Assert-SetupCmConfig' {
             $config = Read-SetupCmConfig -Path "$PSScriptRoot/../../config/lab.example.yaml"
             $config.topology | Should -Be 'single-box'
             $config.sources.sqlServer.cacheFile | Should -Be 'sql-server.iso'
+            $config.sources.sqlServer.name | Should -Be 'sqlServer'
             $config.sources.mecm.cacheFile | Should -Be 'mecm-current-branch-2509.iso'
+            $config.sources.mecm.name | Should -Be 'mecm'
             $config.sources.mecm.version | Should -Be '5.00.9141.1002'
         }
 
@@ -86,12 +88,14 @@ Describe 'Assert-SetupCmConfig' {
                         uri = 'https://vault/sql.iso'; sha256 = ('a' * 64)
                         cacheFile = 'sql.iso'; licenseAccepted = $true
                         sizeBytes = 1024; version = '16.0.1000.6'; architecture = 'x64'
+                        signatureRelativePath = 'setup.exe'
                     }
                     mecm = @{
                         uri = 'https://vault/mecm.iso'; sha256 = ('b' * 64)
                         cacheFile = 'mecm.iso'; licenseAccepted = $true
                         sizeBytes = 2048; version = '5.00.9141.1002'; architecture = 'x64'
                         publisher = 'Microsoft Corporation'
+                        signatureRelativePath = 'SMSSETUP\BIN\X64\setup.exe'
                     }
                 }
                 sql = @{ instanceName = 'MSSQLSERVER'; sysAdminAccounts = @('TEST\Admins') }
@@ -110,12 +114,14 @@ Describe 'Assert-SetupCmConfig' {
                         cacheFile = 'sql.iso'; licenseAccepted = $true
                         sizeBytes = 1024; version = '16.0.1000.6'; architecture = 'x64'
                         publisher = 'Microsoft Corporation'
+                        signatureRelativePath = 'setup.exe'
                     }
                     mecm = @{
                         uri = 'https://vault/mecm.iso'; sha256 = ('b' * 64)
                         cacheFile = 'mecm-current-branch-2509.iso'; licenseAccepted = $true
                         sizeBytes = 2048; version = '2509'; architecture = 'x64'
                         publisher = 'Microsoft Corporation'
+                        signatureRelativePath = 'SMSSETUP\BIN\X64\setup.exe'
                     }
                 }
                 sql = @{ instanceName = 'MSSQLSERVER'; sysAdminAccounts = @('TEST\Admins') }
@@ -134,18 +140,45 @@ Describe 'Assert-SetupCmConfig' {
                         cacheFile = 'sql.iso'; licenseAccepted = $true
                         sizeBytes = 1024; version = '16.0.1000.6'; architecture = 'x64'
                         publisher = 'Microsoft Corporation'
+                        signatureRelativePath = 'setup.exe'
                     }
                     mecm = @{
                         uri = 'https://vault/mecm.iso'; sha256 = ('b' * 64)
                         cacheFile = 'mecm.iso'; licenseAccepted = $true
                         sizeBytes = 2048; version = '5.00.9141.1002'; architecture = 'x64'
                         publisher = 'Microsoft Corporation'
+                        signatureRelativePath = 'SMSSETUP\BIN\X64\setup.exe'
                     }
                 }
                 sql = @{ instanceName = 'MSSQLSERVER'; sysAdminAccounts = @('TEST\Admins') }
             }
 
             (Assert-SetupCmConfig -Config $config).sources.mecm.architecture | Should -Be 'x64'
+        }
+
+        It 'requires a signed identity path for every runnable ISO source' {
+            $config = @{
+                safety = @{ isolatedLab = $true }
+                sources = @{
+                    sqlServer = @{
+                        uri = 'https://vault/sql.iso'; sha256 = ('a' * 64)
+                        cacheFile = 'sql.iso'; licenseAccepted = $true
+                        sizeBytes = 1024; version = '16.0.1000.6'; architecture = 'x64'
+                        publisher = 'Microsoft Corporation'
+                    }
+                    mecm = @{
+                        uri = 'https://vault/mecm.iso'; sha256 = ('b' * 64)
+                        cacheFile = 'mecm.iso'; licenseAccepted = $true
+                        sizeBytes = 2048; version = '5.00.9141.1002'; architecture = 'x64'
+                        publisher = 'Microsoft Corporation'
+                        signatureRelativePath = 'SMSSETUP\BIN\X64\setup.exe'
+                    }
+                }
+                sql = @{ instanceName = 'MSSQLSERVER'; sysAdminAccounts = @('TEST\Admins') }
+            }
+
+            { Assert-SetupCmConfig -Config $config } |
+                Should -Throw '*sources.sqlServer.signatureRelativePath*'
         }
 
         It 'fails closed when enabled marker acceptance does not use the fixed LabZ1 identities' {

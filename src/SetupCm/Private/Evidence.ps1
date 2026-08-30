@@ -49,7 +49,7 @@ function Test-SetupCmSensitiveEvidenceKey {
     param([Parameter(Mandatory)][string]$Name)
 
     $normalized = [regex]::Replace($Name, '[_\-\s]', '').ToLowerInvariant()
-    if ($normalized -match '(?:password|secret|token|authorization|credential|apikey|privatekey|connectionstring|connstring)') {
+    if ($normalized -match '(?:password|secret|token|authorization|credential|apikey|(?:access|shared|account)key|privatekey|connectionstring|connstring)') {
         return $true
     }
     if ($normalized -match '(?:uri|url)$') {
@@ -90,7 +90,7 @@ function ConvertTo-SetupCmSanitizedEvidenceString {
 
     $sanitized = [regex]::Replace(
         $Value,
-        '(?im)(\b(?:password|pwd|token|secret|authorization|(?:x-)?api[_-]?key)\s*(?:=|:)\s*)(?:"[^"]*"|''[^'']*''|[^;\r\n]+)',
+        '(?im)(\b(?:password|pwd|token|secret|authorization|(?:x-)?api[_-]?key|(?:access|shared|account)[_-]?key)\s*(?:=|:)\s*)(?:"[^"]*"|''[^'']*''|[^;\r\n]+)',
         '$1<redacted>'
     )
     $sanitized = [regex]::Replace($sanitized, '(?i)(\bbearer\s+)[A-Za-z0-9._~+/=-]+', '$1<redacted>')

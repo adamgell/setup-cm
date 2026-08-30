@@ -110,6 +110,23 @@ Describe 'Write-SetupCmEvidenceJson' {
             $sanitized | Should -Not -Match 'Basic|dXNlcjpwYXNzd29yZA=='
         }
 
+        It 'redacts access, shared, and account key properties and assignments' {
+            $path = Write-SetupCmEvidenceJson -EvidenceRoot $TestDrive -Name 'key-credentials' -Value @{
+                accessKey = 'access-value'
+                sharedKey = 'shared-value'
+                accountKey = 'account-value'
+                message = 'accessKey=inline-access; sharedKey: inline-shared; accountKey="inline account"'
+            }
+
+            $json = Get-Content -LiteralPath $path -Raw
+            $parsed = $json | ConvertFrom-Json
+            $json | Should -Not -Match 'access-value|shared-value|account-value|inline-access|inline-shared|inline account'
+            $parsed.PSObject.Properties.Name | Should -Not -Contain 'accessKey'
+            $parsed.PSObject.Properties.Name | Should -Not -Contain 'sharedKey'
+            $parsed.PSObject.Properties.Name | Should -Not -Contain 'accountKey'
+            $parsed.message | Should -Be 'accessKey=<redacted>; sharedKey: <redacted>; accountKey=<redacted>'
+        }
+
         It 'removes composite sensitive keys while preserving safe path and status fields' {
             $sensitiveValues = 1..6 | ForEach-Object { "sensitive-value-$_" }
             $value = [ordered]@{

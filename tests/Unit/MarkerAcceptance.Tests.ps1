@@ -122,6 +122,14 @@ Describe 'Setup-CM marker acceptance desired state' {
                 }
                 return $providers
             }
+
+            function Get-CimInstance {
+                param($Namespace, $ClassName, $Filter, $ErrorAction)
+            }
+        }
+
+        AfterAll {
+            Remove-Item -Path 'function:Get-CimInstance' -ErrorAction SilentlyContinue
         }
 
         It 'accepts only the exact fixed LabZ1 boundary and one active client identity' {
@@ -357,6 +365,31 @@ Describe 'Setup-CM marker acceptance desired state' {
                 -Providers (New-RecordingMarkerRepairProviders -Calls $calls)
 
             $calls | Should -BeExactly @('RequestClientPolicy')
+        }
+
+        It 'rejects <CollectionCount> matching collections before deployment update' -ForEach @(
+            @{ CollectionCount = 0 }
+            @{ CollectionCount = 2 }
+        ) {
+            $script:matchingCollections = @(
+                if ($CollectionCount -gt 0) {
+                    1..$CollectionCount | ForEach-Object {
+                        [pscustomobject]@{ CollectionID = "LAB0001$_" }
+                    }
+                }
+            )
+            Mock Get-CimInstance { $script:matchingCollections }
+            Mock Invoke-SetupCmMarkerSiteCommand {
+                & $ScriptBlock 'root\SMS\site_LAB'
+            }
+            $providers = Get-SetupCmMarkerDefaultProviders
+            $contract = [pscustomobject]@{
+                CollectionName = 'Setup-CM Phase 1 Marker - RING0IVY24-01 Only'
+                ApplicationName = 'Setup-CM Phase 1 Marker'
+            }
+
+            { & $providers.UpdateDeployment @{ markerAcceptance = @{ siteCode = 'LAB' } } $contract } |
+                Should -Throw '*Exactly one bounded marker collection*'
         }
 
         It 'writes marker evidence tied to the exact source commit' {

@@ -23,7 +23,7 @@ sources:
     sizeBytes: integer
     licenseAccepted: boolean
     cacheFile: string
-    signatureRelativePath: string   # optional, for ISO media
+    signatureRelativePath: string   # required for ISO media
 sql:
   instanceName: string
   serviceAccount: string

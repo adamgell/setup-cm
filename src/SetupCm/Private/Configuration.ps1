@@ -42,7 +42,16 @@ function Read-SetupCmConfig {
     }
 
     $config = ConvertTo-SetupCmHashtable -Value (Get-Content -LiteralPath $Path -Raw | ConvertFrom-Yaml)
-    Assert-SetupCmConfig -Config $config
+    $config = Assert-SetupCmConfig -Config $config
+    foreach ($sourceName in $config.sources.Keys) {
+        $source = $config.sources[$sourceName]
+        if ($source -is [hashtable] -and
+            (-not $source.ContainsKey('name') -or
+                [string]::IsNullOrWhiteSpace([string]$source.name))) {
+            $source.name = [string]$sourceName
+        }
+    }
+    return $config
 }
 
 function Assert-SetupCmConfig {
@@ -106,7 +115,7 @@ function Assert-SetupCmConfig {
 
     $isTemplate = $Config.ContainsKey('template') -and $Config['template']
     if (-not $isTemplate) {
-        foreach ($sourceName in $Config.sources.Keys) {
+        foreach ($sourceName in ($Config.sources.Keys | Sort-Object)) {
             $source = $Config.sources[$sourceName]
             if ($source -isnot [hashtable]) { continue }
             foreach ($field in 'cacheFile', 'sha256', 'sizeBytes', 'version', 'architecture', 'publisher') {
@@ -121,6 +130,11 @@ function Assert-SetupCmConfig {
             }
             if ([string]$source.architecture -notin 'x64', 'x86', 'neutral') {
                 throw "sources.$sourceName.architecture must be x64, x86, or neutral."
+            }
+            if ([IO.Path]::GetExtension([string]$source.cacheFile) -ieq '.iso' -and
+                (-not $source.ContainsKey('signatureRelativePath') -or
+                    [string]::IsNullOrWhiteSpace([string]$source.signatureRelativePath))) {
+                throw "sources.$sourceName.signatureRelativePath is required for ISO media."
             }
             if ([string]$sourceName -ieq 'mecm' -and
                 [string]$source.version -notmatch '^\d+\.\d+\.\d+\.\d+$') {

@@ -177,7 +177,9 @@ function New-SetupCmSqlConnection {
     $builder['TrustServerCertificate'] = 'No'
     $builder['Connection Timeout'] = 10
     $builder['Application Name'] = 'setup-cm'
-    return [System.Data.Odbc.OdbcConnection]::new($builder.ConnectionString)
+    $connection = [System.Data.Odbc.OdbcConnection]::new($builder.ConnectionString)
+    $connection.ConnectionTimeout = 10
+    return $connection
 }
 
 function Add-SetupCmSqlNVarCharParameter {
@@ -295,10 +297,10 @@ function Get-SetupCmSqlDefaultProviders {
                     Get-CimInstance -Namespace 'root\SMS' -ClassName SMS_ProviderLocation -ErrorAction Stop
                 ).Count -gt 0
             }
-            catch {
-                if ($_.Exception.Message -match '(?i)invalid namespace|invalid class|0x8004100e|0x80041010') {
-                    return $false
-                }
+            catch [Microsoft.Management.Infrastructure.CimException] {
+                $absentSiteState = Resolve-SetupCmAbsentMecmSiteCimStatus `
+                    -StatusCode ([uint32]$_.Exception.StatusCode)
+                if ($null -ne $absentSiteState) { return $false }
                 throw
             }
         }
@@ -841,7 +843,8 @@ function Repair-SetupCmSqlDesiredState {
     param(
         [Parameter(Mandatory)][hashtable]$Config,
         [Parameter(Mandatory)]$State,
-        [Parameter(Mandatory)][string]$EvidenceRoot
+        [Parameter(Mandatory)][string]$EvidenceRoot,
+        [hashtable]$Providers
     )
 
     $aggregateState = if ($State -is [string]) { [string]$State } else { [string]$State.State }
@@ -875,7 +878,11 @@ function Repair-SetupCmSqlDesiredState {
 
     $windowsFeatures = @($repairable | Where-Object Name -eq 'WindowsFeatures')
     if ($windowsFeatures.Count -gt 0) {
-        $missingFeatures = @($windowsFeatures[0].Missing)
+        $missingFeatureDetails = Get-SetupCmSqlObjectValue -InputObject $windowsFeatures[0] `
+            -Name Missing -DefaultValue @()
+        $missingFeatures = @($missingFeatureDetails | Where-Object {
+                -not [string]::IsNullOrWhiteSpace([string]$_)
+            })
         if ($missingFeatures.Count -eq 0) { throw 'WindowsFeatures repair state did not identify missing features.' }
         Install-SetupCmWindowsPrerequisites -FeatureName $missingFeatures
     }
@@ -911,21 +918,37 @@ function Repair-SetupCmSqlDesiredState {
         [System.StringComparer]::OrdinalIgnoreCase
     )
     foreach ($sysAdminState in @($repairable | Where-Object Name -eq 'SqlSysAdmins')) {
-        foreach ($account in @($sysAdminState.Missing)) {
+        $missingAccountDetails = Get-SetupCmSqlObjectValue -InputObject $sysAdminState `
+            -Name Missing -DefaultValue @()
+        $missingAccounts = @($missingAccountDetails | Where-Object {
+                -not [string]::IsNullOrWhiteSpace([string]$_)
+            })
+        if ($missingAccounts.Count -eq 0) {
+            throw 'SqlSysAdmins repair state did not identify missing accounts.'
+        }
+        foreach ($account in $missingAccounts) {
             Add-SetupCmSqlSysAdmin -Config $Config -Account $account
             [void]$repairedSysAdmins.Add((ConvertTo-SetupCmSqlComparableAccount -Account ([string]$account)))
         }
     }
 
     if ($odbcInstalled) {
-        $postBootstrapState = Get-SetupCmSqlDesiredState -Config $Config
+        $postBootstrapState = Get-SetupCmSqlDesiredState -Config $Config -Providers $Providers
         if ([string]$postBootstrapState.State -eq 'Conflict') {
             throw 'SQL desired state contains a conflict after ODBC bootstrap.'
         }
         foreach ($sysAdminState in @($postBootstrapState.Components | Where-Object {
             $_.Name -eq 'SqlSysAdmins' -and $_.State -eq 'NotCompliant'
         })) {
-            foreach ($account in @($sysAdminState.Missing)) {
+            $missingAccountDetails = Get-SetupCmSqlObjectValue -InputObject $sysAdminState `
+                -Name Missing -DefaultValue @()
+            $missingAccounts = @($missingAccountDetails | Where-Object {
+                    -not [string]::IsNullOrWhiteSpace([string]$_)
+                })
+            if ($missingAccounts.Count -eq 0) {
+                throw 'SqlSysAdmins repair state did not identify missing accounts.'
+            }
+            foreach ($account in $missingAccounts) {
                 $normalizedAccount = ConvertTo-SetupCmSqlComparableAccount -Account ([string]$account)
                 if ($repairedSysAdmins.Contains($normalizedAccount)) { continue }
                 Add-SetupCmSqlSysAdmin -Config $Config -Account $account

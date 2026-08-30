@@ -5,7 +5,8 @@ Before running `setup-cm`, ensure the following are in place.
 ## Environment
 
 - An **isolated, domain-joined lab** with a Windows Server host and a separate test client.
-- **PowerShell 7** or later on the server.
+- **PowerShell 7.0** or later on the server for SetupCm operations.
+- **PowerShell 7.4** or later on hosts that run the Pester 6 test suite.
 - **Git for Windows** with `git.exe` on `PATH`, used to verify the commit
   embedded in the reviewed source archive before extraction.
 - The `powershell-yaml` module to read the YAML configuration.
@@ -14,6 +15,10 @@ Before running `setup-cm`, ensure the following are in place.
 - Sufficient local disk space for the configured cache, SQL installation directory, MECM installation directory, and evidence.
 
 ## Install dependencies locally
+
+Run these test-dependency commands from PowerShell 7.4 or later. Pester 6 also
+supports Windows PowerShell 5.1, but this repository's module requires
+PowerShell 7.
 
 ```powershell
 Install-Module Pester -RequiredVersion 6.0.0 -Scope CurrentUser

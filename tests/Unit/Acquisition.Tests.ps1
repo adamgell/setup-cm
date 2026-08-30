@@ -43,6 +43,35 @@ Describe 'Get-SetupCmArtifact' {
             $result.Sha256 | Should -Be $hash.ToLowerInvariant()
         }
 
+        It 'acquires a cache miss from a keyed documented source without a nested name' {
+            $sourceFile = Join-Path $TestDrive 'approved-sql.iso'
+            Set-Content -LiteralPath $sourceFile -Value 'approved media' -NoNewline
+            $config = Read-SetupCmConfig -Path "$PSScriptRoot/../../config/lab.example.yaml"
+            $source = $config.sources.sqlServer
+            $source.vaultPath = $sourceFile
+            $source.licenseAccepted = $true
+            Mock Get-SetupCmArtifactState {
+                if ([string]::IsNullOrWhiteSpace($ArtifactPath)) {
+                    return [pscustomobject]@{
+                        Name = $Source.name; State = 'NotCompliant'; Reason = 'Missing'
+                    }
+                }
+                [pscustomobject]@{
+                    Name = $Source.name; State = 'Compliant'; Reason = 'Verified'
+                    Sha256 = ('a' * 64); SizeBytes = 14
+                    Version = '16.0.1000.6'; Architecture = 'x64'
+                }
+            }
+
+            $result = Get-SetupCmArtifact -Source $source -CacheRoot $TestDrive `
+                -EvidenceRoot $TestDrive
+
+            $result.Name | Should -Be 'sqlServer'
+            $result.State | Should -Be 'Compliant'
+            Test-Path -LiteralPath (Join-Path $TestDrive 'sql-server.iso') |
+                Should -BeTrue
+        }
+
         It 'fails safely when an invalid cached artifact has no approved source' {
             Set-Content -LiteralPath (Join-Path $TestDrive 'mecm.iso') -Value 'wrong installer' -NoNewline
             Mock Get-SetupCmArtifactState {
@@ -63,6 +92,7 @@ Describe 'Get-SetupCmArtifact' {
                     name = 'mecm'; cacheFile = 'mecm.iso'; sha256 = ('0' * 64); licenseAccepted = $false
                     sizeBytes = 15; version = '5.00.9141.1002'; architecture = 'x64'
                     publisher = 'Microsoft Corporation'
+                    signatureRelativePath = 'SMSSETUP\BIN\X64\setup.exe'
                 } -CacheRoot $TestDrive -EvidenceRoot $TestDrive
             } | Should -Throw '*licenseAccepted*'
         }
@@ -209,6 +239,7 @@ Describe 'Get-SetupCmArtifactState' {
                 name = 'sqlServer'; cacheFile = 'sql.iso'; sha256 = ('a' * 64)
                 sizeBytes = 1024; version = '16.0.1000.6'; architecture = 'x64'
                 licenseAccepted = $true; publisher = 'Microsoft Corporation'
+                signatureRelativePath = 'setup.exe'
             }
         }
 
@@ -240,6 +271,19 @@ Describe 'Get-SetupCmArtifactState' {
             $state.Reason | Should -Be 'MissingSourceField:publisher'
             $script:pathProbed | Should -BeFalse
             $script:identityProbed | Should -BeFalse
+        }
+
+        It 'fails closed before probing bytes when ISO signature metadata is missing' {
+            $withoutSignaturePath = $source.Clone()
+            $null = $withoutSignaturePath.Remove('signatureRelativePath')
+            $script:pathProbed = $false
+
+            $state = Get-SetupCmArtifactState -Source $withoutSignaturePath -CacheRoot $TestDrive `
+                -PathProvider { $script:pathProbed = $true }
+
+            $state.State | Should -Be 'Conflict'
+            $state.Reason | Should -Be 'MissingSourceField:signatureRelativePath'
+            $script:pathProbed | Should -BeFalse
         }
 
         It 'reports only the byte-length mismatch without probing native identity' {

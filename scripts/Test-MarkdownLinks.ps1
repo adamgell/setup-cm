@@ -81,6 +81,7 @@ function Get-MarkdownContentLine {
     $inIndentedCode = $false
     $fenceCharacter = $null
     $fenceLength = 0
+    $previousBlank = $true
     foreach ($line in @(Get-Content -LiteralPath $MarkdownPath)) {
         $lineNumber++
         if ($line -match '^ {0,3}(?<fence>`{3,}|~{3,})(?<suffix>.*)$') {
@@ -99,19 +100,29 @@ function Get-MarkdownContentLine {
                 $fenceCharacter = $null
                 $fenceLength = 0
             }
+            $previousBlank = $false
             continue
         }
         if ($inFence) { continue }
 
-        if ($line -match '^(?: {4}|\t)') {
-            $inIndentedCode = $true
-            continue
-        }
         if ($inIndentedCode) {
-            if ([string]::IsNullOrWhiteSpace($line)) { continue }
+            if ([string]::IsNullOrWhiteSpace($line)) {
+                $previousBlank = $true
+                continue
+            }
+            if ($line -match '^(?: {4}|\t)') {
+                $previousBlank = $false
+                continue
+            }
             $inIndentedCode = $false
         }
+        if ($previousBlank -and $line -match '^(?: {4}|\t)') {
+            $inIndentedCode = $true
+            $previousBlank = $false
+            continue
+        }
 
+        $previousBlank = [string]::IsNullOrWhiteSpace($line)
         [pscustomobject]@{ Number = $lineNumber; Text = $line }
     }
 }

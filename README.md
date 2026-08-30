@@ -61,7 +61,8 @@ The first-release baseline intentionally excludes production targets, distribute
 ## Requirements
 
 - An isolated, domain-joined lab with a Windows Server host and a separate test client.
-- PowerShell 7 or later.
+- PowerShell 7.0 or later for module operation; PowerShell 7.4 or later when
+  running the Pester 6 test suite.
 - Git for Windows with `git.exe` on `PATH`, used to verify the commit embedded
   in the reviewed source archive before extraction.
 - The `powershell-yaml` module to read the YAML configuration.
@@ -71,7 +72,9 @@ The first-release baseline intentionally excludes production targets, distribute
   and VC++ x64/x86 media, checksums, and accepted licenses.
 - Sufficient local disk space for the configured cache, SQL installation directory, MECM installation directory, and evidence.
 
-The CI workflow uses Pester 6. Install the dependencies locally when you want to run the unit tests:
+The CI workflow uses Pester 6, which supports PowerShell Core 7.4 and later.
+Install the dependencies from PowerShell 7.4 or later when you want to run the
+unit tests:
 
 ```powershell
 Install-Module Pester -RequiredVersion 6.0.0 -Scope CurrentUser

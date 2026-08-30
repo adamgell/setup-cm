@@ -94,14 +94,14 @@ The retained CM01 evidence includes successful bootstrap stages:
 | SQL | `20260801-234355-49212d28` | Succeeded — verified compliant |
 | MECM | `20260802-010048-f1fd1688` | Succeeded — verified compliant |
 
-The current runner deliberately treats `Acquire` and `Mecm` as apply-only
-stages. A whole-run replay would reprocess installation media instead of acting
-as a read-only acceptance check. Final acceptance therefore uses the retained
-successful bootstrap artifacts, a current exact-head preflight, independent
-live inventory, and a fresh exact-head Health stage. Do not rerun the entire
-bootstrap solely to generate newer timestamps. This limitation is the explicit
-restart point for the 2026-08-30 hands-off rerun v1 plan, not an unfinished
-part of the accepted Phase 0 deployment.
+The historical Phase 0 runner treated `Acquire` and `Mecm` as apply-only stages,
+so a whole-run replay could reprocess installation media instead of acting as a
+read-only acceptance check. The v1 runner replaces that limitation with the
+Test/Apply/Verify contract: it performs read-only desired-state probes before
+any bounded Apply repair. The retained successful bootstrap artifacts, current
+exact-head preflight, independent live inventory, and fresh exact-head Health
+stage remain the accepted Phase 0 restart evidence rather than an instruction
+to replay the historical bootstrap solely for newer timestamps.
 
 ## Fresh typed client acceptance
 

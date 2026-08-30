@@ -65,7 +65,7 @@ The template includes `sqlServer`, `mecm`, `adk`, `adkWinPe`, `odbcDriver18`,
 | `sizeBytes` | Exact approved artifact length in bytes. |
 | `licenseAccepted` | An explicit acknowledgement that the operator has accepted the applicable license. |
 | `cacheFile` | Filename used under `cacheRoot`. |
-| `signatureRelativePath` | Executable inside ISO media whose signature can be checked; used by the SQL Server and MECM entries. |
+| `signatureRelativePath` | Required for ISO media: executable inside the ISO whose signature and native identity are checked. |
 
 For signed executables and ISO media, `version` is the native `ProductVersion`
 of the file selected by `signatureRelativePath`. Human release labels are not

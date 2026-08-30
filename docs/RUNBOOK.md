@@ -31,8 +31,9 @@ outside this runbook.
 
 ## Prepare the server
 
-1. Install PowerShell 7.0 or later, Git for Windows, `powershell-yaml`, and
-   Pester 6:
+1. Install PowerShell 7.0 or later for SetupCm operations, plus Git for
+   Windows and `powershell-yaml`. Use PowerShell 7.4 or later on any host that
+   will run the Pester 6 test suite:
 
    ```powershell
    Install-Module powershell-yaml -RequiredVersion 0.4.12 -Scope CurrentUser
@@ -43,8 +44,10 @@ outside this runbook.
    is available in .NET Core 3.1, the archive verifier writes bytes directly to
    the child process stream, and acquisition uses the compatible `TimeoutSec`
    on PowerShell 7.0-7.3 before switching to split timeouts on 7.4 and later.
-   The pinned Pester 6.0.0 module manifest declares PowerShell 5.1, so Pester
-   does not raise that floor.
+   The pinned Pester 6.0.0 test dependency requires PowerShell 7.4 or later on
+   PowerShell Core. Pester also supports Windows PowerShell 5.1, but this
+   repository imports the PowerShell 7-only SetupCm module; its manifest value
+   does not imply Pester support for Core 7.0-7.3.
 
 2. On the review host, create and hash a source archive from one exact commit:
 
@@ -285,9 +288,11 @@ pwsh ./scripts/Invoke-SetupCm.ps1 `
   -SourceCommit $env:SETUPCM_SOURCE_COMMIT
 ```
 
-When `markerAcceptance.enabled: true`, omitting `-Stage` selects the same
-five stages in that order. Keep `-Stage` explicit for release acceptance and
-recovery evidence.
+When marker acceptance is enabled, lab-only, fixed to the validated LabZ1
+identities, and supplied a full source commit, omitting `-Stage` selects the
+same five stages in that order. A marker-disabled configuration omits Marker;
+an enabled marker configuration without the commit fails before stage
+execution. Keep `-Stage` explicit for release acceptance and recovery evidence.
 
 The first accepted run may repair only proven missing state. Run the identical
 command from the identical commit a second time. The second run must report all

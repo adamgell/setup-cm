@@ -108,6 +108,7 @@ Describe 'New-SetupCmSqlConnection' {
                 $connection.ConnectionString | Should -Match 'TrustServerCertificate=No'
                 $connection.ConnectionString | Should -Match 'Connection Timeout=10'
                 $connection.ConnectionString | Should -Match 'Application Name=setup-cm'
+                $connection.ConnectionTimeout | Should -Be 10
                 Should -Invoke Add-Type -Times 1 -Exactly -ParameterFilter {
                     $AssemblyName -eq 'System.Data.Odbc'
                 }
@@ -156,6 +157,32 @@ Describe 'Add-SetupCmSqlNVarCharParameter' {
             $parameter.OdbcType | Should -Be ([System.Data.Odbc.OdbcType]::NVarChar)
             $parameter.Size | Should -Be 128
             $parameter.Value | Should -Be 'CM_LAB'
+        }
+    }
+}
+
+Describe 'Get-SetupCmSqlDefaultProviders' {
+    InModuleScope SetupCm {
+        BeforeAll {
+            function Get-CimInstance {
+                param($Namespace, $ClassName, $ErrorAction)
+            }
+        }
+
+        AfterAll {
+            Remove-Item -Path 'function:Get-CimInstance' -ErrorAction SilentlyContinue
+        }
+
+        It 'does not infer an absent site from localized CIM exception text' {
+            Mock Get-CimInstance {
+                $exception = [Microsoft.Management.Infrastructure.CimException]::new(
+                    'invalid namespace'
+                )
+                throw $exception
+            }
+            $providers = Get-SetupCmSqlDefaultProviders
+
+            { & $providers.Site } | Should -Throw '*invalid namespace*'
         }
     }
 }
@@ -590,6 +617,22 @@ Describe 'Repair-SetupCmSqlDesiredState' {
             Should -Invoke Install-SetupCmSql -Times 0 -Exactly
         }
 
+        It 'fails boundedly when Windows feature repair details are absent' {
+            $state = [pscustomobject]@{
+                State = 'NotCompliant'
+                Components = @(
+                    [pscustomobject]@{
+                        Name = 'WindowsFeatures'; State = 'NotCompliant'; Reason = 'Missing'
+                    }
+                )
+            }
+            $config = @{ cacheRoot = 'C:\cache'; sql = @{}; sources = @{} }
+
+            { Repair-SetupCmSqlDesiredState -Config $config -State $state -EvidenceRoot $TestDrive } |
+                Should -Throw '*did not identify missing features*'
+            Should -Invoke Install-SetupCmWindowsPrerequisites -Times 0 -Exactly
+        }
+
         It 'validates every required source before applying any SQL repair' {
             $state = [pscustomobject]@{
                 State = 'NotCompliant'
@@ -653,6 +696,29 @@ Describe 'Repair-SetupCmSqlDesiredState' {
             Should -Invoke Add-SetupCmSqlSysAdmin -Times 0 -Exactly
         }
 
+        It 'uses the injected providers for the post-ODBC state refresh' {
+            $state = [pscustomobject]@{
+                State = 'NotCompliant'
+                Components = @(
+                    [pscustomobject]@{ Name = 'OdbcDriver18'; State = 'NotCompliant'; Reason = 'Missing' }
+                )
+            }
+            $config = @{
+                cacheRoot = 'C:\cache'
+                sql = @{ instanceName = 'MSSQLSERVER' }
+                mecm = @{ siteServerFqdn = 'LABZ1-CM01.test.gell.one' }
+                sources = @{ odbcDriver18 = @{ name = 'odbcDriver18' } }
+            }
+            $expectedProviders = @{ Identity = 'injected' }
+
+            Repair-SetupCmSqlDesiredState -Config $config -State $state `
+                -EvidenceRoot $TestDrive -Providers $expectedProviders
+
+            Should -Invoke Get-SetupCmSqlDesiredState -Times 1 -Exactly -ParameterFilter {
+                [object]::ReferenceEquals($Providers, $expectedProviders)
+            }
+        }
+
         It 'repairs sysadmin drift discovered after ODBC bootstrap without repeating other repairs' {
             $state = [pscustomobject]@{
                 State = 'NotCompliant'
@@ -708,6 +774,25 @@ Describe 'Repair-SetupCmSqlDesiredState' {
                 $Account -eq 'TEST\CMSetupAdmins'
             }
             Should -Invoke Install-SetupCmSql -Times 0 -Exactly
+        }
+
+        It 'fails boundedly when SQL sysadmin repair details are absent' {
+            $state = [pscustomobject]@{
+                State = 'NotCompliant'
+                Components = @(
+                    [pscustomobject]@{
+                        Name = 'SqlSysAdmins'; State = 'NotCompliant'; Reason = 'Missing'
+                    }
+                )
+            }
+            $config = @{
+                cacheRoot = 'C:\cache'; sql = @{ instanceName = 'MSSQLSERVER' }; sources = @{}
+                mecm = @{ siteServerFqdn = 'LABZ1-CM01.test.gell.one' }
+            }
+
+            { Repair-SetupCmSqlDesiredState -Config $config -State $state -EvidenceRoot $TestDrive } |
+                Should -Throw '*did not identify missing accounts*'
+            Should -Invoke Add-SetupCmSqlSysAdmin -Times 0 -Exactly
         }
 
         It 'validates SQL connection identity before applying any mixed repair' {

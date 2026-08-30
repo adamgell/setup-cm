@@ -249,6 +249,12 @@ function Get-SetupCmArtifactState {
             return [pscustomobject]$state
         }
     }
+    if ([IO.Path]::GetExtension([string]$Source.cacheFile) -ieq '.iso' -and
+        (-not $Source.ContainsKey('signatureRelativePath') -or
+            [string]::IsNullOrWhiteSpace([string]$Source.signatureRelativePath))) {
+        $state.Reason = 'MissingSourceField:signatureRelativePath'
+        return [pscustomobject]$state
+    }
     if (-not $Source.ContainsKey('licenseAccepted') -or -not $Source.licenseAccepted) {
         $state.Reason = 'LicenseNotAccepted'
         return [pscustomobject]$state

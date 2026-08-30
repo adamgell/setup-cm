@@ -1145,8 +1145,12 @@ function Get-SetupCmMarkerDefaultProviders {
             Invoke-SetupCmMarkerSiteCommand -Config $Config -ScriptBlock {
                 param($namespace)
                 $escapedCollectionName = $Contract.CollectionName.Replace("'", "''")
-                $collection = Get-CimInstance -Namespace $namespace -ClassName SMS_Collection `
-                    -Filter "Name = '$escapedCollectionName'" -ErrorAction Stop
+                $collections = @(Get-CimInstance -Namespace $namespace -ClassName SMS_Collection `
+                        -Filter "Name = '$escapedCollectionName'" -ErrorAction Stop)
+                if ($collections.Count -ne 1) {
+                    throw 'Exactly one bounded marker collection is required for deployment update.'
+                }
+                $collection = $collections[0]
                 $assignment = Get-CMApplicationDeployment -Name $Contract.ApplicationName |
                     Where-Object { [string]$_.TargetCollectionID -ceq `
                         [string]$collection.CollectionID } |
