@@ -263,6 +263,20 @@ function Get-SetupCmMecmExpectedClientResourceId {
     return $null
 }
 
+function ConvertFrom-SetupCmMecmClientSqlRow {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)]$Reader)
+
+    @{
+        Name = if ($Reader.IsDBNull(0)) { '' } else { [string]$Reader.GetValue(0) }
+        ResourceId = if ($Reader.IsDBNull(1)) { 0 } else { [int]$Reader.GetValue(1) }
+        Active = if ($Reader.IsDBNull(2)) { 0 } else { [int]$Reader.GetValue(2) }
+        Obsolete = if ($Reader.IsDBNull(3)) { 1 } else { [int]$Reader.GetValue(3) }
+        Client = if ($Reader.IsDBNull(4)) { 0 } else { [int]$Reader.GetValue(4) }
+        ClientVersion = if ($Reader.IsDBNull(5)) { '' } else { [string]$Reader.GetValue(5) }
+    }
+}
+
 function Get-SetupCmMecmDefaultProviders {
     [CmdletBinding()]
     param()
@@ -423,14 +437,7 @@ WHERE Name0 = @Name
                 $reader = $client.ExecuteReader()
                 try {
                     while ($reader.Read()) {
-                        [void]$rows.Add(@{
-                            Name = [string]$reader.GetValue(0)
-                            ResourceId = [int]$reader.GetValue(1)
-                            Active = [int]$reader.GetValue(2)
-                            Obsolete = [int]$reader.GetValue(3)
-                            Client = [int]$reader.GetValue(4)
-                            ClientVersion = [string]$reader.GetValue(5)
-                        })
+                        [void]$rows.Add((ConvertFrom-SetupCmMecmClientSqlRow -Reader $reader))
                     }
                 }
                 finally {
@@ -717,7 +724,7 @@ function Get-SetupCmMecmDesiredState {
     $databaseName = [string](Get-SetupCmMecmObjectValue -InputObject $databaseClientState -Name DatabaseName)
     $databaseServer = [string](Get-SetupCmMecmObjectValue -InputObject $databaseClientState -Name ServerName)
     $expectedDatabase = "CM_$($Config.mecm.siteCode)"
-    if ($databaseName -cne $expectedDatabase -or
+    if ($databaseName -ine $expectedDatabase -or
         -not (Test-SetupCmMecmServerIdentity -Actual $databaseServer -Expected ([string]$Config.mecm.sqlServer) -AllowShortName)) {
         [void]$components.Add((New-SetupCmMecmComponent -Name AcceptedClientSql -State Conflict -Reason DatabaseIdentityMismatch -Details @{
             DatabaseName = $databaseName; ServerName = $databaseServer

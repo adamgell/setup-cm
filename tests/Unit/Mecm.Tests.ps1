@@ -310,6 +310,19 @@ Describe 'Get-SetupCmMecmDesiredState' {
             @($state.Components | Where-Object State -ne 'Compliant') | Should -HaveCount 0
         }
 
+        It 'compares the SQL database identity case-insensitively' {
+            $providers = New-CompliantMecmProviders
+            $databaseState = & $providers.ClientDatabase
+            $databaseState.DatabaseName = 'cm_lab'
+            $providers.ClientDatabase = { $databaseState }.GetNewClosure()
+
+            $state = Get-SetupCmMecmDesiredState -Config (New-TestMecmConfig) -Providers $providers
+
+            $state.State | Should -Be 'Compliant'
+            ($state.Components | Where-Object Name -eq 'AcceptedClientSql').State |
+                Should -Be 'Compliant'
+        }
+
         It 'fails closed on a target host mismatch before provider probes' {
             $script:siteProbed = $false
             $providers = New-CompliantMecmProviders
@@ -573,6 +586,30 @@ Describe 'Get-SetupCmMecmDefaultProviders' {
             }) | Should -HaveCount 0
 
             $script:clientFilter | Should -Be "Name = 'RING\\O\'IVY'"
+        }
+
+        It 'maps nullable SQL client columns to conservative defaults without reading DBNull values' {
+            $reader = [pscustomobject]@{
+                Values = @('RING0IVY24-01', 16777219, $null, $null, $null, $null)
+            }
+            $reader | Add-Member -MemberType ScriptMethod -Name IsDBNull -Value {
+                param($Index)
+                $Index -ge 2
+            }
+            $reader | Add-Member -MemberType ScriptMethod -Name GetValue -Value {
+                param($Index)
+                if ($this.IsDBNull($Index)) { throw "GetValue called for DBNull index $Index" }
+                $this.Values[$Index]
+            }
+
+            $row = ConvertFrom-SetupCmMecmClientSqlRow -Reader $reader
+
+            $row.Name | Should -Be 'RING0IVY24-01'
+            $row.ResourceId | Should -Be 16777219
+            $row.Active | Should -Be 0
+            $row.Obsolete | Should -Be 1
+            $row.Client | Should -Be 0
+            $row.ClientVersion | Should -Be ''
         }
     }
 }

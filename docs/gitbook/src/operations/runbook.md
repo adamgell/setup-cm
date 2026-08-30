@@ -64,6 +64,47 @@ outside this runbook.
 
 Any run containing `Marker` rejects a missing or abbreviated source commit.
 
+## Extract and enter the reviewed source
+
+On CM01, bind the staged archive to the exact commit and SHA-256 recorded on
+the review host, extract it into a new commit-specific directory, and verify
+the expected source layout before using any relative command:
+
+```powershell
+$archivePath = Join-Path 'C:\ProgramData\SetupCm\staging' `
+  "setup-cm-$($env:SETUPCM_SOURCE_COMMIT).tar"
+$expectedArchiveHash = '<RECORDED_64_CHARACTER_SHA256>'
+if ($expectedArchiveHash -notmatch '^[0-9a-fA-F]{64}$') {
+    throw 'The recorded archive SHA-256 is missing or invalid.'
+}
+$actualArchiveHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash
+if ($actualArchiveHash -ine $expectedArchiveHash) {
+    throw 'The staged source archive hash does not match the reviewed archive.'
+}
+
+$sourceRoot = Join-Path 'C:\ProgramData\SetupCm\source' $env:SETUPCM_SOURCE_COMMIT
+if (Test-Path -LiteralPath $sourceRoot) {
+    throw "The commit-specific source directory already exists: $sourceRoot"
+}
+New-Item -ItemType Directory -Path $sourceRoot -Force | Out-Null
+tar.exe -xf $archivePath -C $sourceRoot
+if ($LASTEXITCODE -ne 0) { throw 'Source archive extraction failed.' }
+
+Set-Location -LiteralPath $sourceRoot
+$requiredSourcePaths = @(
+    './src/SetupCm/SetupCm.psd1'
+    './scripts/Invoke-SetupCm.ps1'
+    './tests/Unit'
+    './docs/gitbook/book.toml'
+)
+$missingSourcePaths = @($requiredSourcePaths | Where-Object {
+    -not (Test-Path -LiteralPath $_)
+})
+if ($missingSourcePaths.Count -gt 0) {
+    throw "The extracted source root is incomplete: $($missingSourcePaths -join ', ')"
+}
+```
+
 ## Run preflight
 
 ```powershell
