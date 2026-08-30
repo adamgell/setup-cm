@@ -17,18 +17,23 @@ function ConvertTo-MarkdownHeadingSlug {
     [regex]::Replace($value.Trim(), '\s+', '-')
 }
 
-function Get-MarkdownAnchors {
+function ConvertTo-MarkdownReferenceLabel {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Label)
+
+    [regex]::Replace($Label.Trim(), '\s+', ' ').ToLowerInvariant()
+}
+
+function Get-MarkdownContentLine {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$MarkdownPath)
 
-    $anchors = [System.Collections.Generic.HashSet[string]]::new(
-        [System.StringComparer]::OrdinalIgnoreCase
-    )
-    $slugCounts = @{}
+    $lineNumber = 0
     $inFence = $false
     $fenceCharacter = $null
     $fenceLength = 0
     foreach ($line in @(Get-Content -LiteralPath $MarkdownPath)) {
+        $lineNumber++
         if ($line -match '^\s*(?<fence>`{3,}|~{3,})') {
             $candidate = [string]$Matches.fence
             $candidateCharacter = $candidate.Substring(0, 1)
@@ -45,7 +50,22 @@ function Get-MarkdownAnchors {
             }
             continue
         }
-        if ($inFence) { continue }
+        if (-not $inFence) {
+            [pscustomobject]@{ Number = $lineNumber; Text = $line }
+        }
+    }
+}
+
+function Get-MarkdownAnchors {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$MarkdownPath)
+
+    $anchors = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase
+    )
+    $slugCounts = @{}
+    foreach ($contentLine in @(Get-MarkdownContentLine -MarkdownPath $MarkdownPath)) {
+        $line = $contentLine.Text
 
         if ($line -match '^\s{0,3}#{1,6}\s+(?<heading>.+?)\s*#*\s*$') {
             $baseSlug = ConvertTo-MarkdownHeadingSlug -Heading $Matches.heading
@@ -121,32 +141,45 @@ $rootPrefix = $resolvedRoot.TrimEnd(
 
 foreach ($markdownFile in $markdownFiles) {
     $relativeSource = [System.IO.Path]::GetRelativePath($resolvedRoot, $markdownFile).Replace('\', '/')
-    $lineNumber = 0
-    $inFence = $false
-    $fenceCharacter = $null
-    $fenceLength = 0
-    foreach ($line in @(Get-Content -LiteralPath $markdownFile)) {
-        $lineNumber++
-        if ($line -match '^\s*(?<fence>`{3,}|~{3,})') {
-            $candidate = [string]$Matches.fence
-            $candidateCharacter = $candidate.Substring(0, 1)
-            if (-not $inFence) {
-                $inFence = $true
-                $fenceCharacter = $candidateCharacter
-                $fenceLength = $candidate.Length
+    $contentLines = @(Get-MarkdownContentLine -MarkdownPath $markdownFile)
+    $referenceDefinitions = @{}
+    foreach ($contentLine in $contentLines) {
+        if ($contentLine.Text -match '^\s{0,3}\[(?<label>[^\]]+)\]:\s*(?<destination><[^>]+>|\S+)') {
+            $label = ConvertTo-MarkdownReferenceLabel -Label $Matches.label
+            if (-not $referenceDefinitions.ContainsKey($label)) {
+                $referenceDefinitions[$label] = $Matches.destination.Trim().Trim('<', '>')
             }
-            elseif ($candidateCharacter -ceq $fenceCharacter -and
-                $candidate.Length -ge $fenceLength) {
-                $inFence = $false
-                $fenceCharacter = $null
-                $fenceLength = 0
-            }
-            continue
         }
-        if ($inFence) { continue }
+    }
 
+    foreach ($contentLine in $contentLines) {
+        $line = $contentLine.Text
+        $lineNumber = $contentLine.Number
+        if ($line -match '^\s{0,3}\[[^\]]+\]:\s*(?:<[^>]+>|\S+)') { continue }
+
+        $destinations = [System.Collections.Generic.List[string]]::new()
         foreach ($match in [regex]::Matches($line, '!?\[[^\]]*\]\((?<destination><[^>]+>|[^)\s]+)')) {
-            $destination = $match.Groups['destination'].Value.Trim().Trim('<', '>')
+            [void]$destinations.Add($match.Groups['destination'].Value.Trim().Trim('<', '>'))
+        }
+        foreach ($match in [regex]::Matches(
+            $line,
+            '!?\[(?<text>[^\]]+)\]\[(?<label>[^\]]*)\]'
+        )) {
+            $labelText = if ([string]::IsNullOrWhiteSpace($match.Groups['label'].Value)) {
+                $match.Groups['text'].Value
+            }
+            else {
+                $match.Groups['label'].Value
+            }
+            $label = ConvertTo-MarkdownReferenceLabel -Label $labelText
+            if (-not $referenceDefinitions.ContainsKey($label)) {
+                [void]$errors.Add("$relativeSource`:$lineNumber undefined reference label '$labelText'")
+                continue
+            }
+            [void]$destinations.Add([string]$referenceDefinitions[$label])
+        }
+
+        foreach ($destination in $destinations) {
             if ([string]::IsNullOrWhiteSpace($destination) -or
                 $destination -match '^[A-Za-z][A-Za-z0-9+.-]*:' -or
                 $destination.StartsWith('//')) {

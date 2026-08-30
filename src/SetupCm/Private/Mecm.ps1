@@ -561,7 +561,7 @@ function Get-SetupCmMecmDesiredState {
         $siteCode -ieq [string]$Config.mecm.siteCode -and
         $registrySiteCode -ieq [string]$Config.mecm.siteCode -and
         $siteName -ceq [string]$Config.mecm.siteName -and
-        (Test-SetupCmMecmServerIdentity -Actual $siteServer -Expected $expectedServer) -and
+        (Test-SetupCmMecmServerIdentity -Actual $siteServer -Expected $expectedServer -AllowShortName) -and
         $siteType -eq 2 -and
         [string]::IsNullOrWhiteSpace($parentSiteCode) -and
         (([string]::IsNullOrWhiteSpace($expectedInstallDirectory)) -or
@@ -580,7 +580,7 @@ function Get-SetupCmMecmDesiredState {
     $providerMachine = [string](Get-SetupCmMecmObjectValue -InputObject $site -Name ProviderMachine)
     $providerLocal = [bool](Get-SetupCmMecmObjectValue -InputObject $site -Name ProviderForLocalSite -DefaultValue $false)
     if ($providerCount -ne 1 -or $providerSiteCode -ine [string]$Config.mecm.siteCode -or
-        -not (Test-SetupCmMecmServerIdentity -Actual $providerMachine -Expected $expectedServer) -or
+        -not (Test-SetupCmMecmServerIdentity -Actual $providerMachine -Expected $expectedServer -AllowShortName) -or
         -not $providerLocal) {
         [void]$components.Add((New-SetupCmMecmComponent -Name MecmSite -State Conflict -Reason ProviderIdentityMismatch -Details @{
             ProviderCount = $providerCount; ProviderSiteCode = $providerSiteCode; ProviderMachine = $providerMachine

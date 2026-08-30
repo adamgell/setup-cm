@@ -137,6 +137,8 @@ function New-SetupCmSqlConnection {
         [string]$Database = 'master'
     )
 
+    Add-Type -AssemblyName System.Data.SqlClient -ErrorAction Stop
+
     $server = if ($Config.mecm.ContainsKey('sqlServer') -and
         -not [string]::IsNullOrWhiteSpace([string]$Config.mecm.sqlServer)) {
         [string]$Config.mecm.sqlServer

@@ -87,6 +87,7 @@ Describe 'Install-SetupCmSql' {
 Describe 'New-SetupCmSqlConnection' {
     InModuleScope SetupCm {
         It 'builds an integrated encrypted connection using canonical SQL keywords' {
+            Mock Add-Type {}
             $config = @{
                 sql = @{ instanceName = 'MSSQLSERVER' }
                 mecm = @{ sqlServer = 'LABZ1-CM01.test.gell.one'; siteServerFqdn = 'LABZ1-CM01.test.gell.one' }
@@ -99,6 +100,9 @@ Describe 'New-SetupCmSqlConnection' {
                 $connection.ConnectionString | Should -Match 'Integrated Security=True'
                 $connection.ConnectionString | Should -Match 'Encrypt=True'
                 $connection.ConnectionString | Should -Match 'TrustServerCertificate=False'
+                Should -Invoke Add-Type -Times 1 -Exactly -ParameterFilter {
+                    $AssemblyName -eq 'System.Data.SqlClient'
+                }
             }
             finally {
                 if ($null -ne $connection) { $connection.Dispose() }

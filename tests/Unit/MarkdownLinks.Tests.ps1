@@ -60,6 +60,39 @@ Describe 'Test-MarkdownLinks script' {
             Should -Throw '*#not-a-heading*'
     }
 
+    It 'resolves reference-style local links whose definitions follow their usage' {
+        Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') -Value @'
+[Guide][guide-reference]
+
+[guide-reference]: guide.md#exact-heading
+'@
+        Set-Content -LiteralPath (Join-Path $TestDrive 'guide.md') -Value '## Exact heading'
+
+        $result = & $linkScript -RepositoryRoot $TestDrive -Path index.md, guide.md
+
+        $result.State | Should -BeExactly 'Passed'
+        $result.LocalLinksChecked | Should -Be 1
+    }
+
+    It 'fails when a reference-style definition names a missing local target' {
+        Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') -Value @'
+[Missing][missing-reference]
+
+[missing-reference]: missing.md
+'@
+
+        { & $linkScript -RepositoryRoot $TestDrive -Path index.md } |
+            Should -Throw '*missing.md*'
+    }
+
+    It 'fails when a reference-style usage has no definition' {
+        Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') `
+            -Value '[Missing][undefined-reference]'
+
+        { & $linkScript -RepositoryRoot $TestDrive -Path index.md } |
+            Should -Throw '*undefined-reference*'
+    }
+
     It 'fails with the source location when a local target file is missing' {
         Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') -Value '[Missing](missing.md)'
 
