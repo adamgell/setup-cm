@@ -60,6 +60,32 @@ Describe 'Test-MarkdownLinks script' {
             Should -Throw '*#not-a-heading*'
     }
 
+    It 'does not close a fence when a matching marker has trailing text' {
+        Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') -Value @'
+```markdown
+```not-a-closing-fence
+[Example only](missing.md)
+```
+'@
+
+        $result = & $linkScript -RepositoryRoot $TestDrive -Path index.md
+
+        $result.State | Should -BeExactly 'Passed'
+        $result.LocalLinksChecked | Should -Be 0
+    }
+
+    It 'documents atomic source extraction with cleanup in <Runbook>' -ForEach @(
+        @{ Runbook = 'docs/RUNBOOK.md' }
+        @{ Runbook = 'docs/gitbook/src/operations/runbook.md' }
+    ) {
+        $content = Get-Content -LiteralPath (Join-Path $repositoryRoot $Runbook) -Raw
+
+        $content | Should -Match '\$temporarySourceRoot\s*='
+        $content | Should -Match 'tar\.exe -xf \$archivePath -C \$temporarySourceRoot'
+        $content | Should -Match 'Move-Item -LiteralPath \$temporarySourceRoot -Destination \$sourceRoot'
+        $content | Should -Match 'Remove-Item -LiteralPath \$temporarySourceRoot -Recurse -Force'
+    }
+
     It 'resolves reference-style local links whose definitions follow their usage' {
         Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') -Value @'
 [Guide][guide-reference]

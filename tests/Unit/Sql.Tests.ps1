@@ -108,6 +108,17 @@ Describe 'New-SetupCmSqlConnection' {
                 if ($null -ne $connection) { $connection.Dispose() }
             }
         }
+
+        It 'fails with a bounded configuration error before loading SQL dependencies when the server identity is missing' {
+            Mock Add-Type {}
+
+            {
+                New-SetupCmSqlConnection -Config @{
+                    sql = @{ instanceName = 'MSSQLSERVER' }
+                } -Database 'master'
+            } | Should -Throw '*mecm.sqlServer or mecm.siteServerFqdn*'
+            Should -Invoke Add-Type -Times 0 -Exactly
+        }
     }
 }
 
@@ -559,6 +570,7 @@ Describe 'Repair-SetupCmSqlDesiredState' {
             }
             $config = @{
                 cacheRoot = 'C:\cache'; sql = @{ instanceName = 'MSSQLSERVER' }; sources = @{}
+                mecm = @{ siteServerFqdn = 'LABZ1-CM01.test.gell.one' }
             }
 
             Repair-SetupCmSqlDesiredState -Config $config -State $state -EvidenceRoot $TestDrive
@@ -567,6 +579,33 @@ Describe 'Repair-SetupCmSqlDesiredState' {
                 $Account -eq 'TEST\CMSetupAdmins'
             }
             Should -Invoke Install-SetupCmSql -Times 0 -Exactly
+        }
+
+        It 'validates SQL connection identity before applying any mixed repair' {
+            $state = [pscustomobject]@{
+                State = 'NotCompliant'
+                Components = @(
+                    [pscustomobject]@{
+                        Name = 'WindowsFeatures'; State = 'NotCompliant'; Reason = 'Missing'
+                        Missing = @('Web-Server')
+                    }
+                    [pscustomobject]@{
+                        Name = 'SqlSysAdmins'; State = 'NotCompliant'; Reason = 'Missing'
+                        Missing = @('TEST\CMSetupAdmins')
+                    }
+                )
+            }
+            $config = @{
+                cacheRoot = 'C:\cache'
+                sql = @{ instanceName = 'MSSQLSERVER' }
+                sources = @{}
+            }
+
+            {
+                Repair-SetupCmSqlDesiredState -Config $config -State $state -EvidenceRoot $TestDrive
+            } | Should -Throw '*mecm.sqlServer or mecm.siteServerFqdn*'
+            Should -Invoke Install-SetupCmWindowsPrerequisites -Times 0 -Exactly
+            Should -Invoke Add-SetupCmSqlSysAdmin -Times 0 -Exactly
         }
     }
 }

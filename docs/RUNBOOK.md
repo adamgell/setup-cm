@@ -91,23 +91,35 @@ $sourceRoot = Join-Path 'C:\ProgramData\SetupCm\source' $env:SETUPCM_SOURCE_COMM
 if (Test-Path -LiteralPath $sourceRoot) {
     throw "The commit-specific source directory already exists: $sourceRoot"
 }
-New-Item -ItemType Directory -Path $sourceRoot -Force | Out-Null
-tar.exe -xf $archivePath -C $sourceRoot
-if ($LASTEXITCODE -ne 0) { throw 'Source archive extraction failed.' }
-
-Set-Location -LiteralPath $sourceRoot
+$sourceParent = Split-Path -Parent $sourceRoot
+$temporarySourceRoot = "$sourceRoot.partial-$PID"
+if (Test-Path -LiteralPath $temporarySourceRoot) {
+    throw "The temporary source directory already exists: $temporarySourceRoot"
+}
+New-Item -ItemType Directory -Path $sourceParent -Force | Out-Null
+New-Item -ItemType Directory -Path $temporarySourceRoot | Out-Null
 $requiredSourcePaths = @(
     './src/SetupCm/SetupCm.psd1'
     './scripts/Invoke-SetupCm.ps1'
     './tests/Unit'
     './docs/gitbook/book.toml'
 )
-$missingSourcePaths = @($requiredSourcePaths | Where-Object {
-    -not (Test-Path -LiteralPath $_)
-})
-if ($missingSourcePaths.Count -gt 0) {
-    throw "The extracted source root is incomplete: $($missingSourcePaths -join ', ')"
+try {
+    tar.exe -xf $archivePath -C $temporarySourceRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Source archive extraction failed.' }
+    $missingSourcePaths = @($requiredSourcePaths | Where-Object {
+        -not (Test-Path -LiteralPath (Join-Path $temporarySourceRoot $_))
+    })
+    if ($missingSourcePaths.Count -gt 0) {
+        throw "The extracted source root is incomplete: $($missingSourcePaths -join ', ')"
+    }
+    Move-Item -LiteralPath $temporarySourceRoot -Destination $sourceRoot
 }
+catch {
+    Remove-Item -LiteralPath $temporarySourceRoot -Recurse -Force -ErrorAction SilentlyContinue
+    throw
+}
+Set-Location -LiteralPath $sourceRoot
 ```
 
 ## Run preflight

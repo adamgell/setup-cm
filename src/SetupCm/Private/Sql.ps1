@@ -130,6 +130,27 @@ function New-SetupCmSqlDesiredStateResult {
     return [pscustomobject]@{ State = $state; Components = $items }
 }
 
+function Get-SetupCmSqlConnectionServer {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][hashtable]$Config)
+
+    if (-not $Config.ContainsKey('mecm') -or $Config.mecm -isnot [hashtable]) {
+        throw 'mecm.sqlServer or mecm.siteServerFqdn is required for SQL connectivity.'
+    }
+    $server = if ($Config.mecm.ContainsKey('sqlServer') -and
+        -not [string]::IsNullOrWhiteSpace([string]$Config.mecm.sqlServer)) {
+        [string]$Config.mecm.sqlServer
+    }
+    elseif ($Config.mecm.ContainsKey('siteServerFqdn') -and
+        -not [string]::IsNullOrWhiteSpace([string]$Config.mecm.siteServerFqdn)) {
+        [string]$Config.mecm.siteServerFqdn
+    }
+    else {
+        throw 'mecm.sqlServer or mecm.siteServerFqdn is required for SQL connectivity.'
+    }
+    $server
+}
+
 function New-SetupCmSqlConnection {
     [CmdletBinding()]
     param(
@@ -137,15 +158,8 @@ function New-SetupCmSqlConnection {
         [string]$Database = 'master'
     )
 
+    $server = Get-SetupCmSqlConnectionServer -Config $Config
     Add-Type -AssemblyName System.Data.SqlClient -ErrorAction Stop
-
-    $server = if ($Config.mecm.ContainsKey('sqlServer') -and
-        -not [string]::IsNullOrWhiteSpace([string]$Config.mecm.sqlServer)) {
-        [string]$Config.mecm.sqlServer
-    }
-    else {
-        [string]$Config.mecm.siteServerFqdn
-    }
     $instanceName = [string]$Config.sql.instanceName
     $dataSource = if ($instanceName -ieq 'MSSQLSERVER') { $server } else { "$server\$instanceName" }
 
@@ -793,6 +807,9 @@ function Repair-SetupCmSqlDesiredState {
     }
 
     $repairable = @($State.Components | Where-Object State -eq 'NotCompliant')
+    if (@($repairable | Where-Object Name -eq 'SqlSysAdmins').Count -gt 0) {
+        [void](Get-SetupCmSqlConnectionServer -Config $Config)
+    }
     $instanceInstalled = $false
     $sourceByComponent = @{
         VcRuntimeX64 = 'vcRedistX64'
