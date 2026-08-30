@@ -43,7 +43,7 @@ acceptance client and is superseded for this baseline.
 
 | Check | Accepted result |
 | --- | --- |
-| `setup-cm` source | `main` and `origin/main` at `99e0b9a4a82cf722e130ddcfac2481a6362b93c9` |
+| Accepted execution source | `99e0b9a4a82cf722e130ddcfac2481a6362b93c9` |
 | Exact source archive | 97,319 bytes; SHA-256 `0ba83fc48c5414a2ffa9e7ac80c610630996d51cc3f02d7acd5903ea4aa6b6e0` |
 | CM01 exact-source root | `C:\ProgramData\SetupCm\staged\99e0b9a-20260829T2240Z` |
 | Preflight | `Ready=true`, no missing requirements, topology `single-box` |
@@ -52,9 +52,11 @@ acceptance client and is superseded for this baseline.
 | Controller queue tests | PASS — 2 passed, 51 deselected |
 | mdBook build | PASS |
 
-The archive was produced from `git archive HEAD`, transferred through a
+The archive was produced from `git archive 99e0b9a`, transferred through a
 temporary lab-only HTTP listener, and verified by SHA-256 on each Windows
 target. The temporary listener was stopped immediately after transfer.
+This acceptance record is a documentation-only successor to the execution
+source; no executable source changed after `99e0b9a` during acceptance.
 The pve2 transfer copy and the Mac-local temporary archive were removed after
 both Windows targets completed their hash checks; the accepted guest copies and
 evidence were retained for reproducibility.
