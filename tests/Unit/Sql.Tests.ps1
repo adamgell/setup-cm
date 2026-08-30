@@ -485,6 +485,25 @@ Describe 'Repair-SetupCmSqlDesiredState' {
             Should -Invoke Install-SetupCmSql -Times 0 -Exactly
         }
 
+        It 'validates every required source before applying any SQL repair' {
+            $state = [pscustomobject]@{
+                State = 'NotCompliant'
+                Components = @(
+                    [pscustomobject]@{
+                        Name = 'WindowsFeatures'; State = 'NotCompliant'; Reason = 'Missing'
+                        Missing = @('Web-Server')
+                    }
+                    [pscustomobject]@{ Name = 'VcRuntimeX86'; State = 'NotCompliant'; Reason = 'Missing' }
+                )
+            }
+            $config = @{ cacheRoot = 'C:\cache'; sql = @{}; sources = @{} }
+
+            { Repair-SetupCmSqlDesiredState -Config $config -State $state -EvidenceRoot $TestDrive } |
+                Should -Throw '*sources.vcRedistX86*'
+            Should -Invoke Install-SetupCmWindowsPrerequisites -Times 0 -Exactly
+            Should -Invoke Install-SetupCmMecmVcRedist -Times 0 -Exactly
+        }
+
         It 'installs only the missing VC runtime architecture' {
             $state = [pscustomobject]@{
                 State = 'NotCompliant'

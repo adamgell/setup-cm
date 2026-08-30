@@ -784,6 +784,19 @@ function Repair-SetupCmSqlDesiredState {
 
     $repairable = @($State.Components | Where-Object State -eq 'NotCompliant')
     $instanceInstalled = $false
+    $sourceByComponent = @{
+        VcRuntimeX64 = 'vcRedistX64'
+        VcRuntimeX86 = 'vcRedistX86'
+        SqlInstance = 'sqlServer'
+    }
+    foreach ($component in $repairable) {
+        $componentName = [string]$component.Name
+        if (-not $sourceByComponent.ContainsKey($componentName)) { continue }
+        $sourceName = $sourceByComponent[$componentName]
+        if (-not $Config.ContainsKey('sources') -or -not $Config.sources.ContainsKey($sourceName)) {
+            throw "sources.$sourceName is required to repair $componentName."
+        }
+    }
 
     $windowsFeatures = @($repairable | Where-Object Name -eq 'WindowsFeatures')
     if ($windowsFeatures.Count -gt 0) {
@@ -792,20 +805,13 @@ function Repair-SetupCmSqlDesiredState {
         Install-SetupCmWindowsPrerequisites -FeatureName $missingFeatures
     }
 
-    $vcSources = @{ VcRuntimeX64 = 'vcRedistX64'; VcRuntimeX86 = 'vcRedistX86' }
     foreach ($componentName in 'VcRuntimeX64', 'VcRuntimeX86') {
         if (@($repairable | Where-Object Name -eq $componentName).Count -eq 0) { continue }
-        $sourceName = $vcSources[$componentName]
-        if (-not $Config.sources.ContainsKey($sourceName)) {
-            throw "sources.$sourceName is required to repair $componentName."
-        }
+        $sourceName = $sourceByComponent[$componentName]
         Install-SetupCmMecmVcRedist -Source $Config.sources[$sourceName] -CacheRoot $Config.cacheRoot -EvidenceRoot $EvidenceRoot
     }
 
     if (@($repairable | Where-Object Name -eq 'SqlInstance').Count -gt 0) {
-        if (-not $Config.sources.ContainsKey('sqlServer')) {
-            throw 'sources.sqlServer is required to install the missing SQL instance.'
-        }
         $media = Get-SetupCmArtifact -Source $Config.sources.sqlServer -CacheRoot $Config.cacheRoot -EvidenceRoot $EvidenceRoot
         Install-SetupCmSql -MediaPath $media.Path -Sql $Config.sql
         $instanceInstalled = $true

@@ -121,17 +121,20 @@ Releases.
 - Test: `tests/Unit/{Mecm,Health}.Tests.ps1`
 - Add: `tests/Integration/CoreStages.Windows.Tests.ps1`
 
-- [ ] Write failing tests for exact site/provider/database/role identity,
+- [x] Write failing tests for exact site/provider/database/role identity,
       services, prerequisites, content library, and accepted active client.
-- [ ] Prove an exact site never opens MECM media, downloads prerequisites, or
+- [x] Prove an exact site never opens MECM media, downloads prerequisites, or
       starts setup; a missing prerequisite repairs only itself; a conflicting
       site fails closed.
-- [ ] Make Health Test and Verify perform only read-only checks and always emit
+- [x] Make Health Test and Verify perform only read-only checks and always emit
       a fresh artifact.
-- [ ] Add Windows integration probes that exercise the real registry/service
+- [x] Add Windows integration probes that exercise the real registry/service
       boundaries without installation.
-- [ ] Run focused, Windows, and full unit suites.
-- [ ] Commit: `feat: make MECM reruns read only`.
+- [x] Run focused, Windows, and full unit suites: 143 local unit tests passed;
+      the Windows integration suite passed 3/3 against `LABZ1-CM01` using the
+      real SQL, MECM, and Health read-only probes with installer/setup calls
+      guarded by mocks.
+- [x] Commit: `feat: make MECM reruns read only`.
 
 ## Task 6: Productize the marker acceptance
 

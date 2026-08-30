@@ -189,108 +189,561 @@ Describe 'Install-SetupCmMecmAdk' {
     }
 }
 
-Describe 'MECM stage prerequisites' {
+Describe 'Get-SetupCmMecmDesiredState' {
     InModuleScope SetupCm {
-        It 'validates both VC++ runtime sources before installing either architecture' {
-            $config = @{
-                cacheRoot = 'C:\SetupCm\cache'
-                evidenceRoot = $TestDrive
-                mecm = @{ prerequisitePath = 'C:\SetupCm\prereqs' }
-                sources = @{
-                    mecm = @{ name = 'mecm' }
-                    vcRedistX64 = @{ name = 'vcRedistX64'; licenseAccepted = $true }
+        BeforeAll {
+            function New-TestMecmConfig {
+                @{
+                    topology = 'single-box'
+                    cacheRoot = 'C:\SetupCm\cache'
+                    evidenceRoot = $TestDrive
+                    sql = @{ instanceName = 'MSSQLSERVER' }
+                    mecm = @{
+                        siteCode = 'LAB'
+                        siteName = 'LABZ1 Configuration Manager'
+                        sqlServer = 'LABZ1-CM01.test.gell.one'
+                        siteServerFqdn = 'LABZ1-CM01.test.gell.one'
+                        smsInstallDir = 'C:\Program Files\Microsoft Configuration Manager'
+                        prerequisitePath = 'C:\SetupCm\Redist'
+                        productId = 'Eval'
+                    }
+                    testClient = @{ name = 'RING0IVY24-01'; domain = 'test.gell.one' }
+                    markerAcceptance = @{ targetResourceId = 16777219 }
+                    sources = @{
+                        mecm = @{ name = 'mecm' }
+                        adk = @{ name = 'adk' }
+                        adkWinPe = @{ name = 'adkWinPe' }
+                        odbcDriver18 = @{ name = 'odbcDriver18' }
+                        vcRedistX64 = @{ name = 'vcRedistX64' }
+                        vcRedistX86 = @{ name = 'vcRedistX86' }
+                    }
                 }
             }
-            Mock Read-SetupCmConfig { $config }
-            Mock New-SetupCmRunEvidence { $TestDrive }
-            Mock Invoke-SetupCmStage {
-                param($Name, $Test, $Apply, $Verify, $EvidenceRoot)
-                & $Apply
+
+            function New-CompliantMecmProviders {
+                @{
+                    Host = { @{ Fqdn = 'LABZ1-CM01.test.gell.one' } }
+                    Adk = { $true }
+                    WinPe = { $true }
+                    Odbc = { $true }
+                    VcRuntime = { param($Architecture) $true }
+                    Site = {
+                        param($Config)
+                        @{
+                            Exists = $true
+                            SiteCode = 'LAB'
+                            SiteName = 'LABZ1 Configuration Manager'
+                            ServerName = 'LABZ1-CM01.test.gell.one'
+                            Type = 2
+                            ParentSiteCode = ''
+                            InstallDirectory = 'C:\Program Files\Microsoft Configuration Manager'
+                            ProviderCount = 1
+                            ProviderSiteCode = 'LAB'
+                            ProviderMachine = 'LABZ1-CM01.test.gell.one'
+                            ProviderForLocalSite = $true
+                        }
+                    }
+                    Roles = {
+                        @(
+                            @{ RoleName = 'SMS Site Server'; ServerName = 'LABZ1-CM01.test.gell.one'; SiteCode = 'LAB' }
+                            @{ RoleName = 'SMS Provider'; ServerName = 'LABZ1-CM01.test.gell.one'; SiteCode = 'LAB' }
+                            @{ RoleName = 'SMS Management Point'; ServerName = 'LABZ1-CM01.test.gell.one'; SiteCode = 'LAB' }
+                            @{ RoleName = 'SMS Distribution Point'; ServerName = 'LABZ1-CM01.test.gell.one'; SiteCode = 'LAB' }
+                            @{ RoleName = 'SMS SQL Server'; ServerName = 'LABZ1-CM01.test.gell.one'; SiteCode = 'LAB' }
+                        )
+                    }
+                    Services = {
+                        @(
+                            @{ Name = 'SMS_EXECUTIVE'; Status = 'Running'; StartType = 'Automatic' }
+                            @{ Name = 'SMS_SITE_COMPONENT_MANAGER'; Status = 'Running'; StartType = 'Automatic' }
+                        )
+                    }
+                    ContentLibrary = {
+                        @{ Path = 'C:\SCCMContentLib'; Accessible = $true; SiteCode = 'LAB' }
+                    }
+                    ClientProvider = {
+                        param($Config)
+                        @(
+                            @{ Name = 'RING0IVY24-01'; ResourceId = 16777219; Active = 1; Obsolete = 0; Client = 1; ClientVersion = '5.00.9141.1011' }
+                        )
+                    }
+                    ClientDatabase = {
+                        param($Config)
+                        @{
+                            DatabaseName = 'CM_LAB'
+                            ServerName = 'LABZ1-CM01'
+                            Rows = @(
+                                @{ Name = 'RING0IVY24-01'; ResourceId = 16777219; Active = 1; Obsolete = 0; Client = 1; ClientVersion = '5.00.9141.1011' }
+                            )
+                        }
+                    }
+                }
             }
-            Mock Test-SetupCmMecmVcRedistArchitecture { 'NotCompliant' }
+        }
+
+        It 'reports Compliant only for the exact single-box site and accepted client' {
+            $state = Get-SetupCmMecmDesiredState -Config (New-TestMecmConfig) -Providers (New-CompliantMecmProviders)
+
+            $state.State | Should -Be 'Compliant'
+            @($state.Components | Where-Object State -ne 'Compliant') | Should -HaveCount 0
+        }
+
+        It 'fails closed on a target host mismatch before provider probes' {
+            $script:siteProbed = $false
+            $providers = New-CompliantMecmProviders
+            $providers.Host = { @{ Fqdn = 'OTHER-CM01.test.gell.one' } }
+            $providers.Site = { $script:siteProbed = $true; throw 'must not run' }
+
+            $state = Get-SetupCmMecmDesiredState -Config (New-TestMecmConfig) -Providers $providers
+
+            $state.State | Should -Be 'Conflict'
+            ($state.Components | Where-Object Name -eq 'TargetHost').Reason | Should -Be 'HostMismatch'
+            $script:siteProbed | Should -BeFalse
+        }
+
+        It 'treats a genuinely absent site as repairable without probing roles or clients' {
+            $script:dependentProbeCount = 0
+            $providers = New-CompliantMecmProviders
+            $providers.Site = { @{ Exists = $false } }
+            $providers.Roles = { $script:dependentProbeCount++; throw 'must not run' }
+            $providers.ClientProvider = { $script:dependentProbeCount++; throw 'must not run' }
+            $providers.ClientDatabase = { $script:dependentProbeCount++; throw 'must not run' }
+
+            $state = Get-SetupCmMecmDesiredState -Config (New-TestMecmConfig) -Providers $providers
+
+            $state.State | Should -Be 'NotCompliant'
+            ($state.Components | Where-Object Name -eq 'MecmSite').Reason | Should -Be 'Missing'
+            $script:dependentProbeCount | Should -Be 0
+        }
+
+        It 'fails closed on residual provider state when no complete site identity exists' {
+            $providers = New-CompliantMecmProviders
+            $providers.Site = { @{ Exists = $false; ResidualState = $true } }
+
+            $state = Get-SetupCmMecmDesiredState -Config (New-TestMecmConfig) -Providers $providers
+
+            $state.State | Should -Be 'Conflict'
+            ($state.Components | Where-Object Name -eq 'MecmSite').Reason |
+                Should -Be 'ResidualInstallationState'
+        }
+
+        It 'fails closed on an existing site-code mismatch' {
+            $providers = New-CompliantMecmProviders
+            $providers.Site = {
+                @{
+                    Exists = $true; SiteCode = 'BAD'; SiteName = 'LABZ1 Configuration Manager'
+                    ServerName = 'LABZ1-CM01.test.gell.one'; Type = 2; ParentSiteCode = ''
+                    InstallDirectory = 'C:\Program Files\Microsoft Configuration Manager'
+                    ProviderCount = 1; ProviderSiteCode = 'BAD'
+                    ProviderMachine = 'LABZ1-CM01.test.gell.one'; ProviderForLocalSite = $true
+                }
+            }
+
+            $state = Get-SetupCmMecmDesiredState -Config (New-TestMecmConfig) -Providers $providers
+
+            $state.State | Should -Be 'Conflict'
+            ($state.Components | Where-Object Name -eq 'MecmSite').Reason | Should -Be 'SiteIdentityMismatch'
+        }
+
+        It 'fails closed when the local provider identity differs' {
+            $providers = New-CompliantMecmProviders
+            $siteProvider = $providers.Site
+            $providers.Site = {
+                $site = & $siteProvider
+                $site.ProviderMachine = 'OTHER-CM01.test.gell.one'
+                $site
+            }.GetNewClosure()
+
+            $state = Get-SetupCmMecmDesiredState -Config (New-TestMecmConfig) -Providers $providers
+
+            $state.State | Should -Be 'Conflict'
+            ($state.Components | Where-Object Name -eq 'MecmSite').Reason | Should -Be 'ProviderIdentityMismatch'
+        }
+
+        It 'fails closed when a required role is missing from the single box' {
+            $providers = New-CompliantMecmProviders
+            $providers.Roles = {
+                @(
+                    @{ RoleName = 'SMS Site Server'; ServerName = 'LABZ1-CM01.test.gell.one'; SiteCode = 'LAB' }
+                    @{ RoleName = 'SMS Provider'; ServerName = 'LABZ1-CM01.test.gell.one'; SiteCode = 'LAB' }
+                    @{ RoleName = 'SMS Management Point'; ServerName = 'LABZ1-CM01.test.gell.one'; SiteCode = 'LAB' }
+                    @{ RoleName = 'SMS SQL Server'; ServerName = 'LABZ1-CM01.test.gell.one'; SiteCode = 'LAB' }
+                )
+            }
+
+            $state = Get-SetupCmMecmDesiredState -Config (New-TestMecmConfig) -Providers $providers
+
+            $state.State | Should -Be 'Conflict'
+            ($state.Components | Where-Object Name -eq 'MecmRoles').Missing |
+                Should -Contain 'SMS Distribution Point'
+        }
+
+        It 'fails closed when a required role exists on another server' {
+            $providers = New-CompliantMecmProviders
+            $rolesProvider = $providers.Roles
+            $providers.Roles = {
+                @(& $rolesProvider) + @(
+                    @{ RoleName = 'SMS Distribution Point'; ServerName = 'OTHER-DP.test.gell.one'; SiteCode = 'LAB' }
+                )
+            }.GetNewClosure()
+
+            $state = Get-SetupCmMecmDesiredState -Config (New-TestMecmConfig) -Providers $providers
+
+            $state.State | Should -Be 'Conflict'
+            ($state.Components | Where-Object Name -eq 'MecmRoles').Reason | Should -Be 'DistributedRoleDetected'
+        }
+
+        It 'reports a stopped required service as repairable drift' {
+            $providers = New-CompliantMecmProviders
+            $providers.Services = {
+                @(
+                    @{ Name = 'SMS_EXECUTIVE'; Status = 'Stopped'; StartType = 'Manual' }
+                    @{ Name = 'SMS_SITE_COMPONENT_MANAGER'; Status = 'Running'; StartType = 'Automatic' }
+                )
+            }
+
+            $state = Get-SetupCmMecmDesiredState -Config (New-TestMecmConfig) -Providers $providers
+
+            $state.State | Should -Be 'NotCompliant'
+            ($state.Components | Where-Object Name -eq 'MecmServices').Repair |
+                Should -Be @('SMS_EXECUTIVE')
+        }
+
+        It 'reports only a missing ADK prerequisite as repairable drift' {
+            $providers = New-CompliantMecmProviders
+            $providers.Adk = { $false }
+
+            $state = Get-SetupCmMecmDesiredState -Config (New-TestMecmConfig) -Providers $providers
+
+            $state.State | Should -Be 'NotCompliant'
+            ($state.Components | Where-Object Name -eq 'Adk').State | Should -Be 'NotCompliant'
+            @($state.Components | Where-Object { $_.State -eq 'NotCompliant' -and $_.Name -ne 'Adk' }) |
+                Should -HaveCount 0
+        }
+
+        It 'fails closed when the registered content library is inaccessible' {
+            $providers = New-CompliantMecmProviders
+            $providers.ContentLibrary = {
+                @{ Path = 'C:\SCCMContentLib'; Accessible = $false; SiteCode = 'LAB' }
+            }
+
+            $state = Get-SetupCmMecmDesiredState -Config (New-TestMecmConfig) -Providers $providers
+
+            $state.State | Should -Be 'Conflict'
+            ($state.Components | Where-Object Name -eq 'ContentLibrary').Reason |
+                Should -Be 'Unavailable'
+        }
+
+        It 'fails closed when the accepted provider client resource identity differs' {
+            $providers = New-CompliantMecmProviders
+            $providers.ClientProvider = {
+                @(
+                    @{ Name = 'RING0IVY24-01'; ResourceId = 99; Active = 1; Obsolete = 0; Client = 1; ClientVersion = '5.00.9141.1011' }
+                )
+            }
+
+            $state = Get-SetupCmMecmDesiredState -Config (New-TestMecmConfig) -Providers $providers
+
+            $state.State | Should -Be 'Conflict'
+            ($state.Components | Where-Object Name -eq 'AcceptedClient').Reason |
+                Should -Be 'ResourceIdentityMismatch'
+        }
+
+        It 'fails closed when provider and SQL client rows disagree' {
+            $providers = New-CompliantMecmProviders
+            $providers.ClientDatabase = {
+                @{
+                    DatabaseName = 'CM_LAB'; ServerName = 'LABZ1-CM01'
+                    Rows = @(
+                        @{ Name = 'RING0IVY24-01'; ResourceId = 16777220; Active = 1; Obsolete = 0; Client = 1; ClientVersion = '5.00.9141.1011' }
+                    )
+                }
+            }
+
+            $state = Get-SetupCmMecmDesiredState -Config (New-TestMecmConfig) -Providers $providers
+
+            $state.State | Should -Be 'Conflict'
+            ($state.Components | Where-Object Name -eq 'AcceptedClientSql').Reason |
+                Should -Be 'ProviderSqlMismatch'
+        }
+
+        It 'fails closed when the site database identity differs' {
+            $providers = New-CompliantMecmProviders
+            $providers.ClientDatabase = {
+                @{ DatabaseName = 'CM_BAD'; ServerName = 'OTHER-CM01'; Rows = @() }
+            }
+
+            $state = Get-SetupCmMecmDesiredState -Config (New-TestMecmConfig) -Providers $providers
+
+            $state.State | Should -Be 'Conflict'
+            ($state.Components | Where-Object Name -eq 'AcceptedClientSql').Reason |
+                Should -Be 'DatabaseIdentityMismatch'
+        }
+    }
+}
+
+Describe 'Get-SetupCmMecmDefaultProviders' {
+    InModuleScope SetupCm {
+        BeforeAll {
+            function Get-CimInstance {
+                param($Namespace, $ClassName, $ErrorAction, $Filter)
+            }
+        }
+
+        It 'normalizes an omitted optional ParentSiteCode from the live SMS_Site shape' {
+            Mock Get-ItemProperty {
+                [pscustomobject]@{
+                    'Site Code' = 'LAB'
+                    'Installation Directory' = 'C:\Program Files\Microsoft Configuration Manager'
+                }
+            } -ParameterFilter { $Path -eq 'HKLM:\SOFTWARE\Microsoft\SMS\Identification' }
+            Mock Get-CimInstance {
+                if ($ClassName -eq 'SMS_Site') {
+                    return [pscustomobject]@{
+                        SiteCode = 'LAB'; SiteName = 'LABZ1 Configuration Manager'
+                        ServerName = 'LABZ1-CM01.test.gell.one'; Type = 2
+                    }
+                }
+                if ($ClassName -eq 'SMS_ProviderLocation') {
+                    return [pscustomobject]@{
+                        SiteCode = 'LAB'; Machine = 'LABZ1-CM01.test.gell.one'
+                        ProviderForLocalSite = $true
+                    }
+                }
+            }
+            $providers = Get-SetupCmMecmDefaultProviders
+
+            $site = & $providers.Site @{ mecm = @{ siteCode = 'LAB' } }
+
+            $site.ParentSiteCode | Should -Be ''
+            $site.Exists | Should -BeTrue
+        }
+
+        It 'reports residual state when provider registration remains without identification' {
+            Mock Get-ItemProperty { $null } -ParameterFilter {
+                $Path -eq 'HKLM:\SOFTWARE\Microsoft\SMS\Identification'
+            }
+            Mock Get-CimInstance {
+                [pscustomobject]@{
+                    SiteCode = 'LAB'; Machine = 'LABZ1-CM01.test.gell.one'
+                    ProviderForLocalSite = $true
+                }
+            } -ParameterFilter { $ClassName -eq 'SMS_ProviderLocation' }
+            $providers = Get-SetupCmMecmDefaultProviders
+
+            $site = & $providers.Site @{ mecm = @{ siteCode = 'LAB' } }
+
+            $site.Exists | Should -BeFalse
+            $site.ResidualState | Should -BeTrue
+        }
+    }
+}
+
+Describe 'Repair-SetupCmMecmDesiredState' {
+    InModuleScope SetupCm {
+        BeforeEach {
             Mock Install-SetupCmMecmVcRedist {}
+            Mock Install-SetupCmMecmAdk {}
+            Mock Install-SetupCmMecmWinPeAddOn {}
+            Mock Install-SetupCmMecmOdbcDriver18 {}
+            Mock Set-SetupCmMecmServiceState {}
+            Mock Get-SetupCmArtifact { [pscustomobject]@{ Path = 'C:\SetupCm\cache\mecm.iso' } }
+            Mock Get-SetupCmMecmPrerequisites { 'C:\SetupCm\Redist' }
+            Mock Install-SetupCmPrimarySite {}
+        }
 
-            { Invoke-SetupCm -ConfigPath 'lab.yaml' -Mode Unattended -Stage Mecm } | Should -Throw '*sources.vcRedistX86*'
+        It 'repairs only one missing ADK prerequisite' {
+            $state = [pscustomobject]@{
+                State = 'NotCompliant'
+                Components = @([pscustomobject]@{ Name = 'Adk'; State = 'NotCompliant'; Reason = 'Missing' })
+            }
+            $config = @{
+                cacheRoot = 'C:\SetupCm\cache'; mecm = @{}; sources = @{ adk = @{ name = 'adk' } }
+            }
 
-            Should -Invoke Test-SetupCmMecmVcRedistArchitecture -Times 0 -Exactly
+            Repair-SetupCmMecmDesiredState -Config $config -State $state -EvidenceRoot $TestDrive
+
+            Should -Invoke Install-SetupCmMecmAdk -Times 1 -Exactly
+            Should -Invoke Get-SetupCmArtifact -Times 0 -Exactly
+            Should -Invoke Install-SetupCmPrimarySite -Times 0 -Exactly
+        }
+
+        It 'validates every required source before applying any prerequisite repair' {
+            $state = [pscustomobject]@{
+                State = 'NotCompliant'
+                Components = @(
+                    [pscustomobject]@{ Name = 'VcRuntimeX64'; State = 'NotCompliant'; Reason = 'Missing' }
+                    [pscustomobject]@{ Name = 'VcRuntimeX86'; State = 'NotCompliant'; Reason = 'Missing' }
+                )
+            }
+            $config = @{
+                cacheRoot = 'C:\SetupCm\cache'; mecm = @{}
+                sources = @{ vcRedistX64 = @{ name = 'vcRedistX64' } }
+            }
+
+            { Repair-SetupCmMecmDesiredState -Config $config -State $state -EvidenceRoot $TestDrive } |
+                Should -Throw '*sources.vcRedistX86*'
             Should -Invoke Install-SetupCmMecmVcRedist -Times 0 -Exactly
         }
 
-        It 'installs the approved ADK before downloading MECM prerequisites' {
+        It 'repairs a missing site with one media acquisition download and setup' {
+            $state = [pscustomobject]@{
+                State = 'NotCompliant'
+                Components = @([pscustomobject]@{ Name = 'MecmSite'; State = 'NotCompliant'; Reason = 'Missing' })
+            }
             $config = @{
                 cacheRoot = 'C:\SetupCm\cache'
-                evidenceRoot = $TestDrive
-                mecm = @{ prerequisitePath = 'C:\SetupCm\prereqs' }
-                sources = @{
-                    mecm = @{ name = 'mecm' }
-                    adk = @{ name = 'adk'; licenseAccepted = $true }
-                    adkWinPe = @{ name = 'adkWinPe'; licenseAccepted = $true }
-                    odbcDriver18 = @{ name = 'odbcDriver18'; licenseAccepted = $true }
-                    vcRedistX64 = @{ name = 'vcRedistX64'; licenseAccepted = $true }
-                    vcRedistX86 = @{ name = 'vcRedistX86'; licenseAccepted = $true }
-                }
+                mecm = @{ prerequisitePath = 'C:\SetupCm\Redist' }
+                sources = @{ mecm = @{ name = 'mecm' } }
             }
-            $callOrder = [System.Collections.Generic.List[string]]::new()
-            Mock Read-SetupCmConfig { $config }
-            Mock New-SetupCmRunEvidence { $TestDrive }
-            Mock Invoke-SetupCmStage {
-                param($Name, $Test, $Apply, $Verify, $EvidenceRoot)
-                & $Apply
-                & $Verify
-                [pscustomobject]@{ name = $Name; state = 'Succeeded' }
-            }
-            Mock Get-SetupCmArtifact { [pscustomobject]@{ Path = 'C:\SetupCm\cache\mecm.iso' } }
-            Mock Test-SetupCmMecmAdk { 'NotCompliant' }
-            Mock Install-SetupCmMecmAdk {}
-            Mock Test-SetupCmMecmWinPeAddOn { 'NotCompliant' }
-            Mock Install-SetupCmMecmWinPeAddOn {}
-            Mock Test-SetupCmMecmOdbcDriver18 { 'Compliant' }
-            Mock Test-SetupCmMecmVcRedistArchitecture { 'NotCompliant' }
-            Mock Install-SetupCmMecmVcRedist {
-                param($Source)
-                [void]$callOrder.Add($Source.name)
-            }
-            Mock Test-SetupCmMecmVcRedist { 'Compliant' }
-            Mock Get-SetupCmMecmPrerequisites { [void]$callOrder.Add('prerequisiteDownload') }
-            Mock Install-SetupCmPrimarySite {}
 
-            Invoke-SetupCm -ConfigPath 'lab.yaml' -Mode Unattended -Stage Mecm | Out-Null
+            Repair-SetupCmMecmDesiredState -Config $config -State $state -EvidenceRoot $TestDrive
 
-            Should -Invoke Install-SetupCmMecmAdk -Times 1 -Exactly -ParameterFilter {
-                $Source.name -eq 'adk' -and $CacheRoot -eq 'C:\SetupCm\cache'
-            }
-            Should -Invoke Install-SetupCmMecmWinPeAddOn -Times 1 -Exactly -ParameterFilter {
-                $Source.name -eq 'adkWinPe' -and $CacheRoot -eq 'C:\SetupCm\cache'
-            }
+            Should -Invoke Get-SetupCmArtifact -Times 1 -Exactly
             Should -Invoke Get-SetupCmMecmPrerequisites -Times 1 -Exactly
-            $callOrder | Should -Be @('vcRedistX64', 'vcRedistX86', 'prerequisiteDownload')
+            Should -Invoke Install-SetupCmPrimarySite -Times 1 -Exactly
         }
 
-        It 'does not download MECM prerequisites after a VC++ restart-required exit' {
+        It 'installs missing prerequisites before downloading primary-site prerequisites' {
+            $state = [pscustomobject]@{
+                State = 'NotCompliant'
+                Components = @(
+                    [pscustomobject]@{ Name = 'Adk'; State = 'NotCompliant'; Reason = 'Missing' }
+                    [pscustomobject]@{ Name = 'MecmSite'; State = 'NotCompliant'; Reason = 'Missing' }
+                )
+            }
             $config = @{
                 cacheRoot = 'C:\SetupCm\cache'
-                evidenceRoot = $TestDrive
-                mecm = @{ prerequisitePath = 'C:\SetupCm\prereqs' }
+                mecm = @{ prerequisitePath = 'C:\SetupCm\Redist' }
+                sources = @{ adk = @{ name = 'adk' }; mecm = @{ name = 'mecm' } }
+            }
+            $callOrder = [System.Collections.Generic.List[string]]::new()
+            Mock Install-SetupCmMecmAdk { [void]$callOrder.Add('adk') }
+            Mock Get-SetupCmMecmPrerequisites { [void]$callOrder.Add('prerequisiteDownload') }
+            Mock Install-SetupCmPrimarySite { [void]$callOrder.Add('siteSetup') }
+
+            Repair-SetupCmMecmDesiredState -Config $config -State $state -EvidenceRoot $TestDrive
+
+            $callOrder | Should -Be @('adk', 'prerequisiteDownload', 'siteSetup')
+        }
+
+        It 'does not download MECM prerequisites after a VC runtime requests restart' {
+            $state = [pscustomobject]@{
+                State = 'NotCompliant'
+                Components = @(
+                    [pscustomobject]@{ Name = 'VcRuntimeX64'; State = 'NotCompliant'; Reason = 'Missing' }
+                    [pscustomobject]@{ Name = 'MecmSite'; State = 'NotCompliant'; Reason = 'Missing' }
+                )
+            }
+            $config = @{
+                cacheRoot = 'C:\SetupCm\cache'
+                mecm = @{ prerequisitePath = 'C:\SetupCm\Redist' }
                 sources = @{
+                    vcRedistX64 = @{ name = 'vcRedistX64' }
                     mecm = @{ name = 'mecm' }
-                    vcRedistX64 = @{ name = 'vcRedistX64'; licenseAccepted = $true }
-                    vcRedistX86 = @{ name = 'vcRedistX86'; licenseAccepted = $true }
                 }
+            }
+            Mock Install-SetupCmMecmVcRedist {
+                throw 'Microsoft Visual C++ Redistributable installation requires a restart before MECM setup can continue (exit code 3010).'
+            }
+
+            { Repair-SetupCmMecmDesiredState -Config $config -State $state -EvidenceRoot $TestDrive } |
+                Should -Throw '*restart before MECM setup can continue*'
+            Should -Invoke Get-SetupCmMecmPrerequisites -Times 0 -Exactly
+            Should -Invoke Install-SetupCmPrimarySite -Times 0 -Exactly
+        }
+
+        It 'repairs only the named stopped service' {
+            $state = [pscustomobject]@{
+                State = 'NotCompliant'
+                Components = @(
+                    [pscustomobject]@{
+                        Name = 'MecmServices'; State = 'NotCompliant'; Reason = 'ServiceState'
+                        Repair = @('SMS_EXECUTIVE')
+                    }
+                )
+            }
+            $config = @{ cacheRoot = 'C:\SetupCm\cache'; mecm = @{}; sources = @{} }
+
+            Repair-SetupCmMecmDesiredState -Config $config -State $state -EvidenceRoot $TestDrive
+
+            Should -Invoke Set-SetupCmMecmServiceState -Times 1 -Exactly -ParameterFilter {
+                $Name -eq 'SMS_EXECUTIVE'
+            }
+            Should -Invoke Install-SetupCmPrimarySite -Times 0 -Exactly
+        }
+
+        It 'never repairs a conflicting MECM state' {
+            $state = [pscustomobject]@{
+                State = 'Conflict'
+                Components = @([pscustomobject]@{ Name = 'MecmSite'; State = 'Conflict'; Reason = 'SiteIdentityMismatch' })
+            }
+
+            { Repair-SetupCmMecmDesiredState -Config @{ sources = @{}; mecm = @{} } -State $state -EvidenceRoot $TestDrive } |
+                Should -Throw '*conflict*'
+            Should -Invoke Get-SetupCmArtifact -Times 0 -Exactly
+            Should -Invoke Install-SetupCmPrimarySite -Times 0 -Exactly
+        }
+    }
+}
+
+Describe 'Invoke-SetupCm MECM desired-state orchestration' {
+    InModuleScope SetupCm {
+        BeforeEach {
+            $script:mecmProbeCount = 0
+            $config = @{
+                evidenceRoot = $TestDrive; cacheRoot = 'C:\SetupCm\cache'
+                mecm = @{ siteCode = 'LAB'; siteServerFqdn = 'LABZ1-CM01.test.gell.one' }
+                sources = @{}
             }
             Mock Read-SetupCmConfig { $config }
             Mock New-SetupCmRunEvidence { $TestDrive }
-            Mock Invoke-SetupCmStage {
-                param($Name, $Test, $Apply, $Verify, $EvidenceRoot)
-                & $Apply
-            }
-            Mock Get-SetupCmArtifact { [pscustomobject]@{ Path = 'C:\SetupCm\cache\mecm.iso' } }
-            Mock Test-SetupCmMecmVcRedistArchitecture { 'NotCompliant' }
-            Mock Install-SetupCmMecmVcRedist { throw 'Microsoft Visual C++ Redistributable installation requires a restart before MECM setup can continue (exit code 3010).' }
+            Mock Repair-SetupCmMecmDesiredState {}
+            Mock Get-SetupCmArtifact {}
             Mock Get-SetupCmMecmPrerequisites {}
+            Mock Install-SetupCmPrimarySite {}
+        }
 
-            { Invoke-SetupCm -ConfigPath 'lab.yaml' -Mode Unattended -Stage Mecm } | Should -Throw '*restart before MECM setup can continue*'
+        It 'skips all media and repair work when the exact site is compliant' {
+            Mock Test-SetupCmMecmDesiredState { 'Compliant' }
 
+            $result = Invoke-SetupCm -ConfigPath 'lab.yaml' -Mode Unattended -Stage Mecm
+
+            $result.state | Should -Be 'Skipped'
+            Should -Invoke Repair-SetupCmMecmDesiredState -Times 0 -Exactly
+            Should -Invoke Get-SetupCmArtifact -Times 0 -Exactly
             Should -Invoke Get-SetupCmMecmPrerequisites -Times 0 -Exactly
+            Should -Invoke Install-SetupCmPrimarySite -Times 0 -Exactly
+        }
+
+        It 'repairs once and independently verifies MECM compliance' {
+            Mock Test-SetupCmMecmDesiredState {
+                $script:mecmProbeCount++
+                if ($script:mecmProbeCount -eq 1) { 'NotCompliant' } else { 'Compliant' }
+            }
+
+            $result = Invoke-SetupCm -ConfigPath 'lab.yaml' -Mode Unattended -Stage Mecm
+
+            $result.state | Should -Be 'Succeeded'
+            Should -Invoke Repair-SetupCmMecmDesiredState -Times 1 -Exactly
+            Should -Invoke Test-SetupCmMecmDesiredState -Times 2 -Exactly
+        }
+
+        It 'never repairs a MECM conflict' {
+            Mock Test-SetupCmMecmDesiredState { 'Conflict' }
+
+            { Invoke-SetupCm -ConfigPath 'lab.yaml' -Mode Unattended -Stage Mecm } |
+                Should -Throw '*conflict*'
+            Should -Invoke Repair-SetupCmMecmDesiredState -Times 0 -Exactly
+            Should -Invoke Install-SetupCmPrimarySite -Times 0 -Exactly
+        }
+
+        It 'fails after one repair when independent MECM verification still fails' {
+            Mock Test-SetupCmMecmDesiredState { 'NotCompliant' }
+
+            { Invoke-SetupCm -ConfigPath 'lab.yaml' -Mode Unattended -Stage Mecm } |
+                Should -Throw '*verification failed*'
+            Should -Invoke Repair-SetupCmMecmDesiredState -Times 1 -Exactly
         }
     }
 }
