@@ -46,6 +46,24 @@ Describe 'Get-SetupCmArtifact' {
             } | Should -Throw '*licenseAccepted*'
         }
 
+        It 'reports a missing cacheFile through bounded source validation' {
+            {
+                Get-SetupCmArtifact -Source @{
+                    name = 'mecm'; sha256 = ('0' * 64); licenseAccepted = $true
+                    sizeBytes = 15; version = '2503'; architecture = 'x64'
+                } -CacheRoot $TestDrive -EvidenceRoot $TestDrive
+            } | Should -Throw '*MissingSourceField:cacheFile*'
+        }
+
+        It 'reports a missing name through bounded source validation' {
+            {
+                Get-SetupCmArtifact -Source @{
+                    cacheFile = 'mecm.iso'; sha256 = ('0' * 64); licenseAccepted = $true
+                    sizeBytes = 15; version = '2503'; architecture = 'x64'
+                } -CacheRoot $TestDrive -EvidenceRoot $TestDrive
+            } | Should -Throw '*MissingSourceField:name*'
+        }
+
         It 'preserves the existing cache when a replacement fails verification' {
             $cacheFile = Join-Path $TestDrive 'mecm.iso'
             $sourceFile = Join-Path $TestDrive 'source-mecm.iso'
@@ -162,6 +180,44 @@ Describe 'Get-SetupCmArtifactState' {
 
             $state.State | Should -Be 'NotCompliant'
             $state.Reason | Should -Be 'SizeMismatch'
+            $script:identityProbed | Should -BeFalse
+        }
+
+        It 'fails closed when artifact existence cannot be probed' {
+            $state = Get-SetupCmArtifactState -Source $source -CacheRoot $TestDrive `
+                -PathProvider { throw 'path unavailable' }
+
+            $state.State | Should -Be 'Conflict'
+            $state.Reason | Should -Be 'PathProbeUnavailable'
+        }
+
+        It 'fails closed on an unavailable length probe without running later probes' {
+            $script:hashProbed = $false
+            $script:identityProbed = $false
+
+            $state = Get-SetupCmArtifactState -Source $source -CacheRoot $TestDrive `
+                -PathProvider { $true } `
+                -LengthProvider { throw 'length unavailable' } `
+                -HashProvider { $script:hashProbed = $true } `
+                -IdentityProvider { $script:identityProbed = $true }
+
+            $state.State | Should -Be 'Conflict'
+            $state.Reason | Should -Be 'LengthProbeUnavailable'
+            $script:hashProbed | Should -BeFalse
+            $script:identityProbed | Should -BeFalse
+        }
+
+        It 'fails closed on an unavailable hash probe without running native identity' {
+            $script:identityProbed = $false
+
+            $state = Get-SetupCmArtifactState -Source $source -CacheRoot $TestDrive `
+                -PathProvider { $true } `
+                -LengthProvider { 1024 } `
+                -HashProvider { throw 'hash unavailable' } `
+                -IdentityProvider { $script:identityProbed = $true }
+
+            $state.State | Should -Be 'Conflict'
+            $state.Reason | Should -Be 'HashProbeUnavailable'
             $script:identityProbed | Should -BeFalse
         }
 
@@ -379,6 +435,34 @@ Describe 'Invoke-SetupCmAcquire' {
                 Should -Throw '*LicenseNotAccepted*'
             Should -Invoke Get-SetupCmArtifact -Times 0 -Exactly
         }
+
+        It 'fails closed when a configured source is not a metadata map' {
+            $config = @{
+                cacheRoot = 'C:\cache'
+                evidenceRoot = $TestDrive
+                sources = @{ mecm = 'not-a-source-map' }
+            }
+            Mock Read-SetupCmConfig { $config }
+            Mock Get-SetupCmArtifact {}
+
+            { Invoke-SetupCmAcquire -ConfigPath 'lab.yaml' -EvidenceRoot $TestDrive } |
+                Should -Throw '*InvalidSourceType*'
+            Should -Invoke Get-SetupCmArtifact -Times 0 -Exactly
+        }
+
+        It 'fails closed when no artifact sources are configured' {
+            $config = @{
+                cacheRoot = 'C:\cache'
+                evidenceRoot = $TestDrive
+                sources = @{}
+            }
+            Mock Read-SetupCmConfig { $config }
+            Mock Get-SetupCmArtifact {}
+
+            { Invoke-SetupCmAcquire -ConfigPath 'lab.yaml' -EvidenceRoot $TestDrive } |
+                Should -Throw '*EmptySourceSet*'
+            Should -Invoke Get-SetupCmArtifact -Times 0 -Exactly
+        }
     }
 }
 
@@ -404,6 +488,33 @@ Describe 'Test-SetupCmAcquire' {
             $evidence = Get-Content -LiteralPath (Join-Path $TestDrive 'acquire-state.json') -Raw | ConvertFrom-Json
             $evidence.components | Should -HaveCount 2
             ($evidence | ConvertTo-Json -Depth 5) | Should -Not -Match 'uri|vault'
+        }
+
+        It 'returns Conflict evidence for a malformed source entry' {
+            $config = @{
+                cacheRoot = 'C:\cache'
+                sources = @{ mecm = 'not-a-source-map' }
+            }
+
+            Test-SetupCmAcquire -Config $config -EvidenceRoot $TestDrive | Should -Be 'Conflict'
+            $evidence = Get-Content -LiteralPath (Join-Path $TestDrive 'acquire-state.json') -Raw |
+                ConvertFrom-Json
+            $evidence.state | Should -Be 'Conflict'
+            $evidence.components | Should -HaveCount 1
+            $evidence.components[0].Name | Should -Be 'mecm'
+            $evidence.components[0].Reason | Should -Be 'InvalidSourceType'
+        }
+
+        It 'returns Conflict evidence when the source set is empty' {
+            $config = @{ cacheRoot = 'C:\cache'; sources = @{} }
+
+            Test-SetupCmAcquire -Config $config -EvidenceRoot $TestDrive | Should -Be 'Conflict'
+            $evidence = Get-Content -LiteralPath (Join-Path $TestDrive 'acquire-state.json') -Raw |
+                ConvertFrom-Json
+            $evidence.state | Should -Be 'Conflict'
+            $evidence.components | Should -HaveCount 1
+            $evidence.components[0].Name | Should -Be 'Sources'
+            $evidence.components[0].Reason | Should -Be 'EmptySourceSet'
         }
     }
 }

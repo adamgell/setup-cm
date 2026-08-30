@@ -237,23 +237,46 @@ function Get-SetupCmArtifactState {
     else {
         $ArtifactPath
     }
-    if (-not (& $PathProvider $path)) {
+    try {
+        $pathExists = [bool](& $PathProvider $path)
+    }
+    catch {
+        $state.State = 'Conflict'
+        $state.Reason = 'PathProbeUnavailable'
+        return [pscustomobject]$state
+    }
+    if (-not $pathExists) {
         $state.State = 'NotCompliant'
         $state.Reason = 'Missing'
         return [pscustomobject]$state
     }
     try {
-        if ([long](& $LengthProvider $path) -ne $expectedSize) {
-            $state.State = 'NotCompliant'
-            $state.Reason = 'SizeMismatch'
-            return [pscustomobject]$state
-        }
+        $actualLength = [long](& $LengthProvider $path)
+    }
+    catch {
+        $state.State = 'Conflict'
+        $state.Reason = 'LengthProbeUnavailable'
+        return [pscustomobject]$state
+    }
+    if ($actualLength -ne $expectedSize) {
+        $state.State = 'NotCompliant'
+        $state.Reason = 'SizeMismatch'
+        return [pscustomobject]$state
+    }
+    try {
         $actualHash = ([string](& $HashProvider $path)).ToLowerInvariant()
-        if ($actualHash -ne ([string]$Source.sha256).ToLowerInvariant()) {
-            $state.State = 'NotCompliant'
-            $state.Reason = 'Sha256Mismatch'
-            return [pscustomobject]$state
-        }
+    }
+    catch {
+        $state.State = 'Conflict'
+        $state.Reason = 'HashProbeUnavailable'
+        return [pscustomobject]$state
+    }
+    if ($actualHash -ne ([string]$Source.sha256).ToLowerInvariant()) {
+        $state.State = 'NotCompliant'
+        $state.Reason = 'Sha256Mismatch'
+        return [pscustomobject]$state
+    }
+    try {
         $identity = & $IdentityProvider $path $Source
     }
     catch {
@@ -311,7 +334,18 @@ function Get-SetupCmNormalizedSources {
     param([Parameter(Mandatory)][hashtable]$Sources)
 
     foreach ($sourceName in ($Sources.Keys | Sort-Object)) {
-        if ($Sources[$sourceName] -isnot [hashtable]) { continue }
+        if ($Sources[$sourceName] -isnot [hashtable]) {
+            if ([string]$sourceName -ceq 'prerequisites' -and
+                $Sources[$sourceName] -is [System.Collections.IEnumerable] -and
+                $Sources[$sourceName] -isnot [string]) {
+                continue
+            }
+            @{
+                name = [string]$sourceName
+                setupCmNormalizationError = 'InvalidSourceType'
+            }
+            continue
+        }
         $source = $Sources[$sourceName].Clone()
         if (-not $source.ContainsKey('name') -or [string]::IsNullOrWhiteSpace($source.name)) {
             $source.name = $sourceName
@@ -327,11 +361,29 @@ function Test-SetupCmAcquire {
         [string]$EvidenceRoot
     )
 
-    $components = @(
-        foreach ($source in (Get-SetupCmNormalizedSources -Sources $Config.sources)) {
-            Get-SetupCmArtifactState -Source $source -CacheRoot $Config.cacheRoot
-        }
-    )
+    $sources = @(Get-SetupCmNormalizedSources -Sources $Config.sources)
+    $components = if ($sources.Count -eq 0) {
+        @([pscustomobject][ordered]@{
+            Name = 'Sources'; State = 'Conflict'; Reason = 'EmptySourceSet'
+            CacheFile = $null; SizeBytes = $null; Sha256 = $null
+            Version = $null; Architecture = $null
+        })
+    }
+    else {
+        @(foreach ($source in $sources) {
+            if ($source.ContainsKey('setupCmNormalizationError')) {
+                [pscustomobject][ordered]@{
+                    Name = [string]$source.name; State = 'Conflict'
+                    Reason = [string]$source.setupCmNormalizationError
+                    CacheFile = $null; SizeBytes = $null; Sha256 = $null
+                    Version = $null; Architecture = $null
+                }
+            }
+            else {
+                Get-SetupCmArtifactState -Source $source -CacheRoot $Config.cacheRoot
+            }
+        })
+    }
     $state = if ($components.State -contains 'Conflict') {
         'Conflict'
     }
@@ -363,17 +415,18 @@ function Get-SetupCmArtifact {
         [string]$EvidenceRoot
     )
 
-    $path = Join-Path $CacheRoot $Source.cacheFile
     $initialState = Get-SetupCmArtifactState -Source $Source -CacheRoot $CacheRoot
+    $artifactName = [string]$initialState.Name
     if ($initialState.State -eq 'Conflict') {
         if ($initialState.Reason -eq 'LicenseNotAccepted') {
-            throw "Artifact '$($Source.name)' requires licenseAccepted=true."
+            throw "Artifact '$artifactName' requires licenseAccepted=true."
         }
-        throw "Artifact '$($Source.name)' cannot be acquired safely: $($initialState.Reason)."
+        throw "Artifact '$artifactName' cannot be acquired safely: $($initialState.Reason)."
     }
+    $path = Join-Path $CacheRoot ([string]$Source.cacheFile)
     if ($initialState.State -eq 'Compliant') {
         return [pscustomobject]@{
-            Name = $Source.name
+            Name = $artifactName
             State = 'Compliant'
             Reason = 'Verified'
             Path = $path
@@ -395,7 +448,7 @@ function Get-SetupCmArtifact {
         $null
     }
     if ([string]::IsNullOrWhiteSpace($sourceUri)) {
-        throw "Artifact '$($Source.name)' is not compliant ($($initialState.Reason)) and has no approved source."
+        throw "Artifact '$artifactName' is not compliant ($($initialState.Reason)) and has no approved source."
     }
 
     New-Item -ItemType Directory -Path $CacheRoot -Force | Out-Null
@@ -421,20 +474,20 @@ function Get-SetupCmArtifact {
         }
         Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
         if ([string]::IsNullOrWhiteSpace($detail)) {
-            throw "Acquisition failed for artifact '$($Source.name)'."
+            throw "Acquisition failed for artifact '$artifactName'."
         }
-        throw "Acquisition failed for artifact '$($Source.name)': $detail"
+        throw "Acquisition failed for artifact '$artifactName': $detail"
     }
 
     $downloadedState = Get-SetupCmArtifactState -Source $Source -CacheRoot $CacheRoot -ArtifactPath $temporaryPath
     if ($downloadedState.State -ne 'Compliant') {
         Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
-        throw "Downloaded artifact '$($Source.name)' failed verification: $($downloadedState.Reason)."
+        throw "Downloaded artifact '$artifactName' failed verification: $($downloadedState.Reason)."
     }
 
     Move-Item -LiteralPath $temporaryPath -Destination $path -Force
     [pscustomobject]@{
-        Name = $Source.name
+        Name = $artifactName
         State = 'Compliant'
         Reason = 'AcquiredAndVerified'
         Path = $path

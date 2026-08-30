@@ -351,6 +351,16 @@ function Get-SetupCmSqlDesiredState {
         [void]$components.Add((New-SetupCmSqlComponent -Name SqlInstance -State Conflict -Reason MissingInstanceName))
         return New-SetupCmSqlDesiredStateResult -Components $components
     }
+    $configuredSysAdmins = @(
+        if ($Config.sql.ContainsKey('sysAdminAccounts')) {
+            $Config.sql.sysAdminAccounts |
+                Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }
+        }
+    )
+    if ($configuredSysAdmins.Count -eq 0) {
+        [void]$components.Add((New-SetupCmSqlComponent -Name SqlSysAdmins -State Conflict -Reason MissingSysAdminAccounts))
+        return New-SetupCmSqlDesiredStateResult -Components $components
+    }
     if ($null -eq $Providers) { $Providers = Get-SetupCmSqlDefaultProviders }
 
     try {
@@ -593,8 +603,6 @@ function Get-SetupCmSqlDesiredState {
             [void]$components.Add((New-SetupCmSqlComponent -Name SqlDatabase -State Compliant -Reason $reason))
         }
 
-        $configuredSysAdmins = @($Config.sql.sysAdminAccounts |
-            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
         $actualSysAdmins = @(Get-SetupCmSqlObjectValue -InputObject $database -Name SysAdminAccounts -DefaultValue @())
         $missingSysAdmins = @($configuredSysAdmins | Where-Object {
             $configured = ConvertTo-SetupCmSqlComparableAccount -Account ([string]$_)

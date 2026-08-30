@@ -62,7 +62,7 @@ Describe 'Setup-CM marker acceptance desired state' {
                     Client = @{
                         Name = 'RING0IVY24-01'; ResourceId = 16777219
                         MarkerHash = '3F44AA70B40C9E9095E69F1C57E98F6ACC06900788A2054E251BCC58179B6254'
-                        MarkerHashVerification = 'ExactDetector'
+                        MarkerHashVerification = 'DirectAuthenticatedFileRead'
                         InstallState = 'Installed'; EvaluationState = 1; ResolvedState = 'Installed'; ExitCode = 0
                         ExecutionContext = 'System'; SelectedDistributionPoint = 'LABZ1-CM01.test.gell.one'
                         ContentDownload = 'Verified'; StateMessages = @('APP_CI_PRESENT')
@@ -228,6 +228,51 @@ Describe 'Setup-CM marker acceptance desired state' {
             ($state.Components | Where-Object Name -eq Assignment).Reason | Should -BeExactly 'AssignmentScopeConflict'
         }
 
+        It 'fails closed without mutation when the bounded assignment is disabled' {
+            $providers = New-CompliantMarkerProviders
+            $inventory = & $providers.Inventory
+            $inventory.Assignments[0].Enabled = $false
+            $providers.Inventory = { $inventory }.GetNewClosure()
+            $state = Get-SetupCmMarkerDesiredState -Config (New-TestMarkerConfig) -Providers $providers
+            $calls = [System.Collections.Generic.List[string]]::new()
+
+            $state.State | Should -BeExactly 'Conflict'
+            ($state.Components | Where-Object Name -eq Assignment).Reason |
+                Should -BeExactly 'DisabledAssignmentRequiresOperator'
+            {
+                Repair-SetupCmMarkerDesiredState -Config (New-TestMarkerConfig) -State $state `
+                    -Providers (New-RecordingMarkerRepairProviders -Calls $calls)
+            } | Should -Throw '*safety conflict*'
+            $calls | Should -HaveCount 0
+        }
+
+        It 'does not accept a contract-derived marker hash as direct client evidence' {
+            $providers = New-CompliantMarkerProviders
+            $inventory = & $providers.Inventory
+            $inventory.Client.MarkerHashVerification = 'ExactDetectorAndServerState'
+            $providers.Inventory = { $inventory }.GetNewClosure()
+
+            $state = Get-SetupCmMarkerDesiredState -Config (New-TestMarkerConfig) -Providers $providers
+
+            $state.State | Should -BeExactly 'NotCompliant'
+            ($state.Components | Where-Object Name -eq Client).Reason |
+                Should -BeExactly 'ClientNotCompliant'
+        }
+
+        It 'fails closed when the direct client marker probe is unavailable' {
+            $providers = New-CompliantMarkerProviders
+            $inventory = & $providers.Inventory
+            $inventory.Client.MarkerHash = ''
+            $inventory.Client.MarkerHashVerification = 'ProbeUnavailable'
+            $providers.Inventory = { $inventory }.GetNewClosure()
+
+            $state = Get-SetupCmMarkerDesiredState -Config (New-TestMarkerConfig) -Providers $providers
+
+            $state.State | Should -BeExactly 'Conflict'
+            ($state.Components | Where-Object Name -eq Client).Reason |
+                Should -BeExactly 'ClientProbeUnavailable'
+        }
+
         It 'reuses an exact deployment without content, membership, assignment, distribution, or policy mutation' {
             $state = Get-SetupCmMarkerDesiredState -Config (New-TestMarkerConfig) -Providers (New-CompliantMarkerProviders)
             $calls = [System.Collections.Generic.List[string]]::new()
@@ -326,6 +371,45 @@ Describe 'Setup-CM marker acceptance desired state' {
             $evidence.sourceCommit | Should -BeExactly $commit
             $evidence.state | Should -BeExactly 'Compliant'
             @($evidence.components | Where-Object state -ne 'Compliant') | Should -HaveCount 0
+        }
+    }
+}
+
+Describe 'Setup-CM marker direct client file evidence' {
+    InModuleScope SetupCm {
+        It 'hashes the fixed client marker through its authenticated admin share' {
+            $contract = Get-SetupCmMarkerFixedContract
+            $script:probedPath = $null
+
+            $state = Get-SetupCmMarkerDirectClientFileState -Contract $contract `
+                -PathProvider {
+                    param($Path)
+                    $script:probedPath = $Path
+                    $true
+                } `
+                -HashProvider { param($Path) ('a' * 64) } `
+                -ItemProvider { param($Path) @{ LastWriteTimeUtc = [datetime]'2026-08-30T12:00:00Z' } }
+
+            $script:probedPath | Should -BeExactly `
+                '\\RING0IVY24-01.test.gell.one\C$\ProgramData\SetupCm\Phase1\marker.json'
+            $state.MarkerHash | Should -BeExactly ('A' * 64)
+            $state.MarkerHashVerification | Should -BeExactly 'DirectAuthenticatedFileRead'
+            $state.MarkerLastWriteTime | Should -BeExactly '2026-08-30T12:00:00.0000000Z'
+            $state.PSObject.Properties.Name | Should -Not -Contain 'Path'
+        }
+
+        It 'distinguishes a missing client marker from an unavailable probe' {
+            $contract = Get-SetupCmMarkerFixedContract
+
+            $missing = Get-SetupCmMarkerDirectClientFileState -Contract $contract `
+                -PathProvider { $false }
+            $unavailable = Get-SetupCmMarkerDirectClientFileState -Contract $contract `
+                -PathProvider { throw 'client share unavailable' }
+
+            $missing.MarkerHash | Should -BeNullOrEmpty
+            $missing.MarkerHashVerification | Should -BeExactly 'Missing'
+            $unavailable.MarkerHash | Should -BeNullOrEmpty
+            $unavailable.MarkerHashVerification | Should -BeExactly 'ProbeUnavailable'
         }
     }
 }

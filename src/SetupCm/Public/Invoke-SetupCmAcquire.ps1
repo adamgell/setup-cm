@@ -11,8 +11,15 @@ function Invoke-SetupCmAcquire {
     if ([string]::IsNullOrWhiteSpace($EvidenceRoot)) {
         $EvidenceRoot = New-SetupCmRunEvidence -Root $config.evidenceRoot
     }
+    $sources = @(Get-SetupCmNormalizedSources -Sources $config.sources)
+    if ($sources.Count -eq 0) {
+        throw 'Artifact acquisition cannot continue safely: EmptySourceSet.'
+    }
     $artifacts = @(
-        foreach ($source in (Get-SetupCmNormalizedSources -Sources $config.sources)) {
+        foreach ($source in $sources) {
+            if ($source.ContainsKey('setupCmNormalizationError')) {
+                throw "Artifact '$($source.name)' cannot be acquired safely: $($source.setupCmNormalizationError)."
+            }
             $state = Get-SetupCmArtifactState -Source $source -CacheRoot $config.cacheRoot
             switch ($state.State) {
                 'Compliant' {

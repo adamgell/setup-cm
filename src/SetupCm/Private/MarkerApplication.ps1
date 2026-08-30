@@ -150,14 +150,14 @@ function Compare-SetupCmMarkerFileInventory {
     $mismatched = [System.Collections.Generic.List[string]]::new()
     foreach ($expectedFile in $expectedItems) {
         $expectedName = [string](Get-SetupCmMarkerValue -InputObject $expectedFile -Name Name)
-        $matches = @($actualItems | Where-Object {
+        $matchingFiles = @($actualItems | Where-Object {
             [string](Get-SetupCmMarkerValue -InputObject $_ -Name Name) -ceq $expectedName
         })
-        if ($matches.Count -ne 1) {
+        if ($matchingFiles.Count -ne 1) {
             [void]$missing.Add($expectedName)
             continue
         }
-        $actualFile = $matches[0]
+        $actualFile = $matchingFiles[0]
         if ([long](Get-SetupCmMarkerValue -InputObject $actualFile -Name Length -DefaultValue -1) -ne
                 [long](Get-SetupCmMarkerValue -InputObject $expectedFile -Name Length) -or
             [string](Get-SetupCmMarkerValue -InputObject $actualFile -Name Hash) -cne
@@ -488,8 +488,10 @@ function Get-SetupCmMarkerDesiredState {
         [int](Get-SetupCmMarkerValue -InputObject $assignment -Name OfferTypeId) -ne 0) {
         [void]$components.Add((New-SetupCmMarkerComponent -Name Assignment -State Conflict -Reason PurposeConflict))
     }
-    elseif (-not [bool](Get-SetupCmMarkerValue -InputObject $assignment -Name Enabled -DefaultValue $false) -or
-        -not [bool](Get-SetupCmMarkerValue -InputObject $assignment -Name NotifyUser -DefaultValue $false) -or
+    elseif (-not [bool](Get-SetupCmMarkerValue -InputObject $assignment -Name Enabled -DefaultValue $false)) {
+        [void]$components.Add((New-SetupCmMarkerComponent -Name Assignment -State Conflict -Reason DisabledAssignmentRequiresOperator))
+    }
+    elseif (-not [bool](Get-SetupCmMarkerValue -InputObject $assignment -Name NotifyUser -DefaultValue $false) -or
         -not [bool](Get-SetupCmMarkerValue -InputObject $assignment -Name UserUIExperience -DefaultValue $false)) {
         [void]$components.Add((New-SetupCmMarkerComponent -Name Assignment -State NotCompliant -Reason OwnedPropertiesDrift))
     }
@@ -502,10 +504,12 @@ function Get-SetupCmMarkerDesiredState {
     }
 
     $client = Get-SetupCmMarkerValue -InputObject $inventory -Name Client
+    $markerHashVerification = [string](Get-SetupCmMarkerValue -InputObject $client -Name MarkerHashVerification)
     $clientExact = $null -ne $client -and
         [string](Get-SetupCmMarkerValue -InputObject $client -Name Name) -ieq $contract.TargetName -and
         [int](Get-SetupCmMarkerValue -InputObject $client -Name ResourceId) -eq $contract.TargetResourceId -and
         [string](Get-SetupCmMarkerValue -InputObject $client -Name MarkerHash) -ceq $contract.MarkerHash -and
+        $markerHashVerification -ceq 'DirectAuthenticatedFileRead' -and
         [string](Get-SetupCmMarkerValue -InputObject $client -Name InstallState) -ceq 'Installed' -and
         [int](Get-SetupCmMarkerValue -InputObject $client -Name EvaluationState) -eq 1 -and
         [string](Get-SetupCmMarkerValue -InputObject $client -Name ResolvedState) -ceq 'Installed' -and
@@ -519,6 +523,9 @@ function Get-SetupCmMarkerDesiredState {
     if ($assignments.Count -eq 0) {
         [void]$components.Add((New-SetupCmMarkerComponent -Name Client -State NotCompliant -Reason PendingDeployment))
     }
+    elseif ($null -ne $client -and $markerHashVerification -ceq 'ProbeUnavailable') {
+        [void]$components.Add((New-SetupCmMarkerComponent -Name Client -State Conflict -Reason ClientProbeUnavailable))
+    }
     elseif (-not $clientExact) {
         [void]$components.Add((New-SetupCmMarkerComponent -Name Client -State NotCompliant -Reason ClientNotCompliant))
     }
@@ -526,7 +533,8 @@ function Get-SetupCmMarkerDesiredState {
         [void]$components.Add((New-SetupCmMarkerComponent -Name Client -State Compliant -Reason Exact -Details @{
             ClientName = $contract.TargetName; ResourceId = $contract.TargetResourceId
             MarkerHash = $contract.MarkerHash
-            MarkerHashVerification = [string](Get-SetupCmMarkerValue -InputObject $client -Name MarkerHashVerification)
+            MarkerHashVerification = $markerHashVerification
+            MarkerLastWriteTime = [string](Get-SetupCmMarkerValue -InputObject $client -Name MarkerLastWriteTime)
             InstallState = 'Installed'; EvaluationState = 1; ResolvedState = 'Installed'; ExitCode = 0
             ExecutionContext = 'System'; SelectedDistributionPoint = $contract.SiteServerFqdn
             ContentDownload = 'Verified'; StateMessages = @(Get-SetupCmMarkerValue -InputObject $client -Name StateMessages)
@@ -744,6 +752,62 @@ function Get-SetupCmMarkerXmlValue {
     [string]$node.InnerText
 }
 
+function Get-SetupCmMarkerDirectClientFileState {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$Contract,
+        [scriptblock]$PathProvider = {
+            param($Path)
+            Test-Path -LiteralPath $Path -PathType Leaf -ErrorAction Stop
+        },
+        [scriptblock]$HashProvider = {
+            param($Path)
+            (Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop).Hash
+        },
+        [scriptblock]$ItemProvider = {
+            param($Path)
+            Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+        }
+    )
+
+    $result = [ordered]@{
+        MarkerHash = ''
+        MarkerHashVerification = 'ProbeUnavailable'
+        MarkerLastWriteTime = ''
+    }
+    try {
+        $targetFqdn = [string](Get-SetupCmMarkerValue -InputObject $Contract -Name TargetFqdn)
+        $markerPath = [string](Get-SetupCmMarkerValue -InputObject $Contract -Name MarkerPath)
+        if ([string]::IsNullOrWhiteSpace($targetFqdn) -or $markerPath -notmatch '^[Cc]:\\') {
+            return [pscustomobject]$result
+        }
+        $relativePath = $markerPath.Substring(3)
+        $clientPath = '\\{0}\C$\{1}' -f $targetFqdn, $relativePath
+        if (-not [bool](& $PathProvider $clientPath)) {
+            $result.MarkerHashVerification = 'Missing'
+            return [pscustomobject]$result
+        }
+
+        $hash = [string](& $HashProvider $clientPath)
+        if ($hash -notmatch '^[0-9a-fA-F]{64}$') {
+            throw 'The direct client marker hash is invalid.'
+        }
+        $item = & $ItemProvider $clientPath
+        $lastWriteTime = Get-SetupCmMarkerValue -InputObject $item -Name LastWriteTimeUtc
+        $result.MarkerHash = $hash.ToUpperInvariant()
+        $result.MarkerHashVerification = 'DirectAuthenticatedFileRead'
+        if ($null -ne $lastWriteTime) {
+            $result.MarkerLastWriteTime = ([datetime]$lastWriteTime).ToUniversalTime().ToString('o')
+        }
+    }
+    catch {
+        $result.MarkerHash = ''
+        $result.MarkerHashVerification = 'ProbeUnavailable'
+        $result.MarkerLastWriteTime = ''
+    }
+    [pscustomobject]$result
+}
+
 function Get-SetupCmMarkerProviderInventory {
     [CmdletBinding()]
     param(
@@ -883,10 +947,16 @@ function Get-SetupCmMarkerProviderInventory {
             [int](Get-SetupCmMarkerValue -InputObject $_ -Name InstalledState) -eq 2
         } | Select-Object -First 1)
         $distributionAccepted = @($distribution | Where-Object State -eq Success).Count -eq 1
+        $directClientMarker = if ($acceptedServerRow.Count -eq 1) {
+            Get-SetupCmMarkerDirectClientFileState -Contract $Contract
+        }
+        else { $null }
         $clientProjection = if ($acceptedServerRow.Count -eq 1) {
             @{
                 Name = $Contract.TargetName; ResourceId = $Contract.TargetResourceId
-                MarkerHash = $Contract.MarkerHash; MarkerHashVerification = 'ExactDetectorAndServerState'
+                MarkerHash = [string]$directClientMarker.MarkerHash
+                MarkerHashVerification = [string]$directClientMarker.MarkerHashVerification
+                MarkerLastWriteTime = [string]$directClientMarker.MarkerLastWriteTime
                 InstallState = 'Installed'; EvaluationState = 1; ResolvedState = 'Installed'; ExitCode = 0
                 ExecutionContext = 'System'
                 SelectedDistributionPoint = if ($distributionAccepted) { $Contract.SiteServerFqdn } else { '' }
@@ -1082,11 +1152,10 @@ function Get-SetupCmMarkerDefaultProviders {
                         [string]$collection.CollectionID } |
                     Select-Object -First 1
                 if ($null -eq $assignment) { throw 'The bounded marker assignment was not found for update.' }
-                Set-CMApplicationDeployment -InputObject $assignment -UserNotification DisplayAll | Out-Null
                 if (-not [bool]$assignment.Enabled) {
-                    Start-CMApplicationDeployment -ApplicationName $Contract.ApplicationName `
-                        -CollectionName $Contract.CollectionName | Out-Null
+                    throw 'The bounded marker assignment is disabled and requires explicit operator reconciliation.'
                 }
+                Set-CMApplicationDeployment -InputObject $assignment -UserNotification DisplayAll | Out-Null
             }
         }
         RequestClientPolicy = {

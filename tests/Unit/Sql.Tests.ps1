@@ -179,6 +179,25 @@ Describe 'Get-SetupCmSqlDesiredState' {
             @($state.Components | Where-Object State -ne 'Compliant') | Should -HaveCount 0
         }
 
+        It 'fails closed when explicit SQL sysadmin configuration is missing or empty' -ForEach @(
+            @{ Variant = 'missing'; Accounts = $null }
+            @{ Variant = 'empty'; Accounts = @() }
+        ) {
+            $config = New-TestSqlConfig
+            if ($Variant -eq 'missing') {
+                $config.sql.Remove('sysAdminAccounts')
+            }
+            else {
+                $config.sql.sysAdminAccounts = $Accounts
+            }
+
+            $state = Get-SetupCmSqlDesiredState -Config $config -Providers (New-CompliantSqlProviders)
+
+            $state.State | Should -Be 'Conflict'
+            ($state.Components | Where-Object Name -eq 'SqlSysAdmins').Reason |
+                Should -Be 'MissingSysAdminAccounts'
+        }
+
         It 'fails closed on a target host mismatch' {
             $providers = New-CompliantSqlProviders
             $providers.Host = { @{ Fqdn = 'OTHER-CM01.test.gell.one' } }
