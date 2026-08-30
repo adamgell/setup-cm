@@ -2,7 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
-> **Status (2026-08-02):** Tasks 1–4 are complete and committed on this branch. Tasks 3 and 4 were already implemented upstream in ProxmoxVEAutopilot `origin/main`; this branch contains the server-side Setup-CM work only. Task 5 needs revision before execution.
+> **Status (2026-08-30):** Complete. Tasks 1–4 were integrated, and Task 5
+> was accepted live through the typed Agent path on `RING0IVY24-01`. See the
+> [Phase 0 acceptance record](../../PHASE0-2026-08-29-LAB-INVENTORY.md#fresh-typed-client-acceptance).
 
 **Goal:** Install and verify the Configuration Manager client on `RING0IVY24-01` through a signed, typed Autopilot Agent work item.
 
@@ -303,83 +305,33 @@ git -C ../ProxmoxVEAutopilot add autopilot-proxmox/web/setup_cm_endpoints.py \
 git -C ../ProxmoxVEAutopilot commit -m "feat: queue typed MECM client install"
 ```
 
-## Task 5: Verify, deploy, and prove the live client path
+## Task 5: Verify, deploy, and prove the live client path — complete
 
-**Files:**
+**Accepted evidence:** [Phase 0 — Fresh typed client acceptance](../../PHASE0-2026-08-29-LAB-INVENTORY.md#fresh-typed-client-acceptance)
 
-- Modify only if tests require it: `docs/RUNBOOK.md`
-- Evidence only: `C:\ProgramData\SetupCm\artifacts\` on CM01 and the Agent
-  work root on `RING0IVY24-01`.
+- [x] **Step 1: Run repository and neighboring contract quality gates.**
+  Setup-CM Pester, Autopilot Agent contract tests, and the controller's focused
+  queue tests passed before deployment.
+- [x] **Step 2: Review the bounded client path.** Findings were validated
+  against the typed request and secret-handling contracts; affected tests were
+  rerun after accepted corrections.
+- [x] **Step 3: Confirm the deployed signed Agent supports typed client work.**
+  The controller reported release `2026.08.48`; both accepted Windows targets
+  reported Agent `2026.8.48.0`.
+- [x] **Step 4: Verify the exact target before queueing.**
+  `agent-ring0ivy24-01` resolved to VM 135 and
+  `RING0IVY24-01.test.gell.one`.
+- [x] **Step 5: Queue and verify typed client installation.**
+  Work item `c6098efd-7455-4b54-82be-c9e1e0668b62` was claimed and completed
+  without error. Client run `20260830-025010-500e3d96` reported
+  `Already compliant.`, site `LAB`, the expected MP, and running
+  `CcmExec`.
+- [x] **Step 6: Independently verify server acceptance and document it.**
+  ConfigMgr provider and `CM_LAB` SQL inventory agreed on active,
+  non-obsolete resource `16777219`. Health run
+  `20260830-025138-89eba1b2` passed SQL, MP, DP, client, and registration.
 
-**Interfaces:**
-
-- Consumes: tested commits from Tasks 1-4 and signed Agent MSI release
-  `2026.8.3`.
-- Produces: an updated client Agent heartbeat, a completed typed work item,
-  client-side evidence, and a server-side discovered client record.
-
-- [ ] **Step 1: Run repository quality gates before deployment**
-
-Run:
-
-```bash
-pwsh -NoProfile -Command "Invoke-Pester ./tests/Unit -Output Detailed"
-dotnet run --project ../ProxmoxVEAutopilot/autopilot-agent/tests/AutopilotAgent.ContractTests/AutopilotAgent.ContractTests.csproj
-pytest -q ../ProxmoxVEAutopilot/autopilot-proxmox/tests/test_agent_v1_endpoints.py -k "client_install or setup_cm_queue"
-```
-
-Expected: all selected Pester, contract, and pytest tests pass.
-
-- [ ] **Step 2: Request and apply CodeRabbit review findings safely**
-
-Run CodeRabbit against the committed diffs. For each finding, verify it
-against the typed request and secret-handling contracts before changing code;
-rerun the affected test after every accepted correction.
-
-- [ ] **Step 3: Confirm the deployed Agent supports the client work kind**
-
-Agent version `2026.8.3` was the planned target, but ProxmoxVEAutopilot
-`origin/main` already released VERSION `2026.08.16` with the client work kind.
-There is probably nothing to build. Verify the released MSI contains
-`setup_cm_client_install`, or use the current release version in the next step.
-The signed MSI build requires a Windows host; WiX cannot build MSIs on macOS.
-
-- [ ] **Step 4: Verify the target Agent self-update before queueing work**
-
-Wait for `agent-ring0ivy24-01` heartbeat telemetry to report the current
-Agent version and capability `setup_cm_client_install`. Do not target the
-stale `2026.8.3` version. If the heartbeat does not update, use the existing
-per-agent update/restart workflow; do not use WinRM or an arbitrary remote
-script.
-
-- [ ] **Step 5: Queue and verify the client install**
-
-Compute the archive hash immediately before queueing and use that exact value
-in the typed endpoint request:
-
-```powershell
-$archive = '\\LABZ1-DC02\SetupCm\Modules\setup-cm.zip'
-$archiveHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
-```
-
-Send `site_code=LAB`,
-`management_point_fqdn=LABZ1-CM01.test.gell.one`,
-`evidence_root=C:\ProgramData\SetupCm\artifacts`, `module_archive_path=$archive`,
-and `module_archive_sha256=$archiveHash` to the controller endpoint for
-`agent-ring0ivy24-01`. Refuse to queue if the value differs from the hash
-recorded for the deployment archive.
-
-Verify the completed work has no error; require `CcmExec` running, site `LAB`,
-the explicit MP, sanitized local logs, a CM01 discovery record for
-`RING0IVY24-01`, and a final server Health-stage artifact with every check
-true.
-
-- [ ] **Step 6: Commit operator documentation, if changed**
-
-```bash
-git add docs/RUNBOOK.md
-git commit -m "docs: add Agent MECM client verification runbook"
-```
-
-Skip this commit only when the existing runbook already documents every live
-command and evidence location used above.
+No VM reset, guest reinstall, authentication weakening, arbitrary remote
+script, direct database insertion, or raw-log capture was used. The Phase 0
+record is authoritative for the exact source archive, hashes, work timestamps,
+and safe restart boundary.

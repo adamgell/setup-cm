@@ -2,6 +2,14 @@
 
 Use this runbook only after a provisioning layer has created an isolated, domain-joined Windows Server and a separate test client. Read the [project overview](../README.md) and [configuration reference](CONFIGURATION.md) first.
 
+> [!IMPORTANT]
+> The accepted LabZ1 baseline is already installed. Until the
+> [hands-off rerun v1 plan](superpowers/plans/2026-08-30-hands-off-rerun-v1.md)
+> replaces the hardcoded `Acquire` and `Mecm` compliance tests, do not run the
+> complete workflow against it solely to refresh evidence. Use the Phase 0
+> read-only `Health` restart procedure and independently verify the Phase 1
+> one-device marker deployment.
+
 ## Prepare the lab
 
 1. Install PowerShell 7 and the `powershell-yaml` module on the server:
@@ -71,7 +79,9 @@ For a failed stage:
      -Stage Sql,Mecm,Health
    ```
 
-4. Reset the VM through the provisioning layer when the installation is ambiguous or cannot be safely resumed. Do not assume a partial MECM installation is recoverable.
+4. If the installation is ambiguous or would require a VM reset/reinstall,
+   stop and hand the exact evidence to the provisioning owner. VM lifecycle is
+   outside setup-cm and is not an automatic recovery action.
 
 ## Validate and extend
 

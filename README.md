@@ -1,7 +1,10 @@
 # setup-cm
 
-> **Work in Progress**
-> This repository and its documentation are under active development. Features, commands, and procedures may change. Verify against the latest source before relying on specific behavior.
+> **Current status — accepted lab, v1 rerun work in progress**
+> The LabZ1 SQL/MECM/client baseline and its one-device required marker
+> deployment are accepted. The core full-run idempotency and v1 release gates
+> are not complete yet. Use the accepted restart records below rather than
+> replaying all bootstrap stages solely to generate newer timestamps.
 
 `setup-cm` automates a repeatable, evidence-backed Microsoft Configuration Manager (MECM, formerly SCCM) primary-site deployment for an **isolated lab**.
 
@@ -10,12 +13,30 @@ It installs and validates a single Windows Server that hosts SQL Server, a MECM 
 > [!WARNING]
 > This repository is for lab automation, not production MECM deployment. Do not use its default topology, example configuration, or unattended workflow against production infrastructure.
 
+## Current LabZ1 acceptance
+
+The current reference lab is `LABZ1-CM01.test.gell.one`, site `LAB`, database
+`CM_LAB`, with `RING0IVY24-01.test.gell.one` as the only accepted client. The
+older planned `LABZ1-CMCLIENT01` identity is obsolete for current acceptance.
+
+- [Phase 0 Lab inventory and baseline acceptance](docs/PHASE0-2026-08-29-LAB-INVENTORY.md)
+  is the authoritative server/client restart record.
+- [Phase 1 marker acceptance](docs/PHASE1-2026-08-29-MARKER-DEPLOYMENT.md)
+  proves the required marker is compliant exclusively on `RING0IVY24-01`.
+- [LabZ1 deployment target](docs/LABZ1_DEPLOYMENT.md) summarizes the current
+  inventory, safe restart point, and remaining v1 work.
+
+Until the hands-off rerun plan is complete, use current read-only Health and
+provider/client checks. `Acquire` and `Mecm` on the accepted source still have
+hardcoded noncompliant tests and can reprocess media.
+
 ## Why this exists
 
 A working MECM lab depends on licensed media, exact prerequisite versions, Windows and SQL configuration, and a sequence of setup steps that are difficult to reproduce or diagnose from a script transcript alone. `setup-cm` makes that process explicit:
 
 - one reviewed YAML configuration declares the target and approved media;
-- each stage tests, applies, and verifies a specific desired state;
+- the stage engine supports testing, applying, and independently verifying a
+  specific desired state;
 - every run preserves structured evidence for successful and failed stages;
 - source media, secrets, certificates, and product keys stay outside Git.
 
@@ -86,7 +107,7 @@ See the [runbook](docs/RUNBOOK.md) before operating the workflow.
 | `Mecm` | Installs MECM prerequisites, ADK, Windows PE, ODBC Driver 18, and the primary site. |
 | `Health` | Checks core SQL and MECM health, site roles, boundaries, test-client state, and expected logs. |
 
-Each selected stage records a JSON result named `stage-<stage>.json` in a unique run directory beneath `evidenceRoot`. The result records the stage name, state (`Succeeded`, `Skipped`, or `Failed`), timestamps, and a message. Preserve that directory when investigating or resuming a failed run.
+Each selected stage records a JSON result named `stage-<stage>.json` in a unique run directory beneath `evidenceRoot`. The result records the stage name, state (`Succeeded`, `Skipped`, or `Failed`), timestamps, and a message. Preserve that directory when investigating or resuming a failed run. The accepted LabZ1 restart procedure currently selects `Health` only; full no-op rerun acceptance is the remaining v1 milestone.
 
 ## Documentation
 

@@ -4,7 +4,11 @@
 
 ## 1. Desired-state stages, not scripts
 
-Each stage is a `Test` / `Apply` / `Verify` triplet. The stage engine only runs `Apply` when `Test` reports `NotCompliant`, and only runs `Verify` after `Apply` succeeds. This makes stages idempotent and safe to rerun.
+Each stage is a `Test` / `Apply` / `Verify` triplet. The stage engine only runs
+`Apply` when `Test` reports `NotCompliant`, and only runs `Verify` after Apply
+succeeds. That engine contract makes a stage idempotent only when its Test is a
+real state probe. The accepted source has not yet met that standard for
+Acquire and MECM; see [Current LabZ1 Status](../operations/current-status.md).
 
 ## 2. Evidence is a first-class output
 

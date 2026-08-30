@@ -1,6 +1,10 @@
 # Overview & Quick Start
 
-`setup-cm` treats a lab MECM deployment as a sequence of small, verifiable stages. Each stage tests whether it is already compliant, applies only the required work, and verifies the result. Every run produces structured evidence.
+`setup-cm` treats a lab MECM deployment as a sequence of small, verifiable
+stages. The stage engine supports Test, Apply, Verify, and structured evidence.
+The accepted LabZ1 environment must currently use the
+[read-only restart procedure](../operations/current-status.md): real no-op
+probes for Acquire and MECM are the remaining v1 work.
 
 ## Architecture at a glance
 
@@ -15,6 +19,9 @@ ProxmoxVEAutopilot / Autopilot Agent
 `setup-cm` owns Windows-side MECM configuration and validation. Virtual-machine lifecycle, operating-system deployment, networking, storage, and domain joining belong to the provisioning layer (for example, ProxmoxVEAutopilot).
 
 ## Quick start
+
+These steps describe a new isolated lab. They are not the restart procedure for
+the already accepted LabZ1 site.
 
 1. Copy `config/lab.example.yaml` to `config/lab.local.yaml`. The local file is ignored by Git.
 2. Replace every placeholder with your isolated-lab details, approved source location, SHA-256 checksum, version, and license acknowledgement. See the [Configuration Reference](../configuration/reference.md).

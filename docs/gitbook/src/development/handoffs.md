@@ -6,7 +6,7 @@ Handoff documents record the state of multi-session work, especially when it spa
 
 | Document | Date | Branch | Status |
 | --- | --- | --- | --- |
-| [HANDOFF-2026-08-02-agent-mecm-client-install.md](../development/handoffs.md#handoff-2026-08-02-agent-mecm-client-install) | 2026-08-02 | `codex/mecm-vc-redist` | Tasks 1–4 complete; Task 5 pending |
+| [HANDOFF-2026-08-02-agent-mecm-client-install.md](../development/handoffs.md#handoff-2026-08-02-agent-mecm-client-install) | 2026-08-02 | `codex/mecm-vc-redist` | Superseded; Task 5 accepted 2026-08-30 |
 
 ---
 
@@ -15,9 +15,12 @@ Handoff documents record the state of multi-session work, especially when it spa
 **Branch:** `codex/mecm-vc-redist`
 **Worktree:** `.worktrees/codex-mecm-vc-redist`
 
-### State
+### Current resolution
 
-Tasks 1–4 of the plan are complete. Task 5 (deploy and prove the live client path) has not been started and needs revision before it can be followed.
+This handoff is preserved historical context and must not be used as the
+current restart procedure. Task 5 completed through the signed typed Agent path
+on `RING0IVY24-01`; the Phase 0 record contains the accepted work item, client
+evidence, provider/SQL registration, and fresh Health proof.
 
 | Task | Where | Status |
 | --- | --- | --- |
@@ -25,7 +28,7 @@ Tasks 1–4 of the plan are complete. Task 5 (deploy and prove the live client p
 | 2. Server-side registration health gate | `codex/mecm-vc-redist` | Done, committed |
 | 3. Typed Autopilot Agent client work | ProxmoxVEAutopilot `origin/main` | Done upstream |
 | 4. Controller queue endpoint | ProxmoxVEAutopilot `origin/main` | Done upstream |
-| 5. Verify, deploy, prove live path | — | Not started; see *Task 5 needs revision* |
+| 5. Verify, deploy, prove live path | Accepted LabZ1 | Done; see Phase 0 evidence |
 
 ### Key commits on `codex/mecm-vc-redist`
 
@@ -41,4 +44,6 @@ aecd918 fix: preserve empty client evidence logs
 dd071e5 fix: wait for MECM client location readiness
 ```
 
-See `docs/HANDOFF-2026-08-02-agent-mecm-client-install.md` in the repository for the full handoff, including the Task 5 revision notes and upstream deviation table.
+See `docs/HANDOFF-2026-08-02-agent-mecm-client-install.md` in the repository for
+the full preserved handoff and its prominent superseded notice. Use
+`docs/PHASE0-2026-08-29-LAB-INVENTORY.md` for current accepted state.

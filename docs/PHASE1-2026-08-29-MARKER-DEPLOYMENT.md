@@ -12,6 +12,11 @@ credentials, tokens, private URLs, raw log bodies, or generated client policy.
 All live checks were performed over SSH and bounded Configuration Manager
 provider queries; no VNC or visual acceptance was used.
 
+This record proves the bounded marker result, not whole-workflow idempotence.
+Until the hands-off rerun v1 plan is accepted, use it with the
+[Phase 0 safe restart point](PHASE0-2026-08-29-LAB-INVENTORY.md#safe-restart-point)
+and do not rerun bootstrap stages merely to refresh timestamps.
+
 ## Accepted scope and safety boundary
 
 - Application: `Setup-CM Phase 1 Marker`

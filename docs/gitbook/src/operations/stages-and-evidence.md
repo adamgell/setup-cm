@@ -1,10 +1,17 @@
 # Stages & Evidence
 
-`setup-cm` executes four stages in order. Each stage is idempotent: it tests whether it is already compliant, applies only the required work, and verifies the result.
+`setup-cm` executes four core stages in order. The stage engine supports an
+idempotent lifecycle, but the currently accepted source still hardcodes
+`Acquire` and `Mecm` as noncompliant. Do not describe a complete LabZ1 replay
+as a no-op until the 2026-08-30 v1 rerun plan is accepted.
+
+Health is read-only and the accepted client stage already skips exact
+compliance. Use [Current LabZ1 Status](./current-status.md) for the safe restart
+boundary.
 
 ## Stage lifecycle
 
-Every stage follows the same pattern:
+The intended contract for every stage is:
 
 1. **Test** — check whether the desired state already exists.
 2. **Apply** — perform the work only if the test reports `NotCompliant`.

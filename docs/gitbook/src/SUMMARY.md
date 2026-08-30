@@ -15,6 +15,7 @@
 
 # Operations
 
+- [Current LabZ1 Status](./operations/current-status.md)
 - [Operator Runbook](./operations/runbook.md)
 - [Stages & Evidence](./operations/stages-and-evidence.md)
 - [Recovery & Resume](./operations/recovery.md)

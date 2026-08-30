@@ -11,6 +11,10 @@ This is the authoritative restart and acceptance record for the LabZ1
 `setup-cm` baseline. It contains no credentials, tokens, private URLs, raw log
 bodies, or generated configuration content.
 
+The follow-on [Phase 1 marker record](PHASE1-2026-08-29-MARKER-DEPLOYMENT.md)
+is also accepted. It adds one required, lab-only application deployment without
+changing this baseline identity.
+
 ## Accepted scope
 
 The accepted target is one isolated single-box MECM lab:
@@ -95,7 +99,9 @@ stages. A whole-run replay would reprocess installation media instead of acting
 as a read-only acceptance check. Final acceptance therefore uses the retained
 successful bootstrap artifacts, a current exact-head preflight, independent
 live inventory, and a fresh exact-head Health stage. Do not rerun the entire
-bootstrap solely to generate newer timestamps.
+bootstrap solely to generate newer timestamps. This limitation is the explicit
+restart point for the 2026-08-30 hands-off rerun v1 plan, not an unfinished
+part of the accepted Phase 0 deployment.
 
 ## Fresh typed client acceptance
 
@@ -135,6 +141,9 @@ The client wrote fresh sanitized evidence under run
 - `EventLastUsedMP`: `labz1-cm01.test.gell.one`
 - sanitized evidence includes `ccmsetup.log` and
   `ClientIDManagerStartup.log`; raw log bodies were not copied into this record.
+
+This completed typed client-install implementation-plan Task 5. Any older plan
+or handoff statement that says Task 5 is pending is superseded by this evidence.
 
 ## Final server acceptance
 
@@ -187,12 +196,14 @@ a later validation session:
 
 1. Confirm the five Proxmox resources above are running on their owner node.
 2. Confirm `/healthz` and the two Agent check-ins are current.
-3. Use SSH for deterministic checks and `pve-vnc open labz1-cm01` or
-   `pve-vnc open ring0ivy24-01` for visible console acceptance.
+3. Use SSH, provider queries, SQL inventory, and bounded client/controller state
+   for deterministic checks; no visual-console acceptance is required.
 4. Rerun only the current exact-head `Health` stage unless there is concrete
    evidence that a bootstrap component is missing.
 5. Treat co-management, third-party patching, reporting, and production
    topology as separate future phases.
+6. Confirm the [Phase 1 marker acceptance](PHASE1-2026-08-29-MARKER-DEPLOYMENT.md)
+   remains exclusive to `RING0IVY24-01`.
 
 Any earlier local Agent MECM client handoff draft is historical context only.
 Its branch, version, and Task 5 status are stale and are superseded by this
