@@ -634,7 +634,7 @@ git commit -m "feat: converge marker client evidence"
 - Produces: executable operator/recovery contract, read-only pre-mutation live
   probe, and a fail-on-mutation exact-state provider test.
 
-- [ ] **Step 1: Extend provider integration assertions before live mutation**
+- [x] **Step 1: Extend provider integration assertions before live mutation**
 
 Require `EvidenceChannel`, `Client`, and `ServerCompliance` components. In
 pre-migration mode assert the only noncompliant components are
@@ -665,7 +665,7 @@ Also run all PowerShell parse checks, PSScriptAnalyzer error-only gate,
 `actionlint`, `git diff --check`, and the repository secret/private-path scan
 used for the existing PR.
 
-- [ ] **Step 3: Run Windows tests from an exact Git archive**
+- [x] **Step 3: Run Windows tests from an exact Git archive**
 
 Create a `git archive` of `git rev-parse HEAD`, verify its SHA-256 and embedded
 commit on CM01, and run:
@@ -680,7 +680,7 @@ Run the detector publication subset on `RING0IVY24-01`. Run the provider suite
 on CM01 first in pre-migration/read-only mode. No provider mutation is allowed
 in this step.
 
-- [ ] **Step 4: Document exact channel, freshness, recovery, and second-run semantics**
+- [x] **Step 4: Document exact channel, freshness, recovery, and second-run semantics**
 
 Document the fixed share/ACL, strict schema, successful proof routes,
 30-minute freshness, policy-only predecessor migration, 15-minute convergence,
@@ -689,7 +689,7 @@ between the immediate zero-action second acceptance run and a later bounded
 evidence refresh. Mark the design status `Approved and implemented` only after
 tests pass.
 
-- [ ] **Step 5: Rerun documentation/full gates and commit**
+- [x] **Step 5: Rerun documentation/full gates and commit**
 
 ```bash
 git add README.md docs/CONFIGURATION.md docs/RUNBOOK.md \

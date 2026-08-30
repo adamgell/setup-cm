@@ -180,6 +180,27 @@ the corrected detector found an already-installed marker, per Microsoft's
 [Configuration Manager state-message reference](https://learn.microsoft.com/en-us/intune/configmgr/core/plan-design/hierarchy/state-messages);
 the original install reported enforcement state `1000`.
 
+## v1 authenticated evidence upgrade
+
+The release-candidate source now implements the authenticated direct-client
+proof required for the v1 rerun. It pins this accepted detector as the only
+approved predecessor and permits a policy-only in-place update to the new
+detector. The new detector keeps the exact marker hash as its installed signal
+and, after a match, publishes a strict six-field record to CM01's one-client
+hidden evidence share. No content file, package, distribution, collection,
+membership, or assignment update is part of that migration.
+
+Before live mutation, exact-archive acceptance at implementation commit
+`2d61457d918a49a6ef141da8684e4afed84c3ecf` passed 11 CM01 Windows tests with
+five client-only cases skipped, all 10 detector/publication cases on
+`RING0IVY24-01`, and the isolated read-only provider pre-migration test. The
+provider reported only `EvidenceChannel/Missing`,
+`DeploymentType/ApprovedDetectorUpgrade`, and
+`Client/ClientEvidencePending` as noncompliant. The live channel and detector
+migration, post-migration provider proof, and immediate zero-action second run
+remain pending; this section does not replace the historical Phase 1 acceptance
+above.
+
 ## Operational notes
 
 - Configuration Manager console module `5.2509.1036.1200` under PowerShell 7

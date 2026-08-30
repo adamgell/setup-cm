@@ -41,9 +41,15 @@ remain unchanged and are not marker targets or v1 acceptance clients.
 3. Typed client-install implementation-plan Task 5 is complete. The preserved
    [2026-08-02 handoff](HANDOFF-2026-08-02-agent-mecm-client-install.md) is
    superseded historical context.
-4. Acquire, SQL, MECM, Marker, and Health now use real desired-state probes;
-   the marker provider integration sees exact live state and proves its
-   mutation adapters remain unused on a compliant deployment.
+4. Acquire, SQL, MECM, Marker, and Health now use real desired-state probes.
+   The authenticated marker-evidence implementation is complete in source.
+5. At implementation commit `2d61457d918a49a6ef141da8684e4afed84c3ecf`, an
+   exact Git archive passed 11 CM01 Windows tests with five target-only tests
+   skipped, all 10 detector/publication tests on `RING0IVY24-01`, and the
+   read-only provider pre-migration test. That provider probe found exactly
+   three expected repairable states: missing evidence channel, approved
+   predecessor detector, and pending client evidence. It performed no
+   mutation.
 
 ## Safe restart point
 
@@ -54,7 +60,9 @@ remain unchanged and are not marker targets or v1 acceptance clients.
 3. Use SSH, ConfigMgr provider queries, SQL inventory, and client state for
    deterministic validation; visual console acceptance is not required.
 4. On the accepted source, run only the read-only `Health` stage unless a
-   specific missing component has been proven.
+   specific missing component has been proven. Run SQL/provider acceptance as
+   the authorized domain operator; CM01's local Administrator is not the
+   accepted SQL/SMS provider identity.
 5. Verify the Phase 1 collection still has exactly one direct member and the
    marker assignment targets no other collection.
 

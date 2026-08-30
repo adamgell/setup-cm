@@ -36,10 +36,19 @@ timestamps. The release-candidate Acquire, SQL, MECM, Marker, and Health probes
 must pass review and then be run twice from one exact source commit before the
 full workflow becomes the accepted restart path.
 
-The release-candidate marker provider gate has already found the exact
-one-device deployment and proved its reconciliation adapters remain unused on
-that exact state. That development gate does not replace the final two complete
-workflow runs and direct client corroboration.
+The authenticated marker-evidence implementation is complete in source. At
+implementation commit `2d61457d918a49a6ef141da8684e4afed84c3ecf`, an exact
+Git archive passed 11 CM01 Windows tests with five target-only tests skipped,
+all 10 detector/publication tests on `RING0IVY24-01`, and the isolated read-only
+provider pre-migration test. That provider gate reported only the expected
+`EvidenceChannel/Missing`, `DeploymentType/ApprovedDetectorUpgrade`, and
+`Client/ClientEvidencePending` states and invoked no mutation adapter.
+
+The live channel creation, approved detector migration, post-migration
+zero-action provider gate, and two complete workflow runs are still pending.
+Run CM01 SQL/provider acceptance as the authorized domain operator; the local
+Administrator identity is not the accepted secured SQL/SMS provider context.
+These development gates do not replace the final two-run evidence.
 
 Production, co-management, Patch My PC, reporting expansion, distributed
 roles, extra clients, tenant integrations, and client-wide security-policy

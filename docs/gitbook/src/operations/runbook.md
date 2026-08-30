@@ -297,6 +297,69 @@ pwsh ./scripts/Invoke-SetupCmMarkerAcceptance.ps1 `
   -SourceCommit $env:SETUPCM_SOURCE_COMMIT
 ```
 
+## Operate the authenticated marker evidence channel
+
+Run live SQL, SMS provider, and Marker acceptance from CM01 as the authorized
+domain operator in an elevated PowerShell session. A successful SSH connection
+as CM01's local Administrator is not an equivalent acceptance context because
+that identity may not have site-database or secured-provider access.
+
+The Marker channel is fixed in code:
+
+| Item | Exact contract |
+| --- | --- |
+| Hidden share | `SetupCmMarkerEvidence$` on `LABZ1-CM01.test.gell.one` |
+| Local target | `C:\ProgramData\SetupCm\MarkerEvidence\RING0IVY24-01` |
+| Final file | `marker-evidence.json`, maximum 2,048 bytes |
+| Only client writer | `TEST\RING0IVY24-01$` |
+| Schema | Six exact fields, version `1`, ASCII-compatible JSON |
+| Freshness | 30 minutes, with at most two minutes of future clock tolerance |
+
+The provider first attempts an authenticated direct `C$` marker read. A
+successful read is authoritative. Only when that transport is unavailable does
+it accept the locally received, target-computer-owned evidence file through the
+`DirectAuthenticatedClientEvidence` route. Missing or stale otherwise valid
+evidence is repairable pending state. Malformed, foreign-owned, future-dated,
+wrong-identity, wrong-path, wrong-hash, or contradictory evidence is a conflict.
+
+On the accepted pre-migration LabZ1 state, the only permitted first-run actions
+are, in order:
+
+1. Create or safely complete the exact protected directory and hidden share.
+2. Replace only the exact approved predecessor detector through
+   `Set-CMScriptDeploymentType`; do not alter content or runtime properties.
+3. Request machine policy and application evaluation once.
+4. Poll read-only state every 15 seconds for up to 15 minutes.
+
+The request start time becomes the minimum acceptable CM01 receipt time.
+Conflict stops immediately. Timeout fails with the final component state and
+does not make a second mutation attempt. Detector-only migration must not copy
+content, redistribute the application, recreate objects, change membership, or
+replace the assignment.
+
+Run the identical five-stage command immediately afterward, while the first
+record is still fresh. That release-acceptance second run must call no mutation
+or side-effect adapter, including no policy/evaluation request, and all five
+stages must be `Skipped`. A later routine run after the 30-minute freshness
+window may make one bounded policy/evaluation request and wait for refreshed
+evidence; that later refresh is not the v1 zero-action second-run proof and must
+still cause no infrastructure or ConfigMgr object churn.
+
+For a read-only provider gate, use a fresh PowerShell process and select the
+state expected at that point:
+
+```powershell
+$env:SETUPCM_LAB_PROVIDER_INTEGRATION = '1'
+$env:SETUPCM_MARKER_PROVIDER_MODE = 'PreMigration' # or PostMigration
+Invoke-Pester ./tests/Integration/MarkerAcceptance.Provider.Tests.ps1 `
+  -Output Detailed -CI
+```
+
+`PreMigration` requires exactly the three repairable states listed above.
+`PostMigration` requires every component compliant and installs throwing
+adapters for every mutation and side effect, so any attempted action fails the
+test.
+
 ## Understand stage behavior
 
 | Probe result | Behavior |

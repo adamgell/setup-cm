@@ -72,7 +72,7 @@ marker acceptance, prove two consecutive runs, and publish v1.
 6. Productize marker acceptance — **complete**.
 7. Document and package the v1 workflow — **complete**.
 8. Complete branch CI and review — **in progress**.
-9. Run Windows/provider integration and two live runs — **pending**.
+9. Run Windows/provider integration and two live runs — **integration preflight complete; live runs pending**.
 10. Record acceptance, merge, tag, release, publish docs, and clean up safely — **pending**.
 
 See `docs/superpowers/plans/2026-08-30-hands-off-rerun-v1.md` for the complete

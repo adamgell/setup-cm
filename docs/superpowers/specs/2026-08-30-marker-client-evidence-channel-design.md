@@ -1,7 +1,7 @@
 # Authenticated Marker Client Evidence Channel Design
 
-**Status:** Architecture approved on 2026-08-30; written specification pending
-final review before implementation.
+**Status:** Approved and implemented in the reviewed source on 2026-08-30;
+live LabZ1 migration and two-run acceptance pending.
 
 ## Purpose
 
@@ -36,9 +36,12 @@ that:
 The former historical `8/8` result is not acceptance for the hardened
 implementation. It predated fail-closed commit `8a38acb` and used
 `ExactDetectorAndServerState`, which projected the configured hash instead of
-reading evidence created by the client. The current live result is therefore
-seven passing Windows/provider checks and one correctly failing marker client
-probe with reason `ClientProbeUnavailable`.
+reading evidence created by the client. The pre-implementation live result was
+therefore seven passing Windows/provider checks and one correctly failing
+marker client probe with reason `ClientProbeUnavailable`. The implemented
+source now passes the strict channel, detector-publication, and read-only
+pre-migration provider gates; applying the live migration remains a separate
+acceptance step.
 
 ## Fixed boundary
 
@@ -62,7 +65,7 @@ not become a generic evidence relay in v1.
 
 ## Decisions and non-goals
 
-The implementation will:
+The implementation does:
 
 - retain VBScript as the ConfigMgr detector;
 - retain the exact marker SHA-256 as the only installed-state signal;
@@ -75,7 +78,7 @@ The implementation will:
   when it is available; and
 - use the outbound evidence record as the normal LabZ1 proof path.
 
-The implementation will not:
+The implementation does not:
 
 - enable Windows file-sharing firewall rules on the client;
 - add a firewall rule owned by setup-cm on the client;

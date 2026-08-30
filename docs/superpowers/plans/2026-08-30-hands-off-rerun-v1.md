@@ -186,7 +186,7 @@ branch provider/cmdlets, CIM/WMI, Microsoft ODBC Driver 18 through
 
 ## Task 8: Review the implementation before live mutation
 
-- [ ] Push the branch and open one PR against `main`.
+- [x] Push the branch and open one PR against `main` (PR #5).
 - [ ] Require Pester CI and mdBook/local documentation gates to pass.
 - [ ] Review the complete diff for targeting, evidence leakage, installer skip
       logic, object duplication, and unsupported repair paths.
@@ -207,7 +207,11 @@ Complete that plan before continuing the remaining Task 9 gates.
 - [ ] Stage a `git archive` of the exact branch commit on CM01; verify byte hash
       and update only the ignored private configuration metadata required by
       the new source contract.
-- [ ] Run Windows-only detector/core-stage/provider integration tests.
+- [x] Run Windows-only detector/core-stage/provider integration tests from the
+      exact `2d61457d918a49a6ef141da8684e4afed84c3ecf` archive: 11 CM01 tests
+      passed with five target-only skips, all 10 target detector/publication
+      tests passed, and the isolated provider pre-migration test passed with no
+      mutation.
 - [ ] Run `Acquire,Sql,Mecm,Marker,Health` once. Permit only bounded missing-state
       repair; independently verify all resulting state and evidence.
 - [ ] Snapshot installer logs/process evidence and ConfigMgr object identities.

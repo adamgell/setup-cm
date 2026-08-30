@@ -32,6 +32,7 @@ Every private function has a corresponding `*.Tests.ps1` file in `tests/Unit/`. 
 | `Sql.Tests.ps1` | SQL component state, bounded repair, conflict and verification gates |
 | `Mecm.Tests.ps1` | Site/component state, bounded repair, media skip and conflict gates |
 | `MarkerAcceptance.Tests.ps1` | Fixed boundary, provider reconciliation, no-op behavior, evidence provenance |
+| `MarkerEvidenceChannel.Tests.ps1` | Strict six-field parser, SID/ACL/share state, proof precedence, freshness, and bounded convergence |
 | `MarkerApplication.Tests.ps1` | Exact payload/detector and safe uninstall behavior |
 | `Health.Tests.ps1` | Read-only SQL/MECM/MP/DP/client checks and fresh evidence |
 | `Client.Tests.ps1` | Manifest validation, install arguments, rerun logic, redaction |
@@ -46,10 +47,35 @@ The integration suite in `tests/Integration/` has three independent boundaries:
 | File | Gate |
 | --- | --- |
 | `CoreStages.Windows.Tests.ps1` | Real SQL, MECM, and read-only Health state on CM01, with installer/setup calls guarded. |
-| `MarkerDetection.Windows.Tests.ps1` | Exact VBScript detection for valid, tampered, path-confused, and missing markers. |
-| `MarkerAcceptance.Provider.Tests.ps1` | Exact one-device provider state plus throwing mutation adapters to prove reconciliation is a no-op. |
+| `MarkerDetection.Windows.Tests.ps1` | Exact VBScript detection plus strict target-only authenticated publication for valid, tampered, missing, transport-failure, and test-path cases. |
+| `MarkerEvidenceChannel.Windows.Tests.ps1` | Real Windows protected ACL construction, SID-normalized inventory, and bounded reads in temporary paths. |
+| `MarkerAcceptance.Provider.Tests.ps1` | Exact one-device provider state in explicit `PreMigration` or `PostMigration` mode, with every mutation/side-effect adapter replaced by a throw. |
 
 > **Note:** Integration tests require a completed single-box lab and are not run in CI.
+
+Run the CM01 Windows and provider suites as the authorized LabZ1 domain
+operator. Use a fresh PowerShell process for the provider suite so module-scope
+mocks from another Pester invocation cannot leak into it:
+
+```powershell
+$env:SETUPCM_LAB_INTEGRATION = '1'
+Invoke-Pester ./tests/Integration/CoreStages.Windows.Tests.ps1, `
+  ./tests/Integration/MarkerDetection.Windows.Tests.ps1, `
+  ./tests/Integration/MarkerEvidenceChannel.Windows.Tests.ps1 `
+  -Output Detailed -CI
+
+$env:SETUPCM_LAB_PROVIDER_INTEGRATION = '1'
+$env:SETUPCM_MARKER_PROVIDER_MODE = 'PreMigration' # or PostMigration
+Invoke-Pester ./tests/Integration/MarkerAcceptance.Provider.Tests.ps1 `
+  -Output Detailed -CI
+```
+
+Build the Windows test source with `git archive` from the exact reviewed commit,
+verify both the archive SHA-256 and embedded commit on CM01, and retain those
+values with the result. The target-only detector publication cases must run on
+`RING0IVY24-01` after asserting its exact computer name. If only Pester 3.4 is
+available there, use a temporary mechanically translated test copy; do not edit
+the tracked source or production detector, and record both exact source hashes.
 
 ## Quality gates
 

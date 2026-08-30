@@ -101,6 +101,23 @@ Conflicting same-name objects, broader membership, another assignment, or
 payload/detector drift fails closed; the command does not delete historical
 objects to resolve a conflict.
 
+The evidence channel is code-fixed and has no YAML override. It is the hidden
+share `SetupCmMarkerEvidence$` on
+`C:\ProgramData\SetupCm\MarkerEvidence\RING0IVY24-01`, exposed only to
+`TEST\RING0IVY24-01$` (`Change`) and `BUILTIN\Administrators` (`Full`). NTFS
+inheritance is disabled; Administrators and SYSTEM retain full control, while
+the target computer receives only the exact directory/file rights required to
+publish `marker-evidence.json`. Any broad, inherited, unknown, excessive, or
+wrong-path access is a conflict rather than a configuration value to relax.
+
+The published record is limited to 2,048 ASCII-compatible bytes and exactly six
+properties: `schemaVersion`, `computerName`, `markerPath`, `markerSha256`,
+`markerLength`, and `verificationMethod`. It has no client timestamp. CM01's
+file receipt time is authoritative, must not be more than two minutes in the
+future, and is fresh for 30 minutes. The successful verification routes are
+`DirectAuthenticatedFileRead` and `DirectAuthenticatedClientEvidence`; a
+ConfigMgr server projection alone is never direct marker proof.
+
 ## SQL and MECM settings
 
 Use Windows identities for `sql.sysAdminAccounts`; at least one is required. Confirm that `sql.installDirectory`, `mecm.smsInstallDir`, and `mecm.prerequisitePath` exist on adequately sized storage before starting.

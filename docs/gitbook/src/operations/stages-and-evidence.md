@@ -25,7 +25,7 @@ stops before mutation. Apply success is not acceptance: Verify must return
 | `Acquire` | Verifies every configured artifact's license, byte length, SHA-256, version, architecture, publisher, and cache identity. | Acquires only missing or invalid artifacts under the approved source policy. |
 | `Sql` | Verifies ODBC Driver 18, Windows prerequisites, instance and services, startup state, TCP/listener/firewall, strict-TLS query reachability, owned configuration, VC++ x64/x86, and conditional `CM_LAB` reachability. | Installs a missing ODBC provider before the first database probe, installs an absent instance, or repairs only owned missing components; conflicting instance identity fails closed. |
 | `Mecm` | Verifies site/provider/database/role identity, services, prerequisites, ADK/WinPE/ODBC/VC++, content library, MP/DP, and the active non-obsolete client. | Installs an absent site or repairs only owned missing prerequisites or roles; it shares the ODBC installer with SQL, and an exact site never opens media or reruns setup. |
-| `Marker` | Verifies the fixed LabZ1 boundary, source and detector hashes, application, deployment type, content, distribution, one-device direct collection, required assignment, and per-device compliance. | Reconciles only the fixed marker chain and requests policy/evaluation only when client or server compliance is missing. |
+| `Marker` | Verifies the fixed LabZ1 boundary, source and detector hashes, protected one-client evidence channel, authenticated direct marker proof, application, deployment type, content, distribution, one-device direct collection, required assignment, and per-device compliance. | Creates only a missing safe channel, performs only the approved predecessor detector update, and requests one bounded policy/evaluation cycle when direct evidence or current server state is pending. |
 | `Health` | Re-reads SQL, MECM, MP, DP, and active-client state. | None. |
 
 ## Marker safety contract
@@ -44,6 +44,15 @@ The collection must have exactly one direct rule and one member, both for the
 accepted resource. No marker assignment may target another collection.
 Same-name conflicts, unexpected rules or files, broader membership, another
 assignment, or hash drift are `Conflict`, not repair opportunities.
+
+The hidden `SetupCmMarkerEvidence$` share points directly to the exact target
+directory and grants client write access only to `TEST\RING0IVY24-01$`.
+Published evidence has six exact fields, no client timestamp, a 2,048-byte
+limit, a 30-minute CM01 receipt freshness window, and two-minute future clock
+tolerance. Authenticated direct `C$` bytes are authoritative when available;
+otherwise a valid target-computer-owned receipt is reported as
+`DirectAuthenticatedClientEvidence`. A ConfigMgr server projection is not a
+direct-proof route.
 
 ## Stage result files
 
@@ -74,13 +83,14 @@ Every selected stage writes `stage-<stage>.json`:
 | `acquisition.json` | Bounded identities and hashes for every artifact evaluated during Acquire Apply, distinguishing reused `Verified` entries from `AcquiredAndVerified` entries. |
 | `sql-state.json` | SQL component state and reasons. |
 | `mecm-state.json` | MECM component state and reasons. |
-| `marker-state.json` | Application/DT revisions, content/package/distribution, collection and membership, assignment/policy, projected client detection fields, per-device server compliance, evaluated time, and exact source commit. |
+| `marker-state.json` | Sanitized evidence-channel identity, direct-proof route, validated marker hash/length and receipt metadata, application/DT revisions, content/package/distribution, collection and membership, assignment/policy, per-device server compliance, evaluated time, and exact source commit. Raw ACL descriptors and policies are excluded. |
 | `health.json` | Fresh Boolean results for each read-only health check. |
 
 Marker provider state proves the exact detector and per-device compliance row.
 Release acceptance must independently corroborate the client's application
-revision, installed/evaluation state, marker bytes and SHA-256, and last-write
-time; a server projection is not a substitute for direct client evidence.
+revision and authenticated marker bytes. The successful routes are
+`DirectAuthenticatedFileRead` and `DirectAuthenticatedClientEvidence`; a
+server projection is not a substitute for either direct route.
 
 ## Sanitization boundary
 
@@ -100,3 +110,8 @@ A successful process exit is not sufficient. A genuine second-run no-op has:
   creation, policy repair, or content redistribution;
 - the same ConfigMgr identities and exact client marker hash;
 - all Health values `true`.
+
+This zero-action claim is for the immediate second acceptance run while the
+first record remains within its 30-minute freshness window. A later stale-proof
+run may request one bounded policy/evaluation cycle and wait for a new receipt,
+but it still must not reinstall, recreate, redistribute, or broaden scope.

@@ -10,6 +10,9 @@ A failed stage does not require a full restart. The stage engine and evidence fo
 | A stage fails because media is corrupt or the wrong version. | Replace the media in the cache or vault, update the configuration if necessary, then rerun. |
 | A stage reports `Conflict`. | Stop. Reconcile identity or scope outside the automated repair path; do not weaken the gate. |
 | Marker collection, member, resource, or assignment identity differs. | Stop before mutation and preserve provider/client evidence. Never broaden membership to continue. |
+| Marker evidence channel is entirely missing or a recognizable protected safe subset. | Rerun `Marker` from the same exact commit; it may create or complete only the fixed channel. |
+| Marker evidence is missing or stale but otherwise valid. | Permit one policy/evaluation request and the bounded convergence wait; do not reinstall or recreate objects. |
+| Marker share path, ACL, owner, identity, detector hash, or evidence record conflicts. | Stop and preserve the final record and component evidence. Never delete or weaken unknown state to continue. |
 | A stage fails partway through and the system state is ambiguous. | Stop, preserve evidence, and hand off to the provisioning owner. Do not reset or reinstall as a setup-cm recovery action. |
 | The `Health` stage fails after a successful `Mecm` stage. | Investigate the specific health check in the evidence, correct the issue, then rerun `Health` alone. |
 
@@ -50,6 +53,26 @@ A failed stage does not require a full restart. The stage engine and evidence fo
 - **Source pinning** — any Marker run rejects a missing or abbreviated commit.
 - **Conflict boundary** — unsupported topology, target, or same-name object
   state never enters Apply.
+
+## Marker evidence recovery
+
+Channel creation proceeds from restrictive local state outward and exposes the
+hidden share last. If it stops partway through, the protected directory is left
+in place. A later run may complete it only when all existing paths are exact,
+inheritance is disabled, and every existing ACE is an expected safe subset.
+The repair never removes an unknown trustee or retargets a same-name share.
+
+`ClientEvidencePending` caused by a missing or older-than-30-minute record is
+repairable. The run records its request start time, requests machine policy and
+application evaluation once, then probes every 15 seconds for up to 15 minutes.
+A conflict stops immediately. Timeout records the final state and does not make
+a second mutation attempt in the same run.
+
+Malformed, duplicate-field, oversized, foreign-owned, future-dated, wrong-path,
+wrong-hash, or wrong-identity evidence is preserved for diagnosis and is not
+deleted automatically. Do not recover by granting a broad principal, enabling
+client inbound SMB, weakening trust or execution policy, using VNC, recreating
+the marker chain, or expanding the target collection.
 
 ## VM reset boundary
 

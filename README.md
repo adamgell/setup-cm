@@ -32,6 +32,14 @@ provider/client checks on the accepted lab. The release-candidate workflow now
 tests exact Acquire, SQL, MECM, Marker, and Health state before applying and
 fails closed on unsupported or conflicting identity.
 
+The release-candidate Marker stage also has an implemented, fixed authenticated
+evidence channel: the exact client computer account publishes a strict
+six-field record to a one-client hidden share on CM01 after verifying the local
+marker hash. An authenticated `C$` read remains authoritative when available;
+otherwise the CM01 receipt provides the direct client proof. The implementation
+and exact Windows tests are complete, but the live share creation, approved
+detector upgrade, and two-run acceptance are still pending.
+
 ## Why this exists
 
 A working MECM lab depends on licensed media, exact prerequisite versions, Windows and SQL configuration, and a sequence of setup steps that are difficult to reproduce or diagnose from a script transcript alone. `setup-cm` makes that process explicit:
@@ -124,7 +132,7 @@ See the [runbook](docs/RUNBOOK.md) before operating the workflow.
 | `Acquire` | Obtains and verifies SQL Server and MECM installation media in the configured cache. |
 | `Sql` | Installs ODBC Driver 18, SQL Server prerequisites, SQL Server, and SQL network configuration. |
 | `Mecm` | Installs MECM prerequisites, ADK, Windows PE, and the primary site; it re-verifies ODBC Driver 18. |
-| `Marker` | Reconciles the fixed lab-only marker application and verifies its required one-device deployment. |
+| `Marker` | Reconciles the fixed lab-only marker application and its one-client authenticated evidence channel, then verifies the required one-device deployment. |
 | `Health` | Rechecks SQL, MECM, Management Point, Distribution Point, and active-client state without repair. |
 
 Every stage follows Test → bounded Apply when required → independent Verify →
