@@ -36,7 +36,7 @@ Describe 'Setup-CM marker acceptance desired state' {
                         Technology = 'Script'; Enabled = $true
                         ContentId = 'Content_test'; PackageId = 'LAB00008'
                         ContentLocation = '\\LABZ1-CM01.test.gell.one\C$\ProgramData\SetupCm\Phase1MarkerContent\'
-                        DetectorHash = 'DFDDD8489C137940A06A4DD18630B0618E0BE5868559366D056352A0A88505AC'
+                        DetectorHash = '4C09CA514339B9C08277189C61B2DC74908309F0268856A3A4FAFD0CBB41F83C'
                         DetectionLanguage = 'VBScript'
                         InstallCommand = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File Install-SetupCmPhase1Marker.ps1'
                         UninstallCommand = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File Uninstall-SetupCmPhase1Marker.ps1'
@@ -91,7 +91,7 @@ Describe 'Setup-CM marker acceptance desired state' {
                         @{ Name = 'Test-SetupCmPhase1Marker.ps1'; Length = 523; Hash = 'E6F5BA49569FBEB3571584627DB3AB1B1BA940B4FE5146FB61595BF31A144FD7' }
                         @{ Name = 'Uninstall-SetupCmPhase1Marker.ps1'; Length = 572; Hash = '843D94C3DE2E29DAFD5EE82FADD344722FF5670BDB2F755B84277B12215E08AA' }
                     )
-                    Detector = @{ Name = 'Test-SetupCmPhase1Marker.vbs'; Length = 1310; Hash = 'DFDDD8489C137940A06A4DD18630B0618E0BE5868559366D056352A0A88505AC' }
+                    Detector = @{ Name = 'Test-SetupCmPhase1Marker.vbs'; Length = 4075; Hash = '4C09CA514339B9C08277189C61B2DC74908309F0268856A3A4FAFD0CBB41F83C' }
                 }
                 $contentSource = @{ Files = @($sourcePayload.Files) }
                 $inventory = New-TestMarkerInventory

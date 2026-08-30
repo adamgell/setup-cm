@@ -375,7 +375,7 @@ git commit -m "feat: reconcile marker evidence channel"
   new exact source detector length/hash become `DetectorFile`, while
   `PreviousDetectorFile` remains the accepted predecessor.
 
-- [ ] **Step 1: Add Windows detector publication tests**
+- [x] **Step 1: Add Windows detector publication tests**
 
 Extend the test helper to accept an optional local evidence path. On the exact
 target, assert:
@@ -395,13 +395,13 @@ argument never touches the production UNC, the final file is complete JSON,
 and more than two arguments returns no installed output. Gate publication
 tests on exact computer name; keep detection-only tests runnable on CM01.
 
-- [ ] **Step 2: Run the new tests against the predecessor and verify RED**
+- [x] **Step 2: Run the new tests against the predecessor and verify RED**
 
 Stage only the test and predecessor detector on the Windows target through the
 existing SSH/controller path. Run Pester and retain the failure showing that
 no evidence record is produced. Do not alter the ConfigMgr deployment type.
 
-- [ ] **Step 3: Implement best-effort atomic publication**
+- [x] **Step 3: Implement best-effort atomic publication**
 
 Keep `Option Explicit` and the existing certutil exact-hash check. After the
 hash matches and only when `WScript.Network.ComputerName` equals
@@ -423,12 +423,12 @@ temporary file on handled failure. Wrap publication in local `On Error Resume
 Next`; always echo exactly `Installed` after the exact hash even when
 publication fails.
 
-- [ ] **Step 4: Run Windows detector tests GREEN**
+- [x] **Step 4: Run Windows detector tests GREEN**
 
 Run all detector tests on `RING0IVY24-01` and the detection-only subset on
 CM01. Verify no test invocation wrote the production evidence UNC.
 
-- [ ] **Step 5: Pin the new reviewed detector bytes**
+- [x] **Step 5: Pin the new reviewed detector bytes**
 
 Compute exact source metadata:
 
@@ -439,12 +439,12 @@ $detectorHash = (Get-FileHash $detector.FullName -Algorithm SHA256).Hash
 ```
 
 Copy those emitted exact values into `DetectorFile`. Keep the predecessor
-length/hash unchanged in `PreviousDetectorFile`. Update unit provider fixtures
-so `SourcePayload.Detector` uses the new source hash while live deployment
-fixtures continue to use the predecessor hash until migration tests say
-otherwise.
+length/hash unchanged in `PreviousDetectorFile`. Update `SourcePayload.Detector`
+and the already-migrated compliant deployment fixture to the new source hash;
+Task 4 adds a separate predecessor deployment fixture before implementing the
+one-step migration path.
 
-- [ ] **Step 6: Run focused portable and Windows tests GREEN and commit**
+- [x] **Step 6: Run focused portable and Windows tests GREEN and commit**
 
 ```bash
 git add scripts/marker/Test-SetupCmPhase1Marker.vbs \

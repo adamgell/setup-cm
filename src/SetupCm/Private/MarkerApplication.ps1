@@ -45,8 +45,8 @@ function Get-SetupCmMarkerFixedContract {
         }
         DetectorFile = [ordered]@{
             Name = 'Test-SetupCmPhase1Marker.vbs'
-            Length = 1310
-            Hash = 'DFDDD8489C137940A06A4DD18630B0618E0BE5868559366D056352A0A88505AC'
+            Length = 4075
+            Hash = '4C09CA514339B9C08277189C61B2DC74908309F0268856A3A4FAFD0CBB41F83C'
         }
         ContentFiles = @(
             [ordered]@{

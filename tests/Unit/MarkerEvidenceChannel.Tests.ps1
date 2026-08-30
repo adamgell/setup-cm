@@ -11,6 +11,11 @@ Describe 'Setup-CM marker evidence fixed contract' {
             $contract.PreviousDetectorFile.Length | Should -Be 1310
             $contract.PreviousDetectorFile.Hash | Should -BeExactly `
                 'DFDDD8489C137940A06A4DD18630B0618E0BE5868559366D056352A0A88505AC'
+            $contract.DetectorFile.Name | Should -BeExactly `
+                'Test-SetupCmPhase1Marker.vbs'
+            $contract.DetectorFile.Length | Should -Be 4075
+            $contract.DetectorFile.Hash | Should -BeExactly `
+                '4C09CA514339B9C08277189C61B2DC74908309F0268856A3A4FAFD0CBB41F83C'
             $contract.EvidenceChannel.ShareName | Should -BeExactly `
                 'SetupCmMarkerEvidence$'
             $contract.EvidenceChannel.ShareDescription | Should -BeExactly `
