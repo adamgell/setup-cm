@@ -53,7 +53,8 @@ the run.
 
 ## Acquisition design
 
-`Test-SetupCmAcquire` evaluates every configured source without downloading:
+`Test-SetupCmAcquire` uses `Get-SetupCmArtifactState` to evaluate every
+configured source without downloading:
 
 - required license acknowledgement;
 - approved cache filename and presence;
@@ -192,4 +193,3 @@ existing installation conflicts, required media/credentials are unavailable,
 or a repair would require VM reset, reinstall, trust/authentication weakening,
 or unrelated user-file overwrite. Preserve clean historical branches/worktrees
 unless every removal precondition is proven.
-

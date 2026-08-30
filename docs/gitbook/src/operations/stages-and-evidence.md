@@ -1,9 +1,10 @@
 # Stages & Evidence
 
-`setup-cm` executes four core stages in order. The stage engine supports an
-idempotent lifecycle, but the currently accepted source still hardcodes
-`Acquire` and `Mecm` as noncompliant. Do not describe a complete LabZ1 replay
-as a no-op until the 2026-08-30 v1 rerun plan is accepted.
+`setup-cm` executes four core stages in order. Acquire has a real read-only
+artifact probe and skips exact cached media. The complete SQL desired-state
+probe is still being expanded, and MECM still has a hardcoded noncompliant
+stage test. Do not describe a complete LabZ1 replay as a no-op until the
+2026-08-30 v1 rerun plan is accepted.
 
 Health is read-only and the accepted client stage already skips exact
 compliance. Use [Current LabZ1 Status](./current-status.md) for the safe restart
@@ -22,7 +23,7 @@ The intended contract for every stage is:
 
 | Stage | Purpose | Key actions |
 | --- | --- | --- |
-| `Acquire` | Obtain and verify installation media. | Downloads or validates cached SQL Server, MECM, ADK, WinPE, ODBC, and VC++ redistributable installers. Verifies SHA-256 and Authenticode signatures. |
+| `Acquire` | Obtain and verify installation media. | Validates license, byte length, SHA-256, version, architecture, and publisher; downloads only missing or invalid artifacts from an approved source. |
 | `Sql` | Install and configure SQL Server. | Installs Windows prerequisites, runs unattended SQL Server setup, configures network protocols, and verifies the service is running. |
 | `Mecm` | Install MECM prerequisites and primary site. | Installs VC++ runtimes, ADK, WinPE add-on, ODBC Driver 18, downloads MECM prerequisites, runs unattended primary-site setup, and configures MP/DP roles. |
 | `Health` | Validate the complete lab. | Checks SQL reachability, MECM site services, Management Point, Distribution Point, boundaries, test-client registration, and expected log files. |

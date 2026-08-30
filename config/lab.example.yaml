@@ -34,7 +34,7 @@ sources:
     sha256: REPLACE_WITH_SHA256
     publisher: Microsoft Corporation
     version: "10.1.26100.2454"
-    architecture: x64
+    architecture: neutral
     sizeBytes: REPLACE_WITH_SIZE_BYTES
     licenseAccepted: false
     cacheFile: adksetup.exe
@@ -43,7 +43,7 @@ sources:
     sha256: REPLACE_WITH_SHA256
     publisher: Microsoft Corporation
     version: "10.1.26100.2454"
-    architecture: x64
+    architecture: neutral
     sizeBytes: REPLACE_WITH_SIZE_BYTES
     licenseAccepted: false
     cacheFile: adkwinpesetup.exe

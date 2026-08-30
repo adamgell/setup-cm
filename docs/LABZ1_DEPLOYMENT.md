@@ -56,6 +56,7 @@ remain unchanged and are not marker targets or v1 acceptance clients.
    marker assignment targets no other collection.
 
 Do not replay the complete bootstrap yet: on the currently accepted source,
-`Acquire` and `Mecm` still have hardcoded noncompliant tests. The
+Acquire now has a read-only exact-artifact test, but the complete SQL/MECM
+desired-state probes are not accepted yet. The
 [hands-off rerun v1 plan](superpowers/plans/2026-08-30-hands-off-rerun-v1.md)
-replaces those tests before the two-run acceptance gate.
+completes those probes before the two-run acceptance gate.

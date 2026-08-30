@@ -5,8 +5,9 @@ Use this runbook only after a provisioning layer has created an isolated, domain
 > [!IMPORTANT]
 > The accepted LabZ1 baseline is already installed. Until the
 > [hands-off rerun v1 plan](superpowers/plans/2026-08-30-hands-off-rerun-v1.md)
-> replaces the hardcoded `Acquire` and `Mecm` compliance tests, do not run the
-> complete workflow against it solely to refresh evidence. Use the Phase 0
+> completes the SQL and MECM desired-state probes, do not run the complete
+> workflow against it solely to refresh evidence. Acquire now verifies exact
+> cached artifacts without downloading compliant media. Use the Phase 0
 > read-only `Health` restart procedure and independently verify the Phase 1
 > one-device marker deployment.
 

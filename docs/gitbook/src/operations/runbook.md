@@ -3,10 +3,10 @@
 Use this runbook only after a provisioning layer has created an isolated, domain-joined Windows Server and a separate test client. Read the [Overview & Quick Start](../getting-started/overview.md) and [Configuration Reference](../configuration/reference.md) first.
 
 > **Current LabZ1 note:** The accepted baseline is already installed. Until
-> the hands-off v1 rerun plan replaces the hardcoded `Acquire` and `Mecm`
-> compliance tests, do not replay the complete workflow solely for newer
-> timestamps. Follow [Current LabZ1 Status](./current-status.md) and run
-> read-only `Health` checks.
+> the hands-off v1 rerun plan completes the SQL and MECM desired-state probes,
+> do not replay the complete workflow solely for newer timestamps. Acquire now
+> verifies exact cached artifacts without downloading compliant media. Follow
+> [Current LabZ1 Status](./current-status.md) and run read-only `Health` checks.
 
 ## Prepare the lab
 

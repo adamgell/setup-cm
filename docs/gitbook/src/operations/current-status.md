@@ -30,7 +30,8 @@ Confirm the LabZ1 resources, controller, Agents, provider, SQL inventory, and
 one-device marker collection through deterministic remote checks. On the
 currently accepted source, run only `Health` unless a specific missing
 component is proven. Do not replay the full bootstrap solely for new
-timestamps: real no-op tests for Acquire and MECM are the remaining v1 work.
+timestamps: Acquire now has an exact read-only artifact probe; complete SQL and
+MECM no-op probes are the remaining core v1 work.
 
 Production, co-management, Patch My PC, reporting expansion, distributed
 roles, extra clients, tenant integrations, and client-wide security-policy

@@ -27,8 +27,9 @@ older planned `LABZ1-CMCLIENT01` identity is obsolete for current acceptance.
   inventory, safe restart point, and remaining v1 work.
 
 Until the hands-off rerun plan is complete, use current read-only Health and
-provider/client checks. `Acquire` and `Mecm` on the accepted source still have
-hardcoded noncompliant tests and can reprocess media.
+provider/client checks. `Acquire` now verifies exact cached size, hash, version,
+architecture, publisher, and license state before applying; the complete SQL
+and MECM no-op probes are still in progress.
 
 ## Why this exists
 
@@ -74,7 +75,7 @@ Install-Module powershell-yaml -RequiredVersion 0.4.12 -Scope CurrentUser
 ## Quick start
 
 1. Copy `config/lab.example.yaml` to `config/lab.local.yaml`. The local file is ignored by Git.
-2. Replace every placeholder with your isolated-lab details, approved source location, SHA-256 checksum, version, and license acknowledgement. See the [configuration reference](docs/CONFIGURATION.md).
+2. Replace every placeholder with your isolated-lab details, approved source location, byte length, SHA-256 checksum, version, architecture, and license acknowledgement. See the [configuration reference](docs/CONFIGURATION.md).
 3. Import the module and check readiness:
 
    ```powershell

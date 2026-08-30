@@ -81,15 +81,15 @@ Releases.
 - Modify: `src/SetupCm/Public/Invoke-SetupCm.ps1`
 - Test: `tests/Unit/Acquisition.Tests.ps1`
 
-- [ ] Write failing tests proving a complete cache skips Apply, one invalid
+- [x] Write failing tests proving a complete cache skips Apply, one invalid
       artifact reacquires only itself, byte length/hash/license are required,
       version/architecture metadata are pinned, and no source location reaches
       evidence.
-- [ ] Implement `Test-SetupCmArtifact` and `Test-SetupCmAcquire` as read-only
+- [x] Implement `Get-SetupCmArtifactState` and `Test-SetupCmAcquire` as read-only
       probes plus affected-artifact-only acquisition.
-- [ ] Prove a second Acquire run invokes no download/copy operation.
-- [ ] Run focused and full unit suites.
-- [ ] Commit: `feat: make artifact acquisition idempotent`.
+- [x] Prove a second Acquire run invokes no download/copy operation.
+- [x] Run focused and full unit suites.
+- [x] Commit: `feat: make artifact acquisition idempotent`.
 
 ## Task 4: Implement SQL desired-state reconciliation
 

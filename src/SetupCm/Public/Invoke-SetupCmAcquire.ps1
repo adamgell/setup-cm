@@ -11,16 +11,23 @@ function Invoke-SetupCmAcquire {
     if ([string]::IsNullOrWhiteSpace($EvidenceRoot)) {
         $EvidenceRoot = New-SetupCmRunEvidence -Root $config.evidenceRoot
     }
-    $artifacts = foreach ($sourceEntry in $config.sources.GetEnumerator()) {
-        if ($sourceEntry.Value -isnot [hashtable]) {
-            continue
+    $artifacts = @(
+        foreach ($source in (Get-SetupCmNormalizedSources -Sources $config.sources)) {
+            $state = Get-SetupCmArtifactState -Source $source -CacheRoot $config.cacheRoot
+            switch ($state.State) {
+                'Compliant' { $state }
+                'NotCompliant' {
+                    Get-SetupCmArtifact -Source $source -CacheRoot $config.cacheRoot -EvidenceRoot $EvidenceRoot
+                }
+                'Conflict' {
+                    throw "Artifact '$($state.Name)' cannot be acquired safely: $($state.Reason)."
+                }
+                default {
+                    throw "Artifact '$($state.Name)' returned unsupported compliance state '$($state.State)'."
+                }
+            }
         }
-        $source = $sourceEntry.Value.Clone()
-        if (-not $source.ContainsKey('name') -or [string]::IsNullOrWhiteSpace($source['name'])) {
-            $source['name'] = $sourceEntry.Key
-        }
-        Get-SetupCmArtifact -Source $source -CacheRoot $config.cacheRoot -EvidenceRoot $EvidenceRoot
-    }
-
+    )
+    Write-SetupCmEvidenceJson -EvidenceRoot $EvidenceRoot -Name 'acquisition' -Value $artifacts | Out-Null
     return $artifacts
 }

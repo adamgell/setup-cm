@@ -3,8 +3,9 @@
 `setup-cm` treats a lab MECM deployment as a sequence of small, verifiable
 stages. The stage engine supports Test, Apply, Verify, and structured evidence.
 The accepted LabZ1 environment must currently use the
-[read-only restart procedure](../operations/current-status.md): real no-op
-probes for Acquire and MECM are the remaining v1 work.
+[read-only restart procedure](../operations/current-status.md): Acquire now
+skips exact cached media, while complete SQL and MECM no-op probes remain v1
+work.
 
 ## Architecture at a glance
 
@@ -24,7 +25,7 @@ These steps describe a new isolated lab. They are not the restart procedure for
 the already accepted LabZ1 site.
 
 1. Copy `config/lab.example.yaml` to `config/lab.local.yaml`. The local file is ignored by Git.
-2. Replace every placeholder with your isolated-lab details, approved source location, SHA-256 checksum, version, and license acknowledgement. See the [Configuration Reference](../configuration/reference.md).
+2. Replace every placeholder with your isolated-lab details, approved source location, byte length, SHA-256 checksum, version, architecture, and license acknowledgement. See the [Configuration Reference](../configuration/reference.md).
 3. Import the module and check readiness:
 
    ```powershell

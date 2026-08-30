@@ -16,7 +16,11 @@ function Invoke-SetupCm {
     foreach ($name in $selected) {
         switch ($name) {
             'Acquire' {
-                Invoke-SetupCmStage -Name Acquire -EvidenceRoot $evidenceRoot -Test { 'NotCompliant' } -Apply { Invoke-SetupCmAcquire -ConfigPath $ConfigPath -EvidenceRoot $evidenceRoot | Out-Null } -Verify { 'Compliant' } | Write-Output
+                Invoke-SetupCmStage -Name Acquire -EvidenceRoot $evidenceRoot `
+                    -Test { Test-SetupCmAcquire -Config $config -EvidenceRoot $evidenceRoot } `
+                    -Apply { Invoke-SetupCmAcquire -ConfigPath $ConfigPath -EvidenceRoot $evidenceRoot | Out-Null } `
+                    -Verify { Test-SetupCmAcquire -Config $config -EvidenceRoot $evidenceRoot } |
+                    Write-Output
             }
             'Sql' {
                 Invoke-SetupCmStage -Name Sql -EvidenceRoot $evidenceRoot -Test {
