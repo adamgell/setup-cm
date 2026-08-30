@@ -46,6 +46,8 @@ Describe 'Assert-SetupCmConfig' {
             $config = Read-SetupCmConfig -Path "$PSScriptRoot/../../config/lab.example.yaml"
             $config.topology | Should -Be 'single-box'
             $config.sources.sqlServer.cacheFile | Should -Be 'sql-server.iso'
+            $config.sources.mecm.cacheFile | Should -Be 'mecm-current-branch-2509.iso'
+            $config.sources.mecm.version | Should -Be '5.00.9141.1002'
         }
 
         It 'rejects installer placeholders in a runnable configuration' {
@@ -88,7 +90,7 @@ Describe 'Assert-SetupCmConfig' {
                     mecm = @{
                         uri = 'https://vault/mecm.iso'; sha256 = ('b' * 64)
                         cacheFile = 'mecm.iso'; licenseAccepted = $true
-                        sizeBytes = 2048; version = '2503'; architecture = 'x64'
+                        sizeBytes = 2048; version = '5.00.9141.1002'; architecture = 'x64'
                         publisher = 'Microsoft Corporation'
                     }
                 }
@@ -97,6 +99,30 @@ Describe 'Assert-SetupCmConfig' {
 
             { Assert-SetupCmConfig -Config $config } |
                 Should -Throw '*sources.sqlServer.publisher*'
+        }
+
+        It 'rejects a MECM branch label where native setup ProductVersion is required' {
+            $config = @{
+                safety = @{ isolatedLab = $true }
+                sources = @{
+                    sqlServer = @{
+                        uri = 'https://vault/sql.iso'; sha256 = ('a' * 64)
+                        cacheFile = 'sql.iso'; licenseAccepted = $true
+                        sizeBytes = 1024; version = '16.0.1000.6'; architecture = 'x64'
+                        publisher = 'Microsoft Corporation'
+                    }
+                    mecm = @{
+                        uri = 'https://vault/mecm.iso'; sha256 = ('b' * 64)
+                        cacheFile = 'mecm-current-branch-2509.iso'; licenseAccepted = $true
+                        sizeBytes = 2048; version = '2509'; architecture = 'x64'
+                        publisher = 'Microsoft Corporation'
+                    }
+                }
+                sql = @{ instanceName = 'MSSQLSERVER'; sysAdminAccounts = @('TEST\Admins') }
+            }
+
+            { Assert-SetupCmConfig -Config $config } |
+                Should -Throw '*sources.mecm.version*native setup.exe ProductVersion*'
         }
 
         It 'accepts pinned source identity metadata in a runnable configuration' {
@@ -112,7 +138,7 @@ Describe 'Assert-SetupCmConfig' {
                     mecm = @{
                         uri = 'https://vault/mecm.iso'; sha256 = ('b' * 64)
                         cacheFile = 'mecm.iso'; licenseAccepted = $true
-                        sizeBytes = 2048; version = '2503'; architecture = 'x64'
+                        sizeBytes = 2048; version = '5.00.9141.1002'; architecture = 'x64'
                         publisher = 'Microsoft Corporation'
                     }
                 }

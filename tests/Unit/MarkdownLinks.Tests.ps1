@@ -98,6 +98,17 @@ Describe 'Test-MarkdownLinks script' {
             Should -Throw '*missing.md*'
     }
 
+    It 'ignores link-looking inline code while validating a real link on the same line' {
+        Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') `
+            -Value 'Use `[Example](missing.md)` and read [Guide](guide.md).'
+        Set-Content -LiteralPath (Join-Path $TestDrive 'guide.md') -Value '# Guide'
+
+        $result = & $linkScript -RepositoryRoot $TestDrive -Path index.md, guide.md
+
+        $result.State | Should -BeExactly 'Passed'
+        $result.LocalLinksChecked | Should -Be 1
+    }
+
     It 'documents atomic source extraction with cleanup in <Runbook>' -ForEach @(
         @{ Runbook = 'docs/RUNBOOK.md' }
         @{ Runbook = 'docs/gitbook/src/operations/runbook.md' }
@@ -136,6 +147,22 @@ Describe 'Test-MarkdownLinks script' {
 
         $content | Should -Match 'tests/Integration/MarkerAcceptance\.Provider\.Tests\.ps1'
         $content | Should -Match 'fail-on-mutation'
+    }
+
+    It 'documents the accepted MECM branch separately from the native media ProductVersion' {
+        $configuration = Get-Content -LiteralPath (
+            Join-Path $repositoryRoot 'docs/CONFIGURATION.md'
+        ) -Raw
+        $gitBookConfiguration = Get-Content -LiteralPath (
+            Join-Path $repositoryRoot 'docs/gitbook/src/configuration/reference.md'
+        ) -Raw
+        $media = Get-Content -LiteralPath (
+            Join-Path $repositoryRoot 'docs/gitbook/src/getting-started/getting-media.md'
+        ) -Raw
+
+        $configuration | Should -Match '(?s)signatureRelativePath.*native `ProductVersion`'
+        $gitBookConfiguration | Should -Match '(?s)signatureRelativePath.*native `ProductVersion`'
+        $media | Should -Match '(?s)2509.*5\.00\.9141\.1002'
     }
 
     It 'resolves reference-style local links whose definitions follow their usage' {

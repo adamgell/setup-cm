@@ -24,6 +24,19 @@ function ConvertTo-MarkdownReferenceLabel {
     [regex]::Replace($Label.Trim(), '\s+', ' ').ToLowerInvariant()
 }
 
+function Remove-MarkdownInlineCode {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Line)
+
+    if (-not $Line.Contains('`')) { return $Line }
+
+    [regex]::Replace(
+        $Line,
+        '(?<!`)(?<delimiter>`+)(?!`).*?(?<!`)\k<delimiter>(?!`)',
+        { param($match) ' ' * $match.Length }
+    )
+}
+
 function Get-MarkdownContentLine {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$MarkdownPath)
@@ -146,7 +159,8 @@ foreach ($markdownFile in $markdownFiles) {
     $contentLines = @(Get-MarkdownContentLine -MarkdownPath $markdownFile)
     $referenceDefinitions = @{}
     foreach ($contentLine in $contentLines) {
-        if ($contentLine.Text -match '^\s{0,3}\[(?<label>[^\]]+)\]:\s*(?<destination><[^>]+>|\S+)') {
+        $definitionLine = Remove-MarkdownInlineCode -Line $contentLine.Text
+        if ($definitionLine -match '^\s{0,3}\[(?<label>[^\]]+)\]:\s*(?<destination><[^>]+>|\S+)') {
             $label = ConvertTo-MarkdownReferenceLabel -Label $Matches.label
             if (-not $referenceDefinitions.ContainsKey($label)) {
                 $referenceDefinitions[$label] = $Matches.destination.Trim().Trim('<', '>')
@@ -155,7 +169,7 @@ foreach ($markdownFile in $markdownFiles) {
     }
 
     foreach ($contentLine in $contentLines) {
-        $line = $contentLine.Text
+        $line = Remove-MarkdownInlineCode -Line $contentLine.Text
         $lineNumber = $contentLine.Number
         if ($line -match '^\s{0,3}\[[^\]]+\]:\s*(?:<[^>]+>|\S+)') { continue }
 

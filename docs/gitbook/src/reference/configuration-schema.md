@@ -67,8 +67,10 @@ The following source names are required for a full run:
 - `template: true` allows placeholder values; `template: false` (or omitted) requires real values.
 - `licenseAccepted` must be `true` for every source before acquisition runs.
 - `sha256` must be a 64-character hexadecimal string.
-- Every non-template source requires a positive `sizeBytes`, a version, and an
-  `x64`, `x86`, or `neutral` architecture.
+- Every non-template source requires a positive `sizeBytes`, an expected
+  publisher, a native product version, and an `x64`, `x86`, or `neutral`
+  architecture. `sources.mecm.version` is the four-component `ProductVersion`
+  of its signed `setup.exe`, not a Current Branch label.
 - `mecm.siteCode` must match `^[A-Z0-9]{3}$`.
 - `mecm.sqlServer` and `mecm.siteServerFqdn` must match the lab domain.
 - `testClient.name` and `testClient.domain` must identify a separate, domain-joined client.

@@ -67,11 +67,16 @@ The template includes `sqlServer`, `mecm`, `adk`, `adkWinPe`, `odbcDriver18`,
 | `cacheFile` | Filename used under `cacheRoot`. |
 | `signatureRelativePath` | Executable inside ISO media whose signature can be checked; used by the SQL Server and MECM entries. |
 
+For signed executables and ISO media, `version` is the native `ProductVersion`
+of the file selected by `signatureRelativePath`. Human release labels are not
+interchangeable with that value: the accepted Current Branch 2509 media uses
+`5.00.9141.1002`, not `2509`.
+
 Replace all `REPLACE_WITH_*` values and example URLs before a real run. Every
-non-template source requires an exact SHA-256, positive `sizeBytes`, version,
-architecture, and cache filename. SQL Server and MECM must also have a usable
-approved URI or vault location when the cache is absent. Source URIs and vault
-paths are never copied into evidence.
+non-template source requires an exact SHA-256, positive `sizeBytes`, expected
+publisher, native product version, architecture, and cache filename. SQL Server
+and MECM must also have a usable approved URI or vault location when the cache
+is absent. Source URIs and vault paths are never copied into evidence.
 
 ## Marker acceptance
 

@@ -24,11 +24,11 @@ sources:
     sha256: REPLACE_WITH_SHA256
     publisher: Microsoft Corporation
     signatureRelativePath: SMSSETUP\BIN\X64\setup.exe
-    version: "2503"
+    version: "5.00.9141.1002"
     architecture: x64
     sizeBytes: REPLACE_WITH_SIZE_BYTES
     licenseAccepted: false
-    cacheFile: mecm.iso
+    cacheFile: mecm-current-branch-2509.iso
   adk:
     uri: https://go.microsoft.com/fwlink/?linkid=2289980
     sha256: REPLACE_WITH_SHA256

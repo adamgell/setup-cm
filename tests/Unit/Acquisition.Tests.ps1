@@ -32,7 +32,7 @@ Describe 'Get-SetupCmArtifact' {
             {
                 Get-SetupCmArtifact -Source @{
                     name = 'mecm'; cacheFile = 'mecm.iso'; sha256 = ('0' * 64); licenseAccepted = $true
-                    sizeBytes = 15; version = '2503'; architecture = 'x64'
+                    sizeBytes = 15; version = '5.00.9141.1002'; architecture = 'x64'
                 } -CacheRoot $TestDrive -EvidenceRoot $TestDrive
             } | Should -Throw '*no approved source*'
         }
@@ -41,7 +41,7 @@ Describe 'Get-SetupCmArtifact' {
             {
                 Get-SetupCmArtifact -Source @{
                     name = 'mecm'; cacheFile = 'mecm.iso'; sha256 = ('0' * 64); licenseAccepted = $false
-                    sizeBytes = 15; version = '2503'; architecture = 'x64'
+                    sizeBytes = 15; version = '5.00.9141.1002'; architecture = 'x64'
                     publisher = 'Microsoft Corporation'
                 } -CacheRoot $TestDrive -EvidenceRoot $TestDrive
             } | Should -Throw '*licenseAccepted*'
@@ -51,7 +51,7 @@ Describe 'Get-SetupCmArtifact' {
             {
                 Get-SetupCmArtifact -Source @{
                     name = 'mecm'; sha256 = ('0' * 64); licenseAccepted = $true
-                    sizeBytes = 15; version = '2503'; architecture = 'x64'
+                    sizeBytes = 15; version = '5.00.9141.1002'; architecture = 'x64'
                 } -CacheRoot $TestDrive -EvidenceRoot $TestDrive
             } | Should -Throw '*MissingSourceField:cacheFile*'
         }
@@ -60,7 +60,7 @@ Describe 'Get-SetupCmArtifact' {
             {
                 Get-SetupCmArtifact -Source @{
                     cacheFile = 'mecm.iso'; sha256 = ('0' * 64); licenseAccepted = $true
-                    sizeBytes = 15; version = '2503'; architecture = 'x64'
+                    sizeBytes = 15; version = '5.00.9141.1002'; architecture = 'x64'
                 } -CacheRoot $TestDrive -EvidenceRoot $TestDrive
             } | Should -Throw '*MissingSourceField:name*'
         }
@@ -80,7 +80,7 @@ Describe 'Get-SetupCmArtifact' {
             {
                 Get-SetupCmArtifact -Source @{
                     name = 'mecm'; cacheFile = 'mecm.iso'; sha256 = ('0' * 64)
-                    sizeBytes = 15; version = '2503'; architecture = 'x64'
+                    sizeBytes = 15; version = '5.00.9141.1002'; architecture = 'x64'
                     licenseAccepted = $true; vaultPath = $sourceFile
                 } -CacheRoot $TestDrive -EvidenceRoot $TestDrive
             } | Should -Throw '*failed verification*VersionMismatch*'
@@ -101,7 +101,7 @@ Describe 'Get-SetupCmArtifact' {
             try {
                 Get-SetupCmArtifact -Source @{
                     name = 'mecm'; cacheFile = 'mecm.iso'; sha256 = ('0' * 64)
-                    sizeBytes = 15; version = '2503'; architecture = 'x64'
+                    sizeBytes = 15; version = '5.00.9141.1002'; architecture = 'x64'
                     licenseAccepted = $true
                     uri = 'https://private.example.invalid/download?token=topsecret'
                 } -CacheRoot $TestDrive -EvidenceRoot $TestDrive
@@ -131,7 +131,7 @@ Describe 'Get-SetupCmArtifact' {
             try {
                 Get-SetupCmArtifact -Source @{
                     name = 'mecm'; cacheFile = 'mecm.iso'; sha256 = ('0' * 64)
-                    sizeBytes = 15; version = '2503'; architecture = 'x64'
+                    sizeBytes = 15; version = '5.00.9141.1002'; architecture = 'x64'
                     licenseAccepted = $true; vaultPath = $vaultPath
                 } -CacheRoot $TestDrive -EvidenceRoot $TestDrive
             }
@@ -454,7 +454,7 @@ Describe 'Invoke-SetupCmAcquire' {
                 [pscustomobject]@{
                     Name = 'mecm'; State = 'Compliant'; Reason = 'AcquiredAndVerified'
                     Path = (Join-Path $cacheRoot 'mecm.iso'); Sha256 = ('b' * 64); SizeBytes = 2048
-                    Version = '2503'; Architecture = 'x64'; VerifiedAt = '2026-08-30T00:00:00.0000000Z'
+                    Version = '5.00.9141.1002'; Architecture = 'x64'; VerifiedAt = '2026-08-30T00:00:00.0000000Z'
                 }
             }
 

@@ -122,6 +122,10 @@ function Assert-SetupCmConfig {
             if ([string]$source.architecture -notin 'x64', 'x86', 'neutral') {
                 throw "sources.$sourceName.architecture must be x64, x86, or neutral."
             }
+            if ([string]$sourceName -ieq 'mecm' -and
+                [string]$source.version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+                throw 'sources.mecm.version must be the native setup.exe ProductVersion, not a Current Branch label.'
+            }
         }
     }
 

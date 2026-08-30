@@ -39,6 +39,19 @@ Describe 'Write-SetupCmEvidenceJson' {
             ($json | ConvertFrom-Json).message | Should -Be 'Download failed from <redacted-uri>'
         }
 
+        It 'redacts local and file URI paths in free text while preserving an approved structured path' {
+            $path = Write-SetupCmEvidenceJson -EvidenceRoot $TestDrive -Name 'path-message' -Value @{
+                message = 'Failure at C:\Users\Operator\private\artifact.iso; fallback file:///C:/Users/Operator/private/artifact.iso'
+                artifactPath = 'C:\ProgramData\SetupCm\cache\mecm-current-branch-2509.iso'
+            }
+
+            $parsed = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+
+            $parsed.message | Should -Be 'Failure at <redacted-path>; fallback <redacted-uri>'
+            $parsed.artifactPath |
+                Should -Be 'C:\ProgramData\SetupCm\cache\mecm-current-branch-2509.iso'
+        }
+
         It 'fully redacts quoted credential assignments that contain spaces' {
             $path = Write-SetupCmEvidenceJson -EvidenceRoot $TestDrive -Name 'quoted-credentials' -Value @{
                 message = 'Password="two words"; Token=''three words''; Pwd=four'

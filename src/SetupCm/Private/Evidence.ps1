@@ -64,9 +64,29 @@ function Test-SetupCmSensitiveEvidenceKey {
     return $false
 }
 
+function Test-SetupCmApprovedEvidencePathKey {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Name)
+
+    $normalized = [regex]::Replace($Name, '[_\-\s]', '').ToLowerInvariant()
+    $normalized -in @(
+        'path',
+        'artifactpath',
+        'contentlibrarypath',
+        'installdirectory',
+        'expectedinstalldirectory',
+        'actualinstalldirectory',
+        'installerpath',
+        'markerpath'
+    )
+}
+
 function ConvertTo-SetupCmSanitizedEvidenceString {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][AllowEmptyString()][string]$Value)
+    param(
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Value,
+        [switch]$PreserveLocalPath
+    )
 
     $sanitized = [regex]::Replace(
         $Value,
@@ -74,13 +94,24 @@ function ConvertTo-SetupCmSanitizedEvidenceString {
         '$1<redacted>'
     )
     $sanitized = [regex]::Replace($sanitized, '(?i)(\bbearer\s+)[A-Za-z0-9._~+/=-]+', '$1<redacted>')
-    $sanitized = [regex]::Replace($sanitized, '(?i)\b(?:https?|ftp)://[^\s"''<>]+', '<redacted-uri>')
-    [regex]::Replace($sanitized, '(?<!\w)\\\\[^\\\s]+\\[^\s;]+', '<redacted-path>')
+    $sanitized = [regex]::Replace($sanitized, '(?i)\b(?:https?|ftp|file)://[^\s"''<>]+', '<redacted-uri>')
+    $sanitized = [regex]::Replace($sanitized, '(?<!\w)\\\\[^\\\s]+\\[^\s;]+', '<redacted-path>')
+    if (-not $PreserveLocalPath) {
+        $sanitized = [regex]::Replace(
+            $sanitized,
+            '(?i)(?:"[A-Z]:\\[^"\r\n]*"|''[A-Z]:\\[^''\r\n]*''|(?<!\w)[A-Z]:\\[^;\r\n,"''<>]+)',
+            '<redacted-path>'
+        )
+    }
+    $sanitized
 }
 
 function ConvertTo-SetupCmSanitizedEvidenceValue {
     [CmdletBinding()]
-    param([AllowNull()]$Value)
+    param(
+        [AllowNull()]$Value,
+        [switch]$PreserveLocalPath
+    )
 
     if ($null -eq $Value) { return $null }
 
@@ -89,7 +120,8 @@ function ConvertTo-SetupCmSanitizedEvidenceValue {
         foreach ($key in $Value.Keys) {
             $name = [string]$key
             if (Test-SetupCmSensitiveEvidenceKey -Name $name) { continue }
-            $result[$name] = ConvertTo-SetupCmSanitizedEvidenceValue -Value $Value[$key]
+            $result[$name] = ConvertTo-SetupCmSanitizedEvidenceValue -Value $Value[$key] `
+                -PreserveLocalPath:(Test-SetupCmApprovedEvidencePathKey -Name $name)
         }
         return $result
     }
@@ -98,7 +130,8 @@ function ConvertTo-SetupCmSanitizedEvidenceValue {
         $result = [ordered]@{}
         foreach ($property in $Value.PSObject.Properties) {
             if (Test-SetupCmSensitiveEvidenceKey -Name $property.Name) { continue }
-            $result[$property.Name] = ConvertTo-SetupCmSanitizedEvidenceValue -Value $property.Value
+            $result[$property.Name] = ConvertTo-SetupCmSanitizedEvidenceValue -Value $property.Value `
+                -PreserveLocalPath:(Test-SetupCmApprovedEvidencePathKey -Name $property.Name)
         }
         return $result
     }
@@ -106,14 +139,16 @@ function ConvertTo-SetupCmSanitizedEvidenceValue {
     if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
         $items = [System.Collections.Generic.List[object]]::new()
         foreach ($item in $Value) {
-            [void]$items.Add((ConvertTo-SetupCmSanitizedEvidenceValue -Value $item))
+            [void]$items.Add((ConvertTo-SetupCmSanitizedEvidenceValue -Value $item `
+                -PreserveLocalPath:$PreserveLocalPath))
         }
         Write-Output -NoEnumerate ([object[]]$items.ToArray())
         return
     }
 
     if ($Value -is [string]) {
-        return ConvertTo-SetupCmSanitizedEvidenceString -Value $Value
+        return ConvertTo-SetupCmSanitizedEvidenceString -Value $Value `
+            -PreserveLocalPath:$PreserveLocalPath
     }
 
     return $Value

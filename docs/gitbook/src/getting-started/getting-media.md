@@ -79,7 +79,11 @@ The example pins `16.0.1000.6` (SQL Server 2022 RTM). Save as `sql-server.iso`.
 - **Evaluation:** [Microsoft Configuration Manager Evaluation Center](https://www.microsoft.com/en-us/evalcenter/evaluate-microsoft-endpoint-configuration-manager) — 180-day trial.
 - **VLSC / Visual Studio Subscription:** Download from your subscriber portal.
 
-The example pins `2503` (March 2025 Current Branch). Save as `mecm.iso`.
+The example uses Current Branch `2509`. Its signed
+`SMSSETUP\BIN\X64\setup.exe` reports native `ProductVersion`
+`5.00.9141.1002`; record that value in `sources.mecm.version` and save the ISO
+as `mecm-current-branch-2509.iso`. A branch label such as `2509` is not a file
+version and fails configuration validation.
 
 > **Important:** MECM evaluation media is lab-appropriate. The `productId: Eval` setting in the example configuration matches evaluation media.
 
