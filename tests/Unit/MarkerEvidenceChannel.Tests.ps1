@@ -895,5 +895,115 @@ Describe 'Setup-CM marker published evidence assessment' {
             $assessment.Reason | Should -BeExactly 'EvidenceOwnerMismatch'
             $assessment.MarkerHashVerification | Should -BeExactly 'EvidenceConflict'
         }
+
+        It 'keeps an authenticated direct read authoritative without fallback' {
+            $direct = [pscustomobject]@{
+                MarkerHash = ('A' * 64)
+                MarkerHashVerification = 'DirectAuthenticatedFileRead'
+                MarkerLastWriteTime = '2026-08-30T12:00:00.0000000Z'
+            }
+            $inventory = New-TestPublishedEvidenceInventory -Json '{'
+
+            $selection = Get-SetupCmMarkerClientEvidenceSelection `
+                -Contract (Get-SetupCmMarkerFixedContract) `
+                -DirectState $direct -EvidenceInventory $inventory `
+                -NowUtc ([datetime]'2026-08-30T12:10:00Z')
+
+            $selection.MarkerHash | Should -BeExactly ('A' * 64)
+            $selection.MarkerHashVerification | Should -BeExactly `
+                'DirectAuthenticatedFileRead'
+        }
+
+        It 'keeps an authenticated direct missing result authoritative without fallback' {
+            $direct = [pscustomobject]@{
+                MarkerHash = ''
+                MarkerHashVerification = 'Missing'
+                MarkerLastWriteTime = ''
+            }
+
+            $selection = Get-SetupCmMarkerClientEvidenceSelection `
+                -Contract (Get-SetupCmMarkerFixedContract) `
+                -DirectState $direct `
+                -EvidenceInventory (New-TestPublishedEvidenceInventory) `
+                -NowUtc ([datetime]'2026-08-30T12:10:00Z')
+
+            $selection.MarkerHash | Should -BeNullOrEmpty
+            $selection.MarkerHashVerification | Should -BeExactly 'Missing'
+        }
+
+        It 'falls back from unavailable direct read to exact published evidence' {
+            $direct = [pscustomobject]@{
+                MarkerHash = ''
+                MarkerHashVerification = 'ProbeUnavailable'
+                MarkerLastWriteTime = ''
+            }
+
+            $selection = Get-SetupCmMarkerClientEvidenceSelection `
+                -Contract (Get-SetupCmMarkerFixedContract) `
+                -DirectState $direct `
+                -EvidenceInventory (New-TestPublishedEvidenceInventory) `
+                -NowUtc ([datetime]'2026-08-30T12:10:00Z')
+
+            $selection.MarkerHash | Should -BeExactly `
+                '3F44AA70B40C9E9095E69F1C57E98F6ACC06900788A2054E251BCC58179B6254'
+            $selection.MarkerLength | Should -Be 78
+            $selection.MarkerHashVerification | Should -BeExactly `
+                'DirectAuthenticatedClientEvidence'
+            $selection.EvidenceOwnerSid | Should -BeExactly 'S-1-5-21-1-2-3-1001'
+        }
+
+        It 'maps missing or stale fallback evidence to pending' {
+            $direct = [pscustomobject]@{
+                MarkerHash = ''
+                MarkerHashVerification = 'ProbeUnavailable'
+                MarkerLastWriteTime = ''
+            }
+            $inventory = New-TestPublishedEvidenceInventory -Exists $false
+
+            $selection = Get-SetupCmMarkerClientEvidenceSelection `
+                -Contract (Get-SetupCmMarkerFixedContract) `
+                -DirectState $direct -EvidenceInventory $inventory `
+                -NowUtc ([datetime]'2026-08-30T12:10:00Z')
+
+            $selection.MarkerHashVerification | Should -BeExactly `
+                'ClientEvidencePending'
+        }
+
+        It 'maps malformed, foreign, or future fallback evidence to conflict' {
+            $direct = [pscustomobject]@{
+                MarkerHash = ''
+                MarkerHashVerification = 'ProbeUnavailable'
+                MarkerLastWriteTime = ''
+            }
+            $inventory = New-TestPublishedEvidenceInventory -Json '{'
+
+            $selection = Get-SetupCmMarkerClientEvidenceSelection `
+                -Contract (Get-SetupCmMarkerFixedContract) `
+                -DirectState $direct -EvidenceInventory $inventory `
+                -NowUtc ([datetime]'2026-08-30T12:10:00Z')
+
+            $selection.MarkerHashVerification | Should -BeExactly 'EvidenceConflict'
+            $selection.EvidenceReason | Should -BeExactly 'EvidenceMalformed'
+        }
+
+        It 'keeps both unexpectedly unavailable reads as probe unavailable' {
+            $direct = [pscustomobject]@{
+                MarkerHash = ''
+                MarkerHashVerification = 'ProbeUnavailable'
+                MarkerLastWriteTime = ''
+            }
+            $inventory = New-TestPublishedEvidenceInventory `
+                -ReadError 'private transport details'
+
+            $selection = Get-SetupCmMarkerClientEvidenceSelection `
+                -Contract (Get-SetupCmMarkerFixedContract) `
+                -DirectState $direct -EvidenceInventory $inventory `
+                -NowUtc ([datetime]'2026-08-30T12:10:00Z')
+
+            $selection.MarkerHashVerification | Should -BeExactly 'ProbeUnavailable'
+            $selection.EvidenceReason | Should -BeExactly 'EvidenceReadUnavailable'
+            ($selection | ConvertTo-Json -Depth 5) | Should -Not -Match `
+                'private transport details'
+        }
     }
 }

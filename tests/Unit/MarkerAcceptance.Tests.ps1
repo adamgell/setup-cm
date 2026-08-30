@@ -37,6 +37,7 @@ Describe 'Setup-CM marker acceptance desired state' {
                         ContentId = 'Content_test'; PackageId = 'LAB00008'
                         ContentLocation = '\\LABZ1-CM01.test.gell.one\C$\ProgramData\SetupCm\Phase1MarkerContent\'
                         DetectorHash = '4C09CA514339B9C08277189C61B2DC74908309F0268856A3A4FAFD0CBB41F83C'
+                        DetectorLength = 4075
                         DetectionLanguage = 'VBScript'
                         InstallCommand = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File Install-SetupCmPhase1Marker.ps1'
                         UninstallCommand = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File Uninstall-SetupCmPhase1Marker.ps1'
@@ -62,6 +63,7 @@ Describe 'Setup-CM marker acceptance desired state' {
                     Client = @{
                         Name = 'RING0IVY24-01'; ResourceId = 16777219
                         MarkerHash = '3F44AA70B40C9E9095E69F1C57E98F6ACC06900788A2054E251BCC58179B6254'
+                        MarkerLength = 78
                         MarkerHashVerification = 'DirectAuthenticatedFileRead'
                         InstallState = 'Installed'; EvaluationState = 1; ResolvedState = 'Installed'; ExitCode = 0
                         ExecutionContext = 'System'; SelectedDistributionPoint = 'LABZ1-CM01.test.gell.one'
@@ -72,6 +74,73 @@ Describe 'Setup-CM marker acceptance desired state' {
                         CollectionId = 'LAB00016'; AppCI = 16777528; DTCI = 16777529
                         ComplianceState = 1; EnforcementState = 1001; InstalledState = 2; Revision = 4
                     })
+                }
+            }
+
+            function New-TestMarkerEvidenceChannelInventory {
+                $administratorsSid = 'S-1-5-32-544'
+                $systemSid = 'S-1-5-18'
+                $targetSid = 'S-1-5-21-1-2-3-1001'
+                $administrativeAces = @(
+                    [pscustomobject]@{
+                        Sid = $administratorsSid; Rights = 2032127
+                        InheritanceFlags = 3; PropagationFlags = 0
+                        AccessControlType = 0; IsInherited = $false
+                    }
+                    [pscustomobject]@{
+                        Sid = $systemSid; Rights = 2032127
+                        InheritanceFlags = 3; PropagationFlags = 0
+                        AccessControlType = 0; IsInherited = $false
+                    }
+                )
+                [pscustomobject]@{
+                    TargetComputerSid = $targetSid
+                    AdministratorsSid = $administratorsSid
+                    SystemSid = $systemSid
+                    ProbeError = ''
+                    Parent = [pscustomobject]@{
+                        Exists = $true; IsDirectory = $true; IsReparsePoint = $false
+                        OwnerSid = $administratorsSid; AclProtected = $true
+                        Aces = @($administrativeAces)
+                    }
+                    Target = [pscustomobject]@{
+                        Exists = $true; IsDirectory = $true; IsReparsePoint = $false
+                        OwnerSid = $administratorsSid; AclProtected = $true
+                        Aces = @(
+                            $administrativeAces
+                            [pscustomobject]@{
+                                Sid = $targetSid; Rights = 1179819
+                                InheritanceFlags = 0; PropagationFlags = 0
+                                AccessControlType = 0; IsInherited = $false
+                            }
+                            [pscustomobject]@{
+                                Sid = $targetSid; Rights = 1245631
+                                InheritanceFlags = 1; PropagationFlags = 2
+                                AccessControlType = 0; IsInherited = $false
+                            }
+                        )
+                    }
+                    Share = [pscustomobject]@{
+                        Exists = $true
+                        Path = 'C:\ProgramData\SetupCm\MarkerEvidence\RING0IVY24-01'
+                        Description = 'Setup-CM LabZ1 marker evidence for RING0IVY24-01'
+                        CachingMode = 'None'
+                        Aces = @(
+                            [pscustomobject]@{
+                                Sid = $administratorsSid; AccessRight = 'Full'
+                                AccessControlType = 0
+                            }
+                            [pscustomobject]@{
+                                Sid = $targetSid; AccessRight = 'Change'
+                                AccessControlType = 0
+                            }
+                        )
+                    }
+                    Evidence = [pscustomobject]@{
+                        Exists = $false; IsDirectory = $false; IsReparsePoint = $false
+                        Length = 0L; Bytes = [byte[]]@(); OwnerSid = ''; AclExact = $false
+                        Aces = @(); LastWriteTimeUtc = $null; ReadError = ''
+                    }
                 }
             }
 
@@ -95,10 +164,12 @@ Describe 'Setup-CM marker acceptance desired state' {
                 }
                 $contentSource = @{ Files = @($sourcePayload.Files) }
                 $inventory = New-TestMarkerInventory
+                $evidenceChannel = New-TestMarkerEvidenceChannelInventory
                 @{
                     Boundary = { $boundary }.GetNewClosure()
                     SourcePayload = { $sourcePayload }.GetNewClosure()
                     ContentSource = { $contentSource }.GetNewClosure()
+                    EvidenceChannel = { $evidenceChannel }.GetNewClosure()
                     Inventory = { $inventory }.GetNewClosure()
                 }
             }
@@ -111,9 +182,11 @@ Describe 'Setup-CM marker acceptance desired state' {
                 )
 
                 $names = @(
-                    'SyncContent', 'CreateApplication', 'CreateDeploymentType', 'UpdateDeploymentType',
-                    'Distribute', 'CreateCollection', 'AddDirectMembership', 'RefreshCollection',
-                    'CreateDeployment', 'UpdateDeployment', 'RequestClientPolicy'
+                    'CreateEvidenceChannel', 'UpdateDetectorPolicy', 'SyncContent',
+                    'CreateApplication', 'CreateDeploymentType', 'UpdateDeploymentType',
+                    'Distribute', 'CreateCollection', 'AddDirectMembership',
+                    'RefreshCollection', 'CreateDeployment', 'UpdateDeployment',
+                    'RequestClientPolicy', 'WaitForConvergence'
                 )
                 $providers = @{}
                 foreach ($name in $names) {
@@ -137,6 +210,89 @@ Describe 'Setup-CM marker acceptance desired state' {
 
             $state.State | Should -BeExactly 'Compliant'
             @($state.Components | Where-Object State -ne 'Compliant') | Should -HaveCount 0
+        }
+
+        It 'probes the exact evidence channel once and emits only sanitized details' {
+            $providers = New-CompliantMarkerProviders
+            $channel = & $providers.EvidenceChannel
+            $counter = [pscustomobject]@{ Count = 0 }
+            $providers.EvidenceChannel = {
+                $counter.Count++
+                $channel
+            }.GetNewClosure()
+
+            $state = Get-SetupCmMarkerDesiredState `
+                -Config (New-TestMarkerConfig) -Providers $providers
+
+            $counter.Count | Should -Be 1
+            $component = $state.Components | Where-Object Name -eq EvidenceChannel
+            $component.State | Should -BeExactly 'Compliant'
+            $component.Reason | Should -BeExactly 'Exact'
+            $component.ShareName | Should -BeExactly 'SetupCmMarkerEvidence$'
+            $component.LocalPath | Should -BeExactly `
+                'C:\ProgramData\SetupCm\MarkerEvidence\RING0IVY24-01'
+            $component.TargetComputerSid | Should -BeExactly `
+                'S-1-5-21-1-2-3-1001'
+            $component.SchemaVersion | Should -Be 1
+            $component.PSObject.Properties.Name | Should -Not -Contain 'Aces'
+            ($component | ConvertTo-Json -Depth 8) | Should -Not -Match `
+                'Rights|InheritanceFlags|PropagationFlags|AccessControlType'
+        }
+
+        It 'accepts exact authenticated client-published evidence as the client proof route' {
+            $providers = New-CompliantMarkerProviders
+            $inventory = & $providers.Inventory
+            $inventory.Client.MarkerHashVerification = 'DirectAuthenticatedClientEvidence'
+            $inventory.Client.MarkerLength = 78
+            $inventory.Client.EvidenceReceiptTimeUtc = '2026-08-30T12:00:00.0000000Z'
+            $inventory.Client.EvidenceOwnerSid = 'S-1-5-21-1-2-3-1001'
+            $providers.Inventory = { $inventory }.GetNewClosure()
+
+            $state = Get-SetupCmMarkerDesiredState `
+                -Config (New-TestMarkerConfig) -Providers $providers
+
+            $state.State | Should -BeExactly 'Compliant'
+            $client = $state.Components | Where-Object Name -eq Client
+            $client.State | Should -BeExactly 'Compliant'
+            $client.MarkerHashVerification | Should -BeExactly `
+                'DirectAuthenticatedClientEvidence'
+            $client.MarkerLength | Should -Be 78
+            $client.EvidenceOwnerSid | Should -BeExactly `
+                'S-1-5-21-1-2-3-1001'
+        }
+
+        It 'keeps missing or stale published evidence pending instead of conflicting' {
+            $providers = New-CompliantMarkerProviders
+            $inventory = & $providers.Inventory
+            $inventory.Client.MarkerHash = ''
+            $inventory.Client.MarkerHashVerification = 'ClientEvidencePending'
+            $providers.Inventory = { $inventory }.GetNewClosure()
+
+            $state = Get-SetupCmMarkerDesiredState `
+                -Config (New-TestMarkerConfig) -Providers $providers
+
+            $state.State | Should -BeExactly 'NotCompliant'
+            $client = $state.Components | Where-Object Name -eq Client
+            $client.State | Should -BeExactly 'NotCompliant'
+            $client.Reason | Should -BeExactly 'ClientEvidencePending'
+        }
+
+        It 'fails closed on malformed, foreign, or future published evidence' {
+            $providers = New-CompliantMarkerProviders
+            $inventory = & $providers.Inventory
+            $inventory.Client.MarkerHash = ''
+            $inventory.Client.MarkerHashVerification = 'EvidenceConflict'
+            $inventory.Client.EvidenceReason = 'EvidenceMalformed'
+            $providers.Inventory = { $inventory }.GetNewClosure()
+
+            $state = Get-SetupCmMarkerDesiredState `
+                -Config (New-TestMarkerConfig) -Providers $providers
+
+            $state.State | Should -BeExactly 'Conflict'
+            $client = $state.Components | Where-Object Name -eq Client
+            $client.State | Should -BeExactly 'Conflict'
+            $client.Reason | Should -BeExactly 'ClientEvidenceConflict'
+            $client.EvidenceReason | Should -BeExactly 'EvidenceMalformed'
         }
 
         It 'fails closed when marker acceptance is not explicitly enabled and lab-only' {
@@ -205,6 +361,58 @@ Describe 'Setup-CM marker acceptance desired state' {
 
             $state.State | Should -BeExactly 'Conflict'
             ($state.Components | Where-Object Name -eq DeploymentType).Reason | Should -BeExactly 'DetectorHashMismatch'
+        }
+
+        It 'classifies only the approved predecessor detector as a bounded upgrade' {
+            $providers = New-CompliantMarkerProviders
+            $inventory = & $providers.Inventory
+            $inventory.DeploymentTypes[0].DetectorHash = `
+                'DFDDD8489C137940A06A4DD18630B0618E0BE5868559366D056352A0A88505AC'
+            $inventory.DeploymentTypes[0].DetectorLength = 1310
+            $providers.Inventory = { $inventory }.GetNewClosure()
+
+            $state = Get-SetupCmMarkerDesiredState `
+                -Config (New-TestMarkerConfig) -Providers $providers
+
+            $state.State | Should -BeExactly 'NotCompliant'
+            $component = $state.Components | Where-Object Name -eq DeploymentType
+            $component.State | Should -BeExactly 'NotCompliant'
+            $component.Reason | Should -BeExactly 'ApprovedDetectorUpgrade'
+        }
+
+        It 'fails closed when predecessor detector state has another property drift' {
+            $providers = New-CompliantMarkerProviders
+            $inventory = & $providers.Inventory
+            $inventory.DeploymentTypes[0].DetectorHash = `
+                'DFDDD8489C137940A06A4DD18630B0618E0BE5868559366D056352A0A88505AC'
+            $inventory.DeploymentTypes[0].DetectorLength = 1310
+            $inventory.DeploymentTypes[0].ExecutionContext = 'User'
+            $providers.Inventory = { $inventory }.GetNewClosure()
+
+            $state = Get-SetupCmMarkerDesiredState `
+                -Config (New-TestMarkerConfig) -Providers $providers
+
+            $state.State | Should -BeExactly 'Conflict'
+            $component = $state.Components | Where-Object Name -eq DeploymentType
+            $component.State | Should -BeExactly 'Conflict'
+            $component.Reason | Should -BeExactly 'DetectorUpgradeWithPropertyDrift'
+        }
+
+        It 'does not approve a predecessor detector with a contradictory length' {
+            $providers = New-CompliantMarkerProviders
+            $inventory = & $providers.Inventory
+            $inventory.DeploymentTypes[0].DetectorHash = `
+                'DFDDD8489C137940A06A4DD18630B0618E0BE5868559366D056352A0A88505AC'
+            $inventory.DeploymentTypes[0].DetectorLength = 1309
+            $providers.Inventory = { $inventory }.GetNewClosure()
+
+            $state = Get-SetupCmMarkerDesiredState `
+                -Config (New-TestMarkerConfig) -Providers $providers
+
+            $state.State | Should -BeExactly 'Conflict'
+            $component = $state.Components | Where-Object Name -eq DeploymentType
+            $component.State | Should -BeExactly 'Conflict'
+            $component.Reason | Should -BeExactly 'DetectorHashMismatch'
         }
 
         It 'fails closed on broad or unexpected collection membership' {
@@ -291,6 +499,62 @@ Describe 'Setup-CM marker acceptance desired state' {
             $calls | Should -HaveCount 0
         }
 
+        It 'performs only the approved first evidence migration sequence' {
+            $providers = New-CompliantMarkerProviders
+            $channel = & $providers.EvidenceChannel
+            $channel.Parent.Exists = $false
+            $channel.Target.Exists = $false
+            $channel.Share.Exists = $false
+            $providers.EvidenceChannel = { $channel }.GetNewClosure()
+            $inventory = & $providers.Inventory
+            $inventory.DeploymentTypes[0].DetectorHash = `
+                'DFDDD8489C137940A06A4DD18630B0618E0BE5868559366D056352A0A88505AC'
+            $inventory.DeploymentTypes[0].DetectorLength = 1310
+            $providers.Inventory = { $inventory }.GetNewClosure()
+            $state = Get-SetupCmMarkerDesiredState `
+                -Config (New-TestMarkerConfig) -Providers $providers
+            $calls = [System.Collections.Generic.List[string]]::new()
+            $repairProviders = New-RecordingMarkerRepairProviders -Calls $calls
+            $capture = [pscustomobject]@{
+                MinimumReceiptUtc = $null
+                Providers = $null
+            }
+            $repairProviders.WaitForConvergence = {
+                param($Config, $Contract, $MinimumReceiptUtc, $AllProviders)
+                [void]$calls.Add('WaitForConvergence')
+                $capture.MinimumReceiptUtc = $MinimumReceiptUtc
+                $capture.Providers = $AllProviders
+            }.GetNewClosure()
+            $minimum = [datetime]'2026-08-30T12:00:00Z'
+
+            Repair-SetupCmMarkerDesiredState -Config (New-TestMarkerConfig) `
+                -State $state -Providers $repairProviders `
+                -UtcNowProvider { $minimum }.GetNewClosure()
+
+            $calls | Should -BeExactly @(
+                'CreateEvidenceChannel',
+                'UpdateDetectorPolicy',
+                'RequestClientPolicy',
+                'WaitForConvergence'
+            )
+            ([datetime]$capture.MinimumReceiptUtc).ToUniversalTime().ToString('o') |
+                Should -BeExactly $minimum.ToUniversalTime().ToString('o')
+            [object]::ReferenceEquals($capture.Providers, $repairProviders) |
+                Should -BeTrue
+        }
+
+        It 'uses only detector script parameters for the approved policy upgrade' {
+            $providers = Get-SetupCmMarkerDefaultProviders
+            $policyText = $providers.UpdateDetectorPolicy.ToString()
+
+            $policyText | Should -Match 'Set-CMScriptDeploymentType'
+            $policyText | Should -Match '-ScriptLanguage\s+VBScript'
+            $policyText | Should -Match '-ScriptText\s+\$detector'
+            $policyText | Should -Match '-Force'
+            $policyText | Should -Not -Match `
+                'ContentLocation|InstallCommand|UninstallCommand|EstimatedRuntime|MaximumRuntime|InstallationBehavior|LogonRequirement|UserInteraction|RebootBehavior'
+        }
+
         It 'repairs only the owned content chain when the managed content source is incomplete' {
             $providers = New-CompliantMarkerProviders
             $content = & $providers.ContentSource
@@ -333,7 +597,11 @@ Describe 'Setup-CM marker acceptance desired state' {
             Repair-SetupCmMarkerDesiredState -Config (New-TestMarkerConfig) -State $state `
                 -Providers (New-RecordingMarkerRepairProviders -Calls $calls)
 
-            $calls | Should -BeExactly @('CreateDeployment', 'RequestClientPolicy')
+            $calls | Should -BeExactly @(
+                'CreateDeployment',
+                'RequestClientPolicy',
+                'WaitForConvergence'
+            )
         }
 
         It 'redistributes only when the accepted package is absent from the single DP' {
@@ -364,7 +632,90 @@ Describe 'Setup-CM marker acceptance desired state' {
             Repair-SetupCmMarkerDesiredState -Config (New-TestMarkerConfig) -State $state `
                 -Providers (New-RecordingMarkerRepairProviders -Calls $calls)
 
-            $calls | Should -BeExactly @('RequestClientPolicy')
+            $calls | Should -BeExactly @(
+                'RequestClientPolicy',
+                'WaitForConvergence'
+            )
+        }
+
+        It 'converges from pending to compliant with one 15-second read-only delay' {
+            $states = [System.Collections.Generic.Queue[object]]::new()
+            $states.Enqueue([pscustomobject]@{
+                State = 'NotCompliant'; Components = @()
+            })
+            $states.Enqueue([pscustomobject]@{
+                State = 'Compliant'; Components = @()
+            })
+            $delays = [System.Collections.Generic.List[int]]::new()
+
+            $result = Wait-SetupCmMarkerConvergence `
+                -Config (New-TestMarkerConfig) `
+                -Contract (Get-SetupCmMarkerFixedContract) `
+                -MinimumEvidenceReceiptUtc ([datetime]'2026-08-30T12:00:00Z') `
+                -StateProvider { $states.Dequeue() }.GetNewClosure() `
+                -UtcNowProvider { [datetime]'2026-08-30T12:00:00Z' } `
+                -DelayProvider { param($Seconds) [void]$delays.Add($Seconds) }.GetNewClosure()
+
+            $result.State | Should -BeExactly 'Compliant'
+            $delays | Should -BeExactly @(15)
+        }
+
+        It 'stops convergence immediately on conflict without delaying' {
+            $delays = [System.Collections.Generic.List[int]]::new()
+
+            {
+                Wait-SetupCmMarkerConvergence `
+                    -Config (New-TestMarkerConfig) `
+                    -Contract (Get-SetupCmMarkerFixedContract) `
+                    -MinimumEvidenceReceiptUtc ([datetime]'2026-08-30T12:00:00Z') `
+                    -StateProvider {
+                        [pscustomobject]@{ State = 'Conflict'; Components = @() }
+                    } `
+                    -UtcNowProvider { [datetime]'2026-08-30T12:00:00Z' } `
+                    -DelayProvider {
+                        param($Seconds)
+                        [void]$delays.Add($Seconds)
+                    }.GetNewClosure()
+            } | Should -Throw '*safety conflict*'
+            $delays | Should -HaveCount 0
+        }
+
+        It 'times convergence out at 900 seconds without another mutation or delay' {
+            $timeoutClockState = [pscustomobject]@{ Calls = 0 }
+            $timeoutStartTime = [datetime]'2026-08-30T12:00:00Z'
+            $probes = [pscustomobject]@{ Count = 0 }
+            $delays = [System.Collections.Generic.List[int]]::new()
+            $timeoutStateProvider = {
+                $probes.Count++
+                [pscustomobject]@{
+                    State = 'NotCompliant'; Components = @()
+                }
+            }.GetNewClosure()
+            $timeoutUtcNowProvider = {
+                $timeoutClockState.Calls++
+                if ($timeoutClockState.Calls -eq 1) {
+                    $timeoutStartTime
+                }
+                else {
+                    $timeoutStartTime.AddSeconds(900)
+                }
+            }.GetNewClosure()
+            $timeoutDelayProvider = {
+                param($Seconds)
+                [void]$delays.Add($Seconds)
+            }.GetNewClosure()
+
+            {
+                Wait-SetupCmMarkerConvergence `
+                    -Config (New-TestMarkerConfig) `
+                    -Contract (Get-SetupCmMarkerFixedContract) `
+                    -MinimumEvidenceReceiptUtc ([datetime]'2026-08-30T12:00:00Z') `
+                    -StateProvider $timeoutStateProvider `
+                    -UtcNowProvider $timeoutUtcNowProvider `
+                    -DelayProvider $timeoutDelayProvider
+            } | Should -Throw '*timed out after 900 seconds*'
+            $probes.Count | Should -Be 1
+            $delays | Should -HaveCount 0
         }
 
         It 'rejects <CollectionCount> matching collections before deployment update' -ForEach @(
@@ -436,6 +787,7 @@ Describe 'Setup-CM marker direct client file evidence' {
                 -ItemProvider {
                     param($Path)
                     @{
+                        Length = 78
                         LastWriteTimeUtc = [datetime]::SpecifyKind(
                             [datetime]'2026-08-30T12:00:00',
                             [System.DateTimeKind]::Utc
@@ -446,6 +798,7 @@ Describe 'Setup-CM marker direct client file evidence' {
             $script:probedPath | Should -BeExactly `
                 '\\RING0IVY24-01.test.gell.one\C$\ProgramData\SetupCm\Phase1\marker.json'
             $state.MarkerHash | Should -BeExactly ('A' * 64)
+            $state.MarkerLength | Should -Be 78
             $state.MarkerHashVerification | Should -BeExactly 'DirectAuthenticatedFileRead'
             $state.MarkerLastWriteTime | Should -BeExactly '2026-08-30T12:00:00.0000000Z'
             $state.PSObject.Properties.Name | Should -Not -Contain 'Path'

@@ -731,7 +731,7 @@ function Get-SetupCmMarkerPublishedEvidenceAssessment {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]$Contract,
-        [Parameter(Mandatory)]$Inventory,
+        [Parameter(Mandatory)][AllowNull()]$Inventory,
         [datetime]$NowUtc = (Get-Date).ToUniversalTime(),
         [Nullable[datetime]]$MinimumReceiptUtc
     )
@@ -911,5 +911,72 @@ function Get-SetupCmMarkerPublishedEvidenceAssessment {
         MarkerHashVerification = 'DirectAuthenticatedClientEvidence'
         ReceiptTimeUtc = $receiptTimeUtc
         OwnerSid = $ownerSid
+    }
+}
+
+function Get-SetupCmMarkerClientEvidenceSelection {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$Contract,
+        [AllowNull()]$DirectState,
+        [AllowNull()]$EvidenceInventory,
+        [datetime]$NowUtc = (Get-Date).ToUniversalTime(),
+        [Nullable[datetime]]$MinimumReceiptUtc
+    )
+
+    $directRoute = [string](Get-SetupCmMarkerValue `
+        -InputObject $DirectState -Name MarkerHashVerification `
+        -DefaultValue 'ProbeUnavailable')
+    if ($directRoute -cne 'ProbeUnavailable') {
+        return [pscustomobject][ordered]@{
+            MarkerHash = [string](Get-SetupCmMarkerValue `
+                -InputObject $DirectState -Name MarkerHash)
+            MarkerLength = [long](Get-SetupCmMarkerValue `
+                -InputObject $DirectState -Name MarkerLength -DefaultValue 0L)
+            MarkerHashVerification = $directRoute
+            MarkerLastWriteTime = [string](Get-SetupCmMarkerValue `
+                -InputObject $DirectState -Name MarkerLastWriteTime)
+            EvidenceReceiptTimeUtc = ''
+            EvidenceOwnerSid = ''
+            EvidenceReason = ''
+        }
+    }
+
+    $assessment = Get-SetupCmMarkerPublishedEvidenceAssessment `
+        -Contract $Contract -Inventory $EvidenceInventory -NowUtc $NowUtc `
+        -MinimumReceiptUtc $MinimumReceiptUtc
+    $route = switch ([string]$assessment.State) {
+        'Compliant' { 'DirectAuthenticatedClientEvidence' }
+        'NotCompliant' { 'ClientEvidencePending' }
+        default {
+            if ([string]$assessment.MarkerHashVerification -ceq 'ProbeUnavailable') {
+                'ProbeUnavailable'
+            }
+            else {
+                'EvidenceConflict'
+            }
+        }
+    }
+    $receiptTime = Get-SetupCmMarkerValue `
+        -InputObject $assessment -Name ReceiptTimeUtc
+    [pscustomobject][ordered]@{
+        MarkerHash = if ($route -ceq 'DirectAuthenticatedClientEvidence') {
+            [string]$assessment.MarkerHash
+        }
+        else { '' }
+        MarkerLength = if ($route -ceq 'DirectAuthenticatedClientEvidence') {
+            [long]$assessment.MarkerLength
+        }
+        else { 0L }
+        MarkerHashVerification = $route
+        MarkerLastWriteTime = ''
+        EvidenceReceiptTimeUtc = if ($receiptTime -is [datetime]) {
+            ([datetime]$receiptTime).ToUniversalTime().ToString('o')
+        }
+        else { '' }
+        EvidenceOwnerSid = [string](Get-SetupCmMarkerValue `
+            -InputObject $assessment -Name OwnerSid)
+        EvidenceReason = [string](Get-SetupCmMarkerValue `
+            -InputObject $assessment -Name Reason)
     }
 }

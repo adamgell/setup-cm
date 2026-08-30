@@ -474,7 +474,7 @@ git commit -m "feat: publish authenticated marker evidence"
   `UpdateDetectorPolicy`, and `WaitForConvergence`, plus
   `Wait-SetupCmMarkerConvergence`.
 
-- [ ] **Step 1: Write desired-state proof-precedence tests**
+- [x] **Step 1: Write desired-state proof-precedence tests**
 
 Extend `New-CompliantMarkerProviders` with exact `EvidenceChannel` inventory.
 Add tests for:
@@ -490,7 +490,7 @@ Add tests for:
   `Conflict/ClientProbeUnavailable`; and
 - `ExactDetectorAndServerState` remains noncompliant.
 
-- [ ] **Step 2: Write detector migration classification tests**
+- [x] **Step 2: Write detector migration classification tests**
 
 Use the predecessor deployment hash with every other property exact and assert:
 
@@ -503,12 +503,12 @@ $component.Reason | Should -BeExactly 'ApprovedDetectorUpgrade'
 Assert current detector is compliant, any third hash is conflict, and
 predecessor plus another deployment-type drift is conflict.
 
-- [ ] **Step 3: Run desired-state tests RED**
+- [x] **Step 3: Run desired-state tests RED**
 
 Run `MarkerAcceptance.Tests.ps1`; require focused failures for missing provider
 keys, unsupported proof route, and predecessor classification.
 
-- [ ] **Step 4: Integrate one channel probe and proof selection**
+- [x] **Step 4: Integrate one channel probe and proof selection**
 
 Call `Providers.EvidenceChannel` once before ConfigMgr inventory, add a sanitized
 `EvidenceChannel` component, and pass the normalized inventory plus optional
@@ -528,7 +528,7 @@ Include only share name, channel local path, target SID, receipt time, owner
 SID, schema version, route, marker hash, and marker length in component
 evidence. Never include ACE arrays or raw descriptors.
 
-- [ ] **Step 5: Write repair-sequence and zero-action tests**
+- [x] **Step 5: Write repair-sequence and zero-action tests**
 
 Record action names and assert the first migration sequence is exactly:
 
@@ -546,7 +546,7 @@ creation, membership, and assignment actions. Assert exact fresh state calls
 zero actions. Preserve existing tests proving real content drift still follows
 `SyncContent`, `UpdateDeploymentType`, and `Distribute`.
 
-- [ ] **Step 6: Implement narrow repair routing**
+- [x] **Step 6: Implement narrow repair routing**
 
 Create the channel before policy mutation. Route only
 `ApprovedDetectorUpgrade` to:
@@ -570,7 +570,7 @@ invoke `WaitForConvergence` once. Extend
 wait provider accepts `($Config, $Contract, $MinimumEvidenceReceiptUtc,
 $AllProviders)` so polling reuses the same read-only provider set.
 
-- [ ] **Step 7: Write and implement convergence tests**
+- [x] **Step 7: Write and implement convergence tests**
 
 Inject state, clock, and delay providers into
 `Wait-SetupCmMarkerConvergence`. Test pending-to-compliant, immediate conflict,
@@ -592,7 +592,7 @@ The default loop probes immediately, sleeps 15 seconds only while pending,
 stops at 900 seconds, throws immediately on conflict, and never invokes a
 second mutation.
 
-- [ ] **Step 8: Run focused tests GREEN and commit**
+- [x] **Step 8: Run focused tests GREEN and commit**
 
 ```powershell
 Invoke-Pester ./tests/Unit/MarkerEvidenceChannel.Tests.ps1,./tests/Unit/MarkerAcceptance.Tests.ps1 -Output Detailed -CI

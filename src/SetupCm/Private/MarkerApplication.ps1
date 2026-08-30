@@ -241,7 +241,8 @@ function Get-SetupCmMarkerDesiredState {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][hashtable]$Config,
-        [hashtable]$Providers
+        [hashtable]$Providers,
+        [Nullable[datetime]]$MinimumEvidenceReceiptUtc
     )
 
     $contract = Get-SetupCmMarkerFixedContract
@@ -334,8 +335,32 @@ function Get-SetupCmMarkerDesiredState {
         [void]$components.Add((New-SetupCmMarkerComponent -Name ContentSource -State Conflict -Reason ProbeUnavailable))
     }
 
+    $evidenceChannelInventory = $null
     try {
-        $inventory = & $Providers.Inventory $Config $contract
+        $evidenceChannelInventory = & $Providers.EvidenceChannel $Config $contract
+        $evidenceChannelAssessment = Get-SetupCmMarkerEvidenceChannelAssessment `
+            -Contract $contract -Inventory $evidenceChannelInventory
+        $evidenceChannelDetails = @{
+            ShareName = [string]$contract.EvidenceChannel.ShareName
+            LocalPath = [string]$contract.EvidenceChannel.LocalPath
+            SchemaVersion = [int]$contract.EvidenceChannel.SchemaVersion
+            TargetComputerSid = [string](Get-SetupCmMarkerValue `
+                -InputObject $evidenceChannelInventory -Name TargetComputerSid)
+        }
+        [void]$components.Add((New-SetupCmMarkerComponent `
+            -Name EvidenceChannel -State $evidenceChannelAssessment.State `
+            -Reason $evidenceChannelAssessment.Reason `
+            -Details $evidenceChannelDetails))
+    }
+    catch {
+        [void]$components.Add((New-SetupCmMarkerComponent `
+            -Name EvidenceChannel -State Conflict -Reason ProbeUnavailable))
+        return New-SetupCmMarkerDesiredStateResult -Components $components
+    }
+
+    try {
+        $inventory = & $Providers.Inventory $Config $contract `
+            $evidenceChannelInventory $MinimumEvidenceReceiptUtc
     }
     catch {
         [void]$components.Add((New-SetupCmMarkerComponent -Name ProviderInventory -State Conflict -Reason ProbeUnavailable))
@@ -378,15 +403,12 @@ function Get-SetupCmMarkerDesiredState {
         $reason = if ($applications.Count -eq 0) { 'PendingApplication' } else { 'Missing' }
         [void]$components.Add((New-SetupCmMarkerComponent -Name DeploymentType -State NotCompliant -Reason $reason))
     }
-    elseif ([string](Get-SetupCmMarkerValue -InputObject $deploymentType -Name DetectorHash) -cne $contract.DetectorFile.Hash) {
-        [void]$components.Add((New-SetupCmMarkerComponent -Name DeploymentType -State Conflict -Reason DetectorHashMismatch))
-    }
     elseif ([string](Get-SetupCmMarkerValue -InputObject $deploymentType -Name Name) -cne $contract.DeploymentTypeName -or
         [string](Get-SetupCmMarkerValue -InputObject $deploymentType -Name Technology) -cne 'Script') {
         [void]$components.Add((New-SetupCmMarkerComponent -Name DeploymentType -State Conflict -Reason SameNameIdentityMismatch))
     }
     else {
-        $deploymentTypeExact =
+        $ownedPropertiesExact =
             [bool](Get-SetupCmMarkerValue -InputObject $deploymentType -Name Enabled -DefaultValue $false) -and
             (ConvertTo-SetupCmMarkerComparablePath -Path ([string](Get-SetupCmMarkerValue -InputObject $deploymentType -Name ContentLocation))) -ieq
                 (ConvertTo-SetupCmMarkerComparablePath -Path $contract.ContentLocation) -and
@@ -398,7 +420,33 @@ function Get-SetupCmMarkerDesiredState {
             [string](Get-SetupCmMarkerValue -InputObject $deploymentType -Name RebootBehavior) -ceq 'NoAction' -and
             -not [string]::IsNullOrWhiteSpace([string](Get-SetupCmMarkerValue -InputObject $deploymentType -Name ContentId)) -and
             -not [string]::IsNullOrWhiteSpace([string](Get-SetupCmMarkerValue -InputObject $deploymentType -Name PackageId))
-        if (-not $deploymentTypeExact) {
+        $detectorHash = [string](Get-SetupCmMarkerValue `
+            -InputObject $deploymentType -Name DetectorHash)
+        $detectorLength = [long](Get-SetupCmMarkerValue `
+            -InputObject $deploymentType -Name DetectorLength -DefaultValue -1L)
+        $previousDetectorExact =
+            $detectorHash -ceq [string]$contract.PreviousDetectorFile.Hash -and
+            $detectorLength -eq [long]$contract.PreviousDetectorFile.Length
+        $currentDetectorExact =
+            $detectorHash -ceq [string]$contract.DetectorFile.Hash -and
+            $detectorLength -eq [long]$contract.DetectorFile.Length
+        if ($previousDetectorExact) {
+            if ($ownedPropertiesExact) {
+                [void]$components.Add((New-SetupCmMarkerComponent `
+                    -Name DeploymentType -State NotCompliant `
+                    -Reason ApprovedDetectorUpgrade))
+            }
+            else {
+                [void]$components.Add((New-SetupCmMarkerComponent `
+                    -Name DeploymentType -State Conflict `
+                    -Reason DetectorUpgradeWithPropertyDrift))
+            }
+        }
+        elseif (-not $currentDetectorExact) {
+            [void]$components.Add((New-SetupCmMarkerComponent `
+                -Name DeploymentType -State Conflict -Reason DetectorHashMismatch))
+        }
+        elseif (-not $ownedPropertiesExact) {
             [void]$components.Add((New-SetupCmMarkerComponent -Name DeploymentType -State NotCompliant -Reason OwnedPropertiesDrift))
         }
         else {
@@ -527,11 +575,30 @@ function Get-SetupCmMarkerDesiredState {
 
     $client = Get-SetupCmMarkerValue -InputObject $inventory -Name Client
     $markerHashVerification = [string](Get-SetupCmMarkerValue -InputObject $client -Name MarkerHashVerification)
+    $successfulClientProof = $markerHashVerification -cin @(
+        'DirectAuthenticatedFileRead',
+        'DirectAuthenticatedClientEvidence'
+    )
+    $clientEvidenceDetails = @{
+        MarkerHash = [string](Get-SetupCmMarkerValue `
+            -InputObject $client -Name MarkerHash)
+        MarkerLength = [long](Get-SetupCmMarkerValue `
+            -InputObject $client -Name MarkerLength -DefaultValue 0L)
+        MarkerHashVerification = $markerHashVerification
+        EvidenceReceiptTimeUtc = [string](Get-SetupCmMarkerValue `
+            -InputObject $client -Name EvidenceReceiptTimeUtc)
+        EvidenceOwnerSid = [string](Get-SetupCmMarkerValue `
+            -InputObject $client -Name EvidenceOwnerSid)
+        EvidenceReason = [string](Get-SetupCmMarkerValue `
+            -InputObject $client -Name EvidenceReason)
+    }
     $clientExact = $null -ne $client -and
         [string](Get-SetupCmMarkerValue -InputObject $client -Name Name) -ieq $contract.TargetName -and
         [int](Get-SetupCmMarkerValue -InputObject $client -Name ResourceId) -eq $contract.TargetResourceId -and
         [string](Get-SetupCmMarkerValue -InputObject $client -Name MarkerHash) -ceq $contract.MarkerHash -and
-        $markerHashVerification -ceq 'DirectAuthenticatedFileRead' -and
+        [long](Get-SetupCmMarkerValue -InputObject $client -Name MarkerLength -DefaultValue -1L) -eq
+            [long]$contract.MarkerLength -and
+        $successfulClientProof -and
         [string](Get-SetupCmMarkerValue -InputObject $client -Name InstallState) -ceq 'Installed' -and
         [int](Get-SetupCmMarkerValue -InputObject $client -Name EvaluationState) -eq 1 -and
         [string](Get-SetupCmMarkerValue -InputObject $client -Name ResolvedState) -ceq 'Installed' -and
@@ -546,7 +613,19 @@ function Get-SetupCmMarkerDesiredState {
         [void]$components.Add((New-SetupCmMarkerComponent -Name Client -State NotCompliant -Reason PendingDeployment))
     }
     elseif ($null -ne $client -and $markerHashVerification -ceq 'ProbeUnavailable') {
-        [void]$components.Add((New-SetupCmMarkerComponent -Name Client -State Conflict -Reason ClientProbeUnavailable))
+        [void]$components.Add((New-SetupCmMarkerComponent `
+            -Name Client -State Conflict -Reason ClientProbeUnavailable `
+            -Details $clientEvidenceDetails))
+    }
+    elseif ($null -ne $client -and $markerHashVerification -ceq 'EvidenceConflict') {
+        [void]$components.Add((New-SetupCmMarkerComponent `
+            -Name Client -State Conflict -Reason ClientEvidenceConflict `
+            -Details $clientEvidenceDetails))
+    }
+    elseif ($null -ne $client -and $markerHashVerification -ceq 'ClientEvidencePending') {
+        [void]$components.Add((New-SetupCmMarkerComponent `
+            -Name Client -State NotCompliant -Reason ClientEvidencePending `
+            -Details $clientEvidenceDetails))
     }
     elseif (-not $clientExact) {
         [void]$components.Add((New-SetupCmMarkerComponent -Name Client -State NotCompliant -Reason ClientNotCompliant))
@@ -555,8 +634,13 @@ function Get-SetupCmMarkerDesiredState {
         [void]$components.Add((New-SetupCmMarkerComponent -Name Client -State Compliant -Reason Exact -Details @{
             ClientName = $contract.TargetName; ResourceId = $contract.TargetResourceId
             MarkerHash = $contract.MarkerHash
+            MarkerLength = [long](Get-SetupCmMarkerValue -InputObject $client -Name MarkerLength -DefaultValue 0L)
             MarkerHashVerification = $markerHashVerification
             MarkerLastWriteTime = [string](Get-SetupCmMarkerValue -InputObject $client -Name MarkerLastWriteTime)
+            EvidenceReceiptTimeUtc = [string](Get-SetupCmMarkerValue `
+                -InputObject $client -Name EvidenceReceiptTimeUtc)
+            EvidenceOwnerSid = [string](Get-SetupCmMarkerValue `
+                -InputObject $client -Name EvidenceOwnerSid)
             InstallState = 'Installed'; EvaluationState = 1; ResolvedState = 'Installed'; ExitCode = 0
             ExecutionContext = 'System'; SelectedDistributionPoint = $contract.SiteServerFqdn
             ContentDownload = 'Verified'; StateMessages = @(Get-SetupCmMarkerValue -InputObject $client -Name StateMessages)
@@ -608,10 +692,12 @@ function Test-SetupCmMarkerDesiredState {
         [Parameter(Mandatory)][hashtable]$Config,
         [Parameter(Mandatory)][string]$EvidenceRoot,
         [hashtable]$Providers,
+        [Nullable[datetime]]$MinimumEvidenceReceiptUtc,
         [switch]$PassThru
     )
 
-    $state = Get-SetupCmMarkerDesiredState -Config $Config -Providers $Providers
+    $state = Get-SetupCmMarkerDesiredState -Config $Config -Providers $Providers `
+        -MinimumEvidenceReceiptUtc $MinimumEvidenceReceiptUtc
     $evidence = [ordered]@{
         evaluatedAt = (Get-Date).ToUniversalTime().ToString('o')
         state = $state.State
@@ -633,13 +719,65 @@ function Invoke-SetupCmMarkerProviderAction {
         [Parameter(Mandatory)][hashtable]$Providers,
         [Parameter(Mandatory)][string]$Name,
         [Parameter(Mandatory)][hashtable]$Config,
-        [Parameter(Mandatory)]$Contract
+        [Parameter(Mandatory)]$Contract,
+        [object[]]$Arguments = @()
     )
 
     if (-not $Providers.ContainsKey($Name) -or $null -eq $Providers[$Name]) {
         throw "Marker repair provider '$Name' is unavailable."
     }
-    & $Providers[$Name] $Config $Contract
+    & $Providers[$Name] $Config $Contract @Arguments
+}
+
+function Wait-SetupCmMarkerConvergence {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][hashtable]$Config,
+        [Parameter(Mandatory)]$Contract,
+        [Parameter(Mandatory)][datetime]$MinimumEvidenceReceiptUtc,
+        [hashtable]$Providers,
+        [scriptblock]$StateProvider,
+        [scriptblock]$UtcNowProvider = {
+            (Get-Date).ToUniversalTime()
+        },
+        [scriptblock]$DelayProvider = {
+            param($Seconds)
+            Start-Sleep -Seconds $Seconds
+        }
+    )
+
+    if ($null -eq $Providers) { $Providers = Get-SetupCmMarkerDefaultProviders }
+    if ($null -eq $StateProvider) {
+        $StateProvider = {
+            param(
+                $StateConfig,
+                $StateContract,
+                $StateMinimumReceiptUtc,
+                $StateProviders
+            )
+            Get-SetupCmMarkerDesiredState -Config $StateConfig `
+                -Providers $StateProviders `
+                -MinimumEvidenceReceiptUtc $StateMinimumReceiptUtc
+        }
+    }
+
+    $startedAt = ([datetime](& $UtcNowProvider)).ToUniversalTime()
+    $deadline = $startedAt.AddSeconds(
+        [int]$Contract.EvidenceChannel.ConvergenceSeconds)
+    while ($true) {
+        $state = & $StateProvider $Config $Contract `
+            $MinimumEvidenceReceiptUtc $Providers
+        if ([string]$state.State -ceq 'Compliant') { return $state }
+        if ([string]$state.State -ceq 'Conflict') {
+            throw 'Marker convergence encountered a safety conflict.'
+        }
+
+        $now = ([datetime](& $UtcNowProvider)).ToUniversalTime()
+        if ($now -ge $deadline) {
+            throw "Marker convergence timed out after $($Contract.EvidenceChannel.ConvergenceSeconds) seconds."
+        }
+        & $DelayProvider ([int]$Contract.EvidenceChannel.PollSeconds)
+    }
 }
 
 function Repair-SetupCmMarkerDesiredState {
@@ -648,7 +786,10 @@ function Repair-SetupCmMarkerDesiredState {
         [Parameter(Mandatory)][hashtable]$Config,
         [Parameter(Mandatory)]$State,
         [string]$EvidenceRoot,
-        [hashtable]$Providers
+        [hashtable]$Providers,
+        [scriptblock]$UtcNowProvider = {
+            (Get-Date).ToUniversalTime()
+        }
     )
 
     if ($State.State -eq 'Conflict' -or @($State.Components | Where-Object State -eq 'Conflict').Count -gt 0) {
@@ -664,7 +805,23 @@ function Repair-SetupCmMarkerDesiredState {
     $contract = Get-SetupCmMarkerFixedContract
     $contentChanged = $false
     $deploymentTypeChanged = $false
+    $detectorPolicyChanged = $false
     $deploymentCreated = $false
+    $evidenceChannelChanged = $false
+
+    $evidenceChannel = $State.Components |
+        Where-Object Name -eq EvidenceChannel | Select-Object -First 1
+    if ($null -eq $evidenceChannel) {
+        throw 'Marker repair requires an EvidenceChannel component.'
+    }
+    if ($evidenceChannel.State -eq 'NotCompliant') {
+        if ($evidenceChannel.Reason -notin 'Missing', 'IncompleteOwnedChannel') {
+            throw 'Marker evidence channel is not safely repairable.'
+        }
+        Invoke-SetupCmMarkerProviderAction -Providers $Providers `
+            -Name CreateEvidenceChannel -Config $Config -Contract $contract
+        $evidenceChannelChanged = $true
+    }
 
     $content = $State.Components | Where-Object Name -eq ContentSource | Select-Object -First 1
     if ($content.State -eq 'NotCompliant') {
@@ -678,9 +835,17 @@ function Repair-SetupCmMarkerDesiredState {
     }
 
     $deploymentType = $State.Components | Where-Object Name -eq DeploymentType | Select-Object -First 1
-    if ($deploymentType.State -eq 'NotCompliant' -and $deploymentType.Reason -in 'Missing', 'PendingApplication') {
+    if ($deploymentType.State -eq 'NotCompliant' -and
+        $deploymentType.Reason -in 'Missing', 'PendingApplication') {
         Invoke-SetupCmMarkerProviderAction -Providers $Providers -Name CreateDeploymentType -Config $Config -Contract $contract
         $deploymentTypeChanged = $true
+    }
+    elseif ($deploymentType.State -eq 'NotCompliant' -and
+        $deploymentType.Reason -eq 'ApprovedDetectorUpgrade' -and
+        -not $contentChanged) {
+        Invoke-SetupCmMarkerProviderAction -Providers $Providers `
+            -Name UpdateDetectorPolicy -Config $Config -Contract $contract
+        $detectorPolicyChanged = $true
     }
     elseif ($deploymentType.State -eq 'NotCompliant' -or $contentChanged) {
         Invoke-SetupCmMarkerProviderAction -Providers $Providers -Name UpdateDeploymentType -Config $Config -Contract $contract
@@ -717,8 +882,14 @@ function Repair-SetupCmMarkerDesiredState {
 
     $client = $State.Components | Where-Object Name -eq Client | Select-Object -First 1
     $server = $State.Components | Where-Object Name -eq ServerCompliance | Select-Object -First 1
-    if ($deploymentCreated -or $client.State -eq 'NotCompliant' -or $server.State -eq 'NotCompliant') {
+    if ($evidenceChannelChanged -or $detectorPolicyChanged -or
+        $deploymentCreated -or $client.State -eq 'NotCompliant' -or
+        $server.State -eq 'NotCompliant') {
+        $minimumEvidenceReceiptUtc = ([datetime](& $UtcNowProvider)).ToUniversalTime()
         Invoke-SetupCmMarkerProviderAction -Providers $Providers -Name RequestClientPolicy -Config $Config -Contract $contract
+        Invoke-SetupCmMarkerProviderAction -Providers $Providers `
+            -Name WaitForConvergence -Config $Config -Contract $contract `
+            -Arguments @($minimumEvidenceReceiptUtc, $Providers)
     }
 }
 
@@ -794,6 +965,7 @@ function Get-SetupCmMarkerDirectClientFileState {
 
     $result = [ordered]@{
         MarkerHash = ''
+        MarkerLength = 0L
         MarkerHashVerification = 'ProbeUnavailable'
         MarkerLastWriteTime = ''
     }
@@ -817,6 +989,8 @@ function Get-SetupCmMarkerDirectClientFileState {
         $item = & $ItemProvider $clientPath
         $lastWriteTime = Get-SetupCmMarkerValue -InputObject $item -Name LastWriteTimeUtc
         $result.MarkerHash = $hash.ToUpperInvariant()
+        $result.MarkerLength = [long](Get-SetupCmMarkerValue `
+            -InputObject $item -Name Length -DefaultValue 0L)
         $result.MarkerHashVerification = 'DirectAuthenticatedFileRead'
         if ($null -ne $lastWriteTime) {
             $result.MarkerLastWriteTime = ([datetime]$lastWriteTime).ToUniversalTime().ToString('o')
@@ -824,6 +998,7 @@ function Get-SetupCmMarkerDirectClientFileState {
     }
     catch {
         $result.MarkerHash = ''
+        $result.MarkerLength = 0L
         $result.MarkerHashVerification = 'ProbeUnavailable'
         $result.MarkerLastWriteTime = ''
     }
@@ -834,7 +1009,9 @@ function Get-SetupCmMarkerProviderInventory {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][hashtable]$Config,
-        [Parameter(Mandatory)]$Contract
+        [Parameter(Mandatory)]$Contract,
+        [AllowNull()]$EvidenceChannelInventory,
+        [Nullable[datetime]]$MinimumEvidenceReceiptUtc
     )
 
     Invoke-SetupCmMarkerSiteCommand -Config $Config -ScriptBlock {
@@ -912,6 +1089,12 @@ function Get-SetupCmMarkerProviderInventory {
                 ContentId = [string]$_.ContentId; PackageId = $packageId
                 ContentLocation = Get-SetupCmMarkerXmlValue -Xml $xml -LocalName Location
                 DetectorHash = if ([string]::IsNullOrEmpty($detectorText)) { '' } else { Get-SetupCmMarkerSha256Text -Text $detectorText }
+                DetectorLength = if ([string]::IsNullOrEmpty($detectorText)) {
+                    0L
+                }
+                else {
+                    [long][System.Text.Encoding]::UTF8.GetByteCount($detectorText)
+                }
                 DetectionLanguage = $detectorLanguage
                 InstallCommand = Get-SetupCmMarkerXmlValue -Xml $xml -LocalName InstallCommandLine
                 UninstallCommand = Get-SetupCmMarkerXmlValue -Xml $xml -LocalName UninstallCommandLine
@@ -973,12 +1156,23 @@ function Get-SetupCmMarkerProviderInventory {
             Get-SetupCmMarkerDirectClientFileState -Contract $Contract
         }
         else { $null }
+        $selectedClientMarker = if ($acceptedServerRow.Count -eq 1) {
+            Get-SetupCmMarkerClientEvidenceSelection -Contract $Contract `
+                -DirectState $directClientMarker `
+                -EvidenceInventory $EvidenceChannelInventory `
+                -MinimumReceiptUtc $MinimumEvidenceReceiptUtc
+        }
+        else { $null }
         $clientProjection = if ($acceptedServerRow.Count -eq 1) {
             @{
                 Name = $Contract.TargetName; ResourceId = $Contract.TargetResourceId
-                MarkerHash = [string]$directClientMarker.MarkerHash
-                MarkerHashVerification = [string]$directClientMarker.MarkerHashVerification
-                MarkerLastWriteTime = [string]$directClientMarker.MarkerLastWriteTime
+                MarkerHash = [string]$selectedClientMarker.MarkerHash
+                MarkerLength = [long]$selectedClientMarker.MarkerLength
+                MarkerHashVerification = [string]$selectedClientMarker.MarkerHashVerification
+                MarkerLastWriteTime = [string]$selectedClientMarker.MarkerLastWriteTime
+                EvidenceReceiptTimeUtc = [string]$selectedClientMarker.EvidenceReceiptTimeUtc
+                EvidenceOwnerSid = [string]$selectedClientMarker.EvidenceOwnerSid
+                EvidenceReason = [string]$selectedClientMarker.EvidenceReason
                 InstallState = 'Installed'; EvaluationState = 1; ResolvedState = 'Installed'; ExitCode = 0
                 ExecutionContext = 'System'
                 SelectedDistributionPoint = if ($distributionAccepted) { $Contract.SiteServerFqdn } else { '' }
@@ -1077,9 +1271,20 @@ function Get-SetupCmMarkerDefaultProviders {
             param($Config, $Contract)
             @{ Files = @(Get-SetupCmMarkerFileInventory -Root $Contract.ContentSource -IncludeAllFiles) }
         }
-        Inventory = {
+        EvidenceChannel = {
             param($Config, $Contract)
-            Get-SetupCmMarkerProviderInventory -Config $Config -Contract $Contract
+            Get-SetupCmMarkerEvidenceChannelInventory -Contract $Contract
+        }
+        Inventory = {
+            param(
+                $Config,
+                $Contract,
+                $EvidenceChannelInventory,
+                $MinimumEvidenceReceiptUtc
+            )
+            Get-SetupCmMarkerProviderInventory -Config $Config -Contract $Contract `
+                -EvidenceChannelInventory $EvidenceChannelInventory `
+                -MinimumEvidenceReceiptUtc $MinimumEvidenceReceiptUtc
         }
         SyncContent = {
             param($Config, $Contract)
@@ -1123,6 +1328,23 @@ function Get-SetupCmMarkerDefaultProviders {
                     -ScriptLanguage VBScript -ScriptText $detector -InstallationBehaviorType InstallForSystem `
                     -LogonRequirementType WhetherOrNotUserLoggedOn -UserInteractionMode Hidden `
                     -RebootBehavior NoAction -EstimatedRuntimeMins 1 -MaximumRuntimeMins 15 -Force | Out-Null
+            }
+        }
+        CreateEvidenceChannel = {
+            param($Config, $Contract)
+            New-SetupCmMarkerEvidenceChannel -Contract $Contract | Out-Null
+        }
+        UpdateDetectorPolicy = {
+            param($Config, $Contract)
+            $detector = [System.IO.File]::ReadAllText(
+                (Join-Path $Contract.SourceRoot $Contract.DetectorFile.Name)
+            )
+            Invoke-SetupCmMarkerSiteCommand -Config $Config -ScriptBlock {
+                Set-CMScriptDeploymentType `
+                    -ApplicationName $Contract.ApplicationName `
+                    -DeploymentTypeName $Contract.DeploymentTypeName `
+                    -ScriptLanguage VBScript -ScriptText $detector -Force |
+                    Out-Null
             }
         }
         Distribute = {
@@ -1192,6 +1414,12 @@ function Get-SetupCmMarkerDefaultProviders {
                 Invoke-CMClientAction -DeviceId ([string]$Contract.TargetResourceId) `
                     -ActionType ClientNotificationAppDeplEvalNow | Out-Null
             }
+        }
+        WaitForConvergence = {
+            param($Config, $Contract, $MinimumEvidenceReceiptUtc, $AllProviders)
+            Wait-SetupCmMarkerConvergence -Config $Config -Contract $Contract `
+                -MinimumEvidenceReceiptUtc $MinimumEvidenceReceiptUtc `
+                -Providers $AllProviders
         }
     }
 }
