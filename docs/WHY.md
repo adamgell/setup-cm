@@ -40,4 +40,7 @@ Keeping that boundary clear allows the MECM workflow to be rerun without redefin
 
 ## What comes next
 
-The core health stage is the gate for optional capabilities such as co-management, Patch My PC, reporting, and diagnostic fixture collection. Those capabilities should remain separate modules so their failures do not obscure whether the baseline MECM site is healthy.
+The core Health stage is the baseline gate. Co-management, Patch My PC,
+reporting, alternate platforms, and every other optional capability remain
+separate projects so their failures cannot obscure baseline MECM health. See
+[Future projects](FUTURE-PROJECTS.md).

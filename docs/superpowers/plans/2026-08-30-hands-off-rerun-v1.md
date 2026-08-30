@@ -172,12 +172,14 @@ Releases.
 - Add: `docs/FUTURE-PROJECTS.md`
 - Modify: `.github/workflows/test.yml` as needed for all portable suites
 
-- [ ] Document the exact full-run/restart command, stage no-op semantics,
+- [x] Document the exact full-run/restart command, stage no-op semantics,
       marker boundary, evidence schema, and private-config/source-commit inputs.
-- [ ] Record every optional integration as a separate future project.
-- [ ] Add a deterministic local-link checker if one is not already available.
-- [ ] Run all portable tests, link checks, mdBook, and diff/secret scans.
-- [ ] Commit: `docs: define the v1 operator workflow`.
+- [x] Record every optional integration as a separate future project.
+- [x] Add a deterministic local-link checker if one is not already available.
+- [x] Run all portable tests, link checks, mdBook, and diff/secret scans: 170/170
+      unit tests passed, 43 Markdown files and 85 local links resolved, mdBook
+      and actionlint passed, and parser/PSScriptAnalyzer reported zero errors.
+- [x] Commit: `docs: define the v1 operator workflow`.
 
 ## Task 8: Review the implementation before live mutation
 

@@ -1,7 +1,7 @@
 # LabZ1 Deployment Target
 
-**Status:** Accepted baseline and marker deployment; v1 full-rerun work is in
-progress.
+**Status:** Accepted baseline and marker deployment; five-stage idempotent
+implementation complete; reviewed v1 two-run live gate pending.
 
 This is the current LabZ1 inventory. The earlier plan to provision
 `LABZ1-CMCLIENT01` was not the path used for final acceptance and is retained
@@ -41,6 +41,9 @@ remain unchanged and are not marker targets or v1 acceptance clients.
 3. Typed client-install implementation-plan Task 5 is complete. The preserved
    [2026-08-02 handoff](HANDOFF-2026-08-02-agent-mecm-client-install.md) is
    superseded historical context.
+4. Acquire, SQL, MECM, Marker, and Health now use real desired-state probes;
+   the marker provider integration sees exact live state and proves its
+   mutation adapters remain unused on a compliant deployment.
 
 ## Safe restart point
 
@@ -55,8 +58,12 @@ remain unchanged and are not marker targets or v1 acceptance clients.
 5. Verify the Phase 1 collection still has exactly one direct member and the
    marker assignment targets no other collection.
 
-Do not replay the complete bootstrap yet: on the currently accepted source,
-Acquire now has a read-only exact-artifact test, but the complete SQL/MECM
-desired-state probes are not accepted yet. The
+Do not replay the complete bootstrap merely for new timestamps. The
+release-candidate source now has exact Acquire, SQL, MECM, Marker, and Health
+probes, but it must pass PR review and then run twice from one exact source
+commit before it replaces the read-only accepted restart path. Follow the
 [hands-off rerun v1 plan](superpowers/plans/2026-08-30-hands-off-rerun-v1.md)
-completes those probes before the two-run acceptance gate.
+and the exact command in the [runbook](RUNBOOK.md).
+
+Capabilities intentionally excluded from this gate are tracked in
+[Future projects](FUTURE-PROJECTS.md).

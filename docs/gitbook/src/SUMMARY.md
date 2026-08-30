@@ -44,4 +44,5 @@
 - [Design Documents](./development/design-documents.md)
 - [Implementation Plans](./development/implementation-plans.md)
 - [Testing](./development/testing.md)
+- [Future Projects](./development/future-projects.md)
 - [Handoff Notes](./development/handoffs.md)

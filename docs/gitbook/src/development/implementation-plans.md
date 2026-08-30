@@ -64,16 +64,16 @@ See `docs/superpowers/plans/2026-08-01-mecm-vc-redist-dependency.md` for the ful
 marker acceptance, prove two consecutive runs, and publish v1.
 
 **Tasks:**
-1. Reconcile current project status and historical handoffs.
-2. Pin evidence and compliance contracts.
-3. Make Acquire read-only before apply.
-4. Implement SQL desired-state reconciliation.
-5. Implement MECM and read-only Health probes.
-6. Productize marker acceptance.
-7. Document and package the v1 workflow.
-8. Complete branch CI and review.
-9. Run Windows/provider integration and two live runs.
-10. Record acceptance, merge, tag, release, publish docs, and clean up safely.
+1. Reconcile current project status and historical handoffs — **complete**.
+2. Pin evidence and compliance contracts — **complete**.
+3. Make Acquire read-only before apply — **complete**.
+4. Implement SQL desired-state reconciliation — **complete**.
+5. Implement MECM and read-only Health probes — **complete**.
+6. Productize marker acceptance — **complete**.
+7. Document and package the v1 workflow — **in progress**.
+8. Complete branch CI and review — **pending**.
+9. Run Windows/provider integration and two live runs — **pending**.
+10. Record acceptance, merge, tag, release, publish docs, and clean up safely — **pending**.
 
 See `docs/superpowers/plans/2026-08-30-hands-off-rerun-v1.md` for the complete
 test-first execution plan.

@@ -20,6 +20,8 @@ sources:
     publisher: Microsoft Corporation
     signatureRelativePath: setup.exe
     version: "16.0.1000.6"
+    architecture: x64
+    sizeBytes: REPLACE_WITH_SIZE_BYTES
     licenseAccepted: false
     cacheFile: sql-server.iso
   mecm:
@@ -28,6 +30,8 @@ sources:
     publisher: Microsoft Corporation
     signatureRelativePath: SMSSETUP\BIN\X64\setup.exe
     version: "2503"
+    architecture: x64
+    sizeBytes: REPLACE_WITH_SIZE_BYTES
     licenseAccepted: false
     cacheFile: mecm.iso
   adk:
@@ -35,6 +39,8 @@ sources:
     sha256: REPLACE_WITH_SHA256
     publisher: Microsoft Corporation
     version: "10.1.26100.2454"
+    architecture: neutral
+    sizeBytes: REPLACE_WITH_SIZE_BYTES
     licenseAccepted: false
     cacheFile: adksetup.exe
   adkWinPe:
@@ -42,6 +48,8 @@ sources:
     sha256: REPLACE_WITH_SHA256
     publisher: Microsoft Corporation
     version: "10.1.26100.2454"
+    architecture: neutral
+    sizeBytes: REPLACE_WITH_SIZE_BYTES
     licenseAccepted: false
     cacheFile: adkwinpesetup.exe
   odbcDriver18:
@@ -49,6 +57,8 @@ sources:
     sha256: REPLACE_WITH_SHA256
     publisher: Microsoft Corporation
     version: "18.4.1.1"
+    architecture: x64
+    sizeBytes: REPLACE_WITH_SIZE_BYTES
     licenseAccepted: false
     cacheFile: msodbcsql18-x64.msi
   vcRedistX64:
@@ -56,6 +66,8 @@ sources:
     sha256: REPLACE_WITH_SHA256
     publisher: Microsoft Corporation
     version: "14.44.35211.0"
+    architecture: x64
+    sizeBytes: REPLACE_WITH_SIZE_BYTES
     licenseAccepted: false
     cacheFile: vc_redist.x64.exe
   vcRedistX86:
@@ -63,6 +75,8 @@ sources:
     sha256: REPLACE_WITH_SHA256
     publisher: Microsoft Corporation
     version: "14.44.35211.0"
+    architecture: x86
+    sizeBytes: REPLACE_WITH_SIZE_BYTES
     licenseAccepted: false
     cacheFile: vc_redist.x86.exe
   prerequisites: []
@@ -83,6 +97,13 @@ mecm:
 testClient:
   name: CMCLIENT01
   domain: lab.local
+markerAcceptance:
+  enabled: false
+  labOnly: true
+  siteCode: LAB
+  siteServerFqdn: LABZ1-CM01.test.gell.one
+  targetFqdn: RING0IVY24-01.test.gell.one
+  targetResourceId: 16777219
 ```
 
 ## Key annotations
@@ -91,7 +112,11 @@ testClient:
 - `safety.isolatedLab: true` — required for the intended lab use case.
 - `licenseAccepted: false` — you must explicitly set this to `true` after accepting the license terms for each installer.
 - `REPLACE_WITH_SHA256` — must be replaced with the actual SHA-256 checksum of your approved media.
+- `REPLACE_WITH_SIZE_BYTES` — must be replaced with the exact approved byte length.
 - `evidenceRoot` and `cacheRoot` — should be on local, adequately sized storage outside the repository.
+- `markerAcceptance.enabled: false` — the template cannot deploy the marker.
+  Enabling it requires the fixed LabZ1 identities shown and a full source
+  commit supplied at runtime.
 
 ## Version guidance
 

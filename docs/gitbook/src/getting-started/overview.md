@@ -2,10 +2,10 @@
 
 `setup-cm` treats a lab MECM deployment as a sequence of small, verifiable
 stages. The stage engine supports Test, Apply, Verify, and structured evidence.
-The accepted LabZ1 environment must currently use the
-[read-only restart procedure](../operations/current-status.md): Acquire now
-skips exact cached media, while complete SQL and MECM no-op probes remain v1
-work.
+The complete release-candidate workflow now has real read-only probes and
+bounded repair. The accepted LabZ1 environment must still use its
+[read-only restart procedure](../operations/current-status.md) until the
+reviewed two-run live gate begins.
 
 ## Architecture at a glance
 
@@ -13,7 +13,7 @@ work.
 ProxmoxVEAutopilot / Autopilot Agent
   └─ provisions the isolated, domain-joined Windows hosts
        └─ setup-cm
-            Acquire → Sql → Mecm → Health
+            Acquire → Sql → Mecm → Marker → Health
                  └─ run evidence in the configured evidence root
 ```
 
@@ -33,18 +33,21 @@ the already accepted LabZ1 site.
    Test-SetupCmPreflight -ConfigPath ./config/lab.local.yaml
    ```
 
-4. Run the guided workflow:
+4. Run the guided workflow. Marker-enabled runs require the full source commit:
 
    ```powershell
-   pwsh ./src/SetupCm/Public/Invoke-SetupCm.ps1 `
+   pwsh ./scripts/Invoke-SetupCm.ps1 `
      -ConfigPath ./config/lab.local.yaml `
-     -Mode Guided
+     -Mode Guided `
+     -SourceCommit '<FULL_40_CHARACTER_GIT_COMMIT>'
    ```
 
-For unattended agent execution, set `SETUPCM_CONFIG` to the staged configuration path and run:
+For unattended execution, stage private configuration separately, then set:
 
 ```powershell
-pwsh ./scripts/Invoke-SetupCm.ps1
+$env:SETUPCM_CONFIG = 'C:\ProgramData\SetupCm\config\lab.local.yaml'
+$env:SETUPCM_SOURCE_COMMIT = '<FULL_40_CHARACTER_GIT_COMMIT>'
+pwsh ./scripts/Invoke-SetupCm.ps1 -Mode Unattended
 ```
 
 See the [Operator Runbook](../operations/runbook.md) before operating the workflow.
@@ -56,6 +59,10 @@ See the [Operator Runbook](../operations/runbook.md) before operating the workfl
 | `Acquire` | Obtains and verifies SQL Server and MECM installation media in the configured cache. |
 | `Sql` | Installs SQL Server prerequisites, SQL Server, and SQL network configuration. |
 | `Mecm` | Installs MECM prerequisites, ADK, Windows PE, ODBC Driver 18, and the primary site. |
-| `Health` | Checks core SQL and MECM health, site roles, boundaries, test-client state, and expected logs. |
+| `Marker` | Reconciles and verifies the fixed one-device LabZ1 marker deployment. |
+| `Health` | Rechecks SQL, MECM, Management Point, Distribution Point, and active-client state without repair. |
 
-Each selected stage records a JSON result named `stage-<stage>.json` in a unique run directory beneath `evidenceRoot`. The result records the stage name, state (`Succeeded`, `Skipped`, or `Failed`), timestamps, and a message. Preserve that directory when investigating or resuming a failed run.
+Each selected stage records a JSON result named `stage-<stage>.json` in a
+unique run directory beneath `evidenceRoot`. Exact compliance is `Skipped`
+with no Apply; conflicts stop before mutation. Preserve the whole directory
+when investigating or resuming a failed run.

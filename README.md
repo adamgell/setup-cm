@@ -1,10 +1,11 @@
 # setup-cm
 
-> **Current status — accepted lab, v1 rerun work in progress**
+> **Current status — accepted lab, v1 live rerun gate pending**
 > The LabZ1 SQL/MECM/client baseline and its one-device required marker
-> deployment are accepted. The core full-run idempotency and v1 release gates
-> are not complete yet. Use the accepted restart records below rather than
-> replaying all bootstrap stages solely to generate newer timestamps.
+> deployment are accepted. Idempotent probes and bounded reconciliation now
+> exist for the complete five-stage workflow. The reviewed two-run live gate,
+> merge, and v1 release are still pending, so follow the accepted restart
+> records rather than replaying bootstrap stages merely for newer timestamps.
 
 `setup-cm` automates a repeatable, evidence-backed Microsoft Configuration Manager (MECM, formerly SCCM) primary-site deployment for an **isolated lab**.
 
@@ -26,10 +27,10 @@ older planned `LABZ1-CMCLIENT01` identity is obsolete for current acceptance.
 - [LabZ1 deployment target](docs/LABZ1_DEPLOYMENT.md) summarizes the current
   inventory, safe restart point, and remaining v1 work.
 
-Until the hands-off rerun plan is complete, use current read-only Health and
-provider/client checks. `Acquire` now verifies exact cached size, hash, version,
-architecture, publisher, and license state before applying; the complete SQL
-and MECM no-op probes are still in progress.
+Until the two-run gate is accepted, use current read-only Health and
+provider/client checks on the accepted lab. The release-candidate workflow now
+tests exact Acquire, SQL, MECM, Marker, and Health state before applying and
+fails closed on unsupported or conflicting identity.
 
 ## Why this exists
 
@@ -49,7 +50,7 @@ Read [why this repository is designed this way](docs/WHY.md) for the boundaries 
 ProxmoxVEAutopilot / Autopilot Agent
   └─ provisions the isolated, domain-joined Windows hosts
        └─ setup-cm
-            Acquire → Sql → Mecm → Health
+            Acquire → Sql → Mecm → Marker → Health
                  └─ run evidence in the configured evidence root
 ```
 
@@ -62,7 +63,8 @@ The first-release baseline intentionally excludes production targets, distribute
 - An isolated, domain-joined lab with a Windows Server host and a separate test client.
 - PowerShell 7 or later.
 - The `powershell-yaml` module to read the YAML configuration.
-- Approved SQL Server, MECM, Windows ADK, Windows PE add-on, and ODBC Driver 18 media, checksums, and accepted licenses.
+- Approved SQL Server, MECM, Windows ADK, Windows PE add-on, ODBC Driver 18,
+  and VC++ x64/x86 media, checksums, and accepted licenses.
 - Sufficient local disk space for the configured cache, SQL installation directory, MECM installation directory, and evidence.
 
 The CI workflow uses Pester 6. Install the dependencies locally when you want to run the unit tests:
@@ -83,18 +85,24 @@ Install-Module powershell-yaml -RequiredVersion 0.4.12 -Scope CurrentUser
    Test-SetupCmPreflight -ConfigPath ./config/lab.local.yaml
    ```
 
-4. Run the guided workflow:
+4. Run the guided workflow. When marker acceptance is enabled, pin evidence to
+   the full 40-character commit used to stage the source:
 
    ```powershell
-   pwsh ./src/SetupCm/Public/Invoke-SetupCm.ps1 `
+   $sourceCommit = '<FULL_40_CHARACTER_GIT_COMMIT>'
+   pwsh ./scripts/Invoke-SetupCm.ps1 `
      -ConfigPath ./config/lab.local.yaml `
-     -Mode Guided
+     -Mode Guided `
+     -SourceCommit $sourceCommit
    ```
 
-For unattended agent execution, set `SETUPCM_CONFIG` to the staged configuration path and run:
+For unattended agent execution, stage the private configuration separately
+from the source archive, set both inputs, and run:
 
 ```powershell
-pwsh ./scripts/Invoke-SetupCm.ps1
+$env:SETUPCM_CONFIG = 'C:\ProgramData\SetupCm\config\lab.local.yaml'
+$env:SETUPCM_SOURCE_COMMIT = '<FULL_40_CHARACTER_GIT_COMMIT>'
+pwsh ./scripts/Invoke-SetupCm.ps1 -Mode Unattended
 ```
 
 See the [runbook](docs/RUNBOOK.md) before operating the workflow.
@@ -106,9 +114,17 @@ See the [runbook](docs/RUNBOOK.md) before operating the workflow.
 | `Acquire` | Obtains and verifies SQL Server and MECM installation media in the configured cache. |
 | `Sql` | Installs SQL Server prerequisites, SQL Server, and SQL network configuration. |
 | `Mecm` | Installs MECM prerequisites, ADK, Windows PE, ODBC Driver 18, and the primary site. |
-| `Health` | Checks core SQL and MECM health, site roles, boundaries, test-client state, and expected logs. |
+| `Marker` | Reconciles the fixed lab-only marker application and verifies its required one-device deployment. |
+| `Health` | Rechecks SQL, MECM, Management Point, Distribution Point, and active-client state without repair. |
 
-Each selected stage records a JSON result named `stage-<stage>.json` in a unique run directory beneath `evidenceRoot`. The result records the stage name, state (`Succeeded`, `Skipped`, or `Failed`), timestamps, and a message. Preserve that directory when investigating or resuming a failed run. The accepted LabZ1 restart procedure currently selects `Health` only; full no-op rerun acceptance is the remaining v1 milestone.
+Every stage follows Test → bounded Apply when required → independent Verify →
+sanitized evidence. Exact compliance produces `Skipped` and performs no Apply.
+A conflict fails before mutation. Health is always read-only. Each selected
+stage records `stage-<stage>.json` in a unique run directory beneath
+`evidenceRoot`; component probes write their state artifacts alongside it.
+Preserve that directory when investigating or resuming a failed run. The
+accepted LabZ1 restart procedure currently selects `Health` only; the reviewed
+two-run no-op acceptance remains the final live v1 gate.
 
 ## Documentation
 
@@ -129,9 +145,12 @@ For offline reading, the original markdown sources are still available:
 - [Operator runbook](docs/RUNBOOK.md) — prepare, run, recover, and validate a lab deployment.
 - [Configuration reference](docs/CONFIGURATION.md) — how to safely complete `lab.local.yaml`.
 - [LabZ1 deployment target](docs/LABZ1_DEPLOYMENT.md) — the current reference-lab inventory and order.
+- [Future projects](docs/FUTURE-PROJECTS.md) — optional capabilities kept outside the v1 boundary.
 
 ## Test
 
 ```powershell
 Invoke-Pester ./tests/Unit -Output Detailed -CI
+./scripts/Test-MarkdownLinks.ps1
+mdbook build ./docs/gitbook
 ```

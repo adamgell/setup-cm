@@ -7,7 +7,8 @@ Before running `setup-cm`, ensure the following are in place.
 - An **isolated, domain-joined lab** with a Windows Server host and a separate test client.
 - **PowerShell 7** or later on the server.
 - The `powershell-yaml` module to read the YAML configuration.
-- Approved SQL Server, MECM, Windows ADK, Windows PE add-on, and ODBC Driver 18 media, checksums, and accepted licenses.
+- Approved SQL Server, MECM, Windows ADK, Windows PE add-on, ODBC Driver 18,
+  and VC++ x64/x86 media, checksums, and accepted licenses.
 - Sufficient local disk space for the configured cache, SQL installation directory, MECM installation directory, and evidence.
 
 ## Install dependencies locally

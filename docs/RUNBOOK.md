@@ -1,91 +1,193 @@
 # SetupCm runbook
 
-Use this runbook only after a provisioning layer has created an isolated, domain-joined Windows Server and a separate test client. Read the [project overview](../README.md) and [configuration reference](CONFIGURATION.md) first.
+Use this runbook only after a provisioning layer has created an isolated,
+domain-joined Windows Server and a separate test client. Read the
+[project overview](../README.md) and [configuration reference](CONFIGURATION.md)
+first.
 
 > [!IMPORTANT]
-> The accepted LabZ1 baseline is already installed. Until the
-> [hands-off rerun v1 plan](superpowers/plans/2026-08-30-hands-off-rerun-v1.md)
-> completes the SQL and MECM desired-state probes, do not run the complete
-> workflow against it solely to refresh evidence. Acquire now verifies exact
-> cached artifacts without downloading compliant media. Use the Phase 0
-> read-only `Health` restart procedure and independently verify the Phase 1
-> one-device marker deployment.
+> The accepted LabZ1 baseline is already installed. The five-stage
+> release-candidate implementation is idempotent, but its reviewed two-run live
+> acceptance is still pending. Until that gate starts, use the read-only
+> restart command below and the accepted
+> [Phase 0 record](PHASE0-2026-08-29-LAB-INVENTORY.md).
 
-## Prepare the lab
+## Required boundary
 
-1. Install PowerShell 7 and the `powershell-yaml` module on the server:
+The v1 workflow supports one topology:
+
+| Role | Required identity |
+| --- | --- |
+| Server, provider, MP, and DP | `LABZ1-CM01.test.gell.one` |
+| Site and database | `LAB` / `CM_LAB` |
+| Only marker target | `RING0IVY24-01.test.gell.one`, resource `16777219` |
+| Marker application | `Setup-CM Phase 1 Marker` |
+
+Marker acceptance must be explicitly enabled and lab-only. A different host,
+site, resource, same-name object, collection rule, member, or assignment is a
+conflict and stops before mutation. Production, additional clients, broad
+collections, VM lifecycle, trust changes, and client-wide policy changes are
+outside this runbook.
+
+## Prepare the server
+
+1. Install PowerShell 7, `powershell-yaml`, and Pester 6:
 
    ```powershell
    Install-Module powershell-yaml -RequiredVersion 0.4.12 -Scope CurrentUser
+   Install-Module Pester -RequiredVersion 6.0.0 -Scope CurrentUser
    ```
 
-2. Copy `config/lab.example.yaml` to the ignored `config/lab.local.yaml`.
-3. Replace every placeholder source, checksum, version, host name, domain, directory, and license acknowledgement with the isolated-lab values.
-4. Put SQL Server and MECM media in the configured cache or an approved private vault when they cannot be retrieved directly. Confirm that the ADK source with Deployment Tools and USMT, the matching Windows PE add-on, ODBC Driver 18, and the Microsoft Visual C++ v14 Redistributables for both x64 and x86 are available for the MECM stage. The Agent verifies and installs both runtime architectures before MECM downloads prerequisites.
-5. Confirm there is sufficient space at the configured cache, evidence, SQL, MECM, and prerequisite paths.
+2. On the review host, create and hash a source archive from one exact commit:
 
-Do not place product keys, credentials, certificates, or installer media in the repository.
+   ```powershell
+   $sourceCommit = (git rev-parse HEAD).Trim()
+   if ($sourceCommit -notmatch '^[0-9a-f]{40}$') { throw 'Commit is not exact.' }
+   $archive = "setup-cm-$sourceCommit.tar"
+   git archive --format=tar --output=$archive $sourceCommit
+   Get-FileHash -LiteralPath $archive -Algorithm SHA256
+   ```
+
+   Stage that archive on CM01 and verify its byte hash before extraction. Do
+   not add generated or private files to it.
+3. Stage the non-template configuration separately, for example at
+   `C:\ProgramData\SetupCm\config\lab.local.yaml`. Restrict its permissions
+   and never commit or copy it into evidence.
+4. Confirm the approved SQL, MECM, ADK, Windows PE, ODBC, and x64/x86 VC++
+   artifacts are present in the configured cache or available through the
+   approved source policy.
+5. Set the private path and the exact archive commit recorded on the review
+   host:
+
+   ```powershell
+   $env:SETUPCM_CONFIG = 'C:\ProgramData\SetupCm\config\lab.local.yaml'
+   $env:SETUPCM_SOURCE_COMMIT = '<FULL_40_CHARACTER_GIT_COMMIT>'
+   if ($env:SETUPCM_SOURCE_COMMIT -notmatch '^[0-9a-fA-F]{40}$') {
+       throw 'SETUPCM_SOURCE_COMMIT must identify the exact staged commit.'
+   }
+   ```
+
+Any run containing `Marker` rejects a missing or abbreviated source commit.
 
 ## Run preflight
 
 ```powershell
 Import-Module ./src/SetupCm/SetupCm.psd1 -Force
-Test-SetupCmPreflight -ConfigPath ./config/lab.local.yaml
+Test-SetupCmPreflight -ConfigPath $env:SETUPCM_CONFIG
 ```
 
-Continue only when `Ready` is `True`. Resolve the names in `Missing` by accepting the relevant license or supplying a source, vault location, or cached file.
+Continue only when `Ready` is `True`. Resolve each item in `Missing` by
+correcting the private configuration or approved artifact source.
 
-## Guided run
+## Read-only accepted-lab restart
 
-Guided mode pauses between stages so the operator can inspect progress:
+Use this command to refresh current Health evidence without invoking an
+installer or marker reconciliation:
 
 ```powershell
-pwsh ./src/SetupCm/Public/Invoke-SetupCm.ps1 `
-  -ConfigPath ./config/lab.local.yaml `
-  -Mode Guided
+pwsh ./scripts/Invoke-SetupCm.ps1 `
+  -ConfigPath $env:SETUPCM_CONFIG `
+  -Mode Unattended `
+  -Stage Health
 ```
 
-The default order is `Acquire`, `Sql`, `Mecm`, then `Health`.
+Health reads SQL, MECM, MP, DP, and active-client state, writes a fresh
+`health.json`, and has no repair action.
 
-## Unattended agent run
+## Run the complete workflow
 
-Stage the source bundle and a non-template local configuration on the server. Set `SETUPCM_CONFIG` to the configuration path, then run:
+From the staged source root, run:
 
 ```powershell
-$env:SETUPCM_CONFIG = 'C:\Path\To\lab.local.yaml'
-pwsh ./scripts/Invoke-SetupCm.ps1
+pwsh ./scripts/Invoke-SetupCm.ps1 `
+  -ConfigPath $env:SETUPCM_CONFIG `
+  -Mode Unattended `
+  -Stage Acquire,Sql,Mecm,Marker,Health `
+  -SourceCommit $env:SETUPCM_SOURCE_COMMIT
 ```
 
-The wrapper runs in unattended mode by default. To run a subset, pass `-Stage Acquire`, `-Stage Sql`, `-Stage Mecm`, or `-Stage Health`.
+When `markerAcceptance.enabled: true`, omitting `-Stage` selects the same
+five stages in that order. Keep `-Stage` explicit for release acceptance and
+recovery evidence.
 
-## Inspect evidence and recover
+The first accepted run may repair only proven missing state. Run the identical
+command from the identical commit a second time. The second run must report all
+five stages `Skipped`, execute no installer, redistribute no content, and
+create no ConfigMgr object, assignment, or membership rule.
 
-Each execution creates a new directory under `evidenceRoot`. It contains `stage-<name>.json` for every selected stage. A result has one of these states:
+To evaluate only the bounded marker feature:
 
-| State | Meaning |
+```powershell
+pwsh ./scripts/Invoke-SetupCmMarkerAcceptance.ps1 `
+  -ConfigPath $env:SETUPCM_CONFIG `
+  -SourceCommit $env:SETUPCM_SOURCE_COMMIT
+```
+
+## Understand stage behavior
+
+Each stage follows the same contract:
+
+| Probe result | Behavior |
 | --- | --- |
-| `Succeeded` | The stage applied its work and its verification passed. |
-| `Skipped` | The stage test found the target already compliant. |
-| `Failed` | The stage stopped; its message identifies the immediate error. |
+| `Compliant` | Write a `Skipped` stage result. Do not call Apply. |
+| `NotCompliant` | Repair only owned missing state, verify independently, then write `Succeeded`. |
+| `Conflict` | Write `Failed` and stop before mutation. |
+| Verification not `Compliant` | Write `Failed` even when Apply returned successfully. |
 
-For a failed stage:
+`Acquire` reacquires only invalid artifacts. `Sql` and `Mecm` repair only
+owned missing components and do not reinstall an exact instance or site.
+`Marker` reuses exact objects and changes only its fixed deployment chain.
+`Health` is always read-only.
 
-1. Preserve the evidence directory and review the failed `stage-<name>.json`.
-2. Correct the stated prerequisite, source, configuration, or host condition.
-3. Rerun the failed stage and any later dependent stages:
+## Inspect evidence
+
+Each invocation creates a unique directory under `evidenceRoot`. Preserve the
+whole directory. A complete run contains:
+
+- `run.json` with run ID, start time, and exact source commit;
+- `stage-Acquire.json`, `stage-Sql.json`, `stage-Mecm.json`,
+  `stage-Marker.json`, and `stage-Health.json`;
+- `acquire-state.json`, `sql-state.json`, `mecm-state.json`,
+  `marker-state.json`, and `health.json`;
+- `acquisition.json` only when artifact application ran.
+
+Evidence omits source URIs, vault paths, credentials, tokens, private keys, raw
+policies, and raw log bodies. Before accepting a run, independently compare
+the marker collection and assignment with the exact client marker hash and
+installed application state.
+
+## Resume a failed run
+
+1. Preserve the failed evidence directory.
+2. Read `stage-<name>.json` and the corresponding component-state artifact.
+3. Correct only the proven prerequisite, source, or owned component.
+4. Rerun the failed stage and its dependent stages from the same commit. For
+   example:
 
    ```powershell
-   pwsh ./src/SetupCm/Public/Invoke-SetupCm.ps1 `
-     -ConfigPath ./config/lab.local.yaml `
-     -Stage Sql,Mecm,Health
+   pwsh ./scripts/Invoke-SetupCm.ps1 `
+     -ConfigPath $env:SETUPCM_CONFIG `
+     -Mode Unattended `
+     -Stage Sql,Mecm,Marker,Health `
+     -SourceCommit $env:SETUPCM_SOURCE_COMMIT
    ```
 
-4. If the installation is ambiguous or would require a VM reset/reinstall,
-   stop and hand the exact evidence to the provisioning owner. VM lifecycle is
-   outside setup-cm and is not an automatic recovery action.
+Stop instead of resuming when identity is inconsistent, state is ambiguous, or
+repair would require reset, reinstall, authentication weakening, trust
+changes, broader targeting, historical-object deletion, or media/credentials
+that are not available.
 
-## Validate and extend
+## Validate the source
 
-Keep the evidence from the first successful `Health` run. It is the baseline proof that SQL, site roles, boundaries, the test client, and expected logs are healthy.
+Before review or live acceptance:
 
-Run the core health stage successfully before enabling future co-management, Patch My PC, reporting, or diagnostic modules. These capabilities are not part of the current baseline.
+```powershell
+Invoke-Pester ./tests/Unit -Output Detailed -CI
+./scripts/Test-MarkdownLinks.ps1
+mdbook build ./docs/gitbook
+```
+
+Run the Windows-only detector, core-stage, and provider integration suites on
+the accepted CM01 host. They are intentionally excluded from portable CI.
+Optional capabilities are tracked as separate work in
+[Future projects](FUTURE-PROJECTS.md).

@@ -1,7 +1,8 @@
 # Current LabZ1 Status
 
-The LabZ1 baseline and one-device marker deployment are accepted; the v1
-hands-off full-rerun gate remains in progress.
+The LabZ1 baseline and one-device marker deployment are accepted. All five
+release-candidate stages now have real desired-state probes and bounded repair;
+the reviewed two-run live gate, merge, and v1 publication remain in progress.
 
 ## Accepted current state
 
@@ -30,8 +31,14 @@ Confirm the LabZ1 resources, controller, Agents, provider, SQL inventory, and
 one-device marker collection through deterministic remote checks. On the
 currently accepted source, run only `Health` unless a specific missing
 component is proven. Do not replay the full bootstrap solely for new
-timestamps: Acquire now has an exact read-only artifact probe; complete SQL and
-MECM no-op probes are the remaining core v1 work.
+timestamps. The release-candidate Acquire, SQL, MECM, Marker, and Health probes
+must pass review and then be run twice from one exact source commit before the
+full workflow becomes the accepted restart path.
+
+The release-candidate marker provider gate has already found the exact
+one-device deployment and proved its reconciliation adapters remain unused on
+that exact state. That development gate does not replace the final two complete
+workflow runs and direct client corroboration.
 
 Production, co-management, Patch My PC, reporting expansion, distributed
 roles, extra clients, tenant integrations, and client-wide security-policy

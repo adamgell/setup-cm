@@ -74,3 +74,16 @@ The following source names are required for a full run:
 - `testClient.name` and `testClient.domain` must identify a separate, domain-joined client.
 - Enabled marker acceptance is fixed to the accepted LabZ1 site server and
   `RING0IVY24-01` resource identity and requires explicit lab-only mode.
+
+## Runtime-only inputs
+
+The private YAML path and source provenance are supplied outside the schema:
+
+| Input | Contract |
+| --- | --- |
+| `SETUPCM_CONFIG` or `-ConfigPath` | Path to the non-template YAML staged separately from source. |
+| `SETUPCM_SOURCE_COMMIT` or `-SourceCommit` | Full 40-character commit used to create the staged source archive; mandatory for Marker. |
+
+Neither value is copied into component evidence except the validated commit.
+The private configuration body, source URIs, and vault locations are never
+evidence fields.

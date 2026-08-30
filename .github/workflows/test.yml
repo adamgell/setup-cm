@@ -11,8 +11,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - shell: pwsh
+      - name: Install PowerShell test dependencies
+        shell: pwsh
         run: |
           Install-Module Pester -RequiredVersion 6.0.0 -Force -Scope CurrentUser
           Install-Module powershell-yaml -RequiredVersion 0.4.12 -Force -Scope CurrentUser
+
+      - name: Run portable unit tests
+        shell: pwsh
+        run: |
           Invoke-Pester ./tests/Unit -Output Detailed -CI
+
+      - name: Check local Markdown links
+        shell: pwsh
+        run: ./scripts/Test-MarkdownLinks.ps1
