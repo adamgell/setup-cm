@@ -167,7 +167,11 @@ The exact committed source archive and private configuration are staged on
 CM01. The same unattended command runs twice:
 
 ```powershell
-pwsh ./scripts/Invoke-SetupCm.ps1 -Stage Acquire,Sql,Mecm,Marker,Health
+pwsh ./scripts/Invoke-SetupCm.ps1 `
+  -ConfigPath $env:SETUPCM_CONFIG `
+  -Mode Unattended `
+  -Stage Acquire,Sql,Mecm,Marker,Health `
+  -SourceCommit $env:SETUPCM_SOURCE_COMMIT
 ```
 
 The first run may repair bounded drift but may not reinstall an existing SQL

@@ -69,6 +69,61 @@ Describe 'Get-SetupCmArtifact' {
             (Get-Content -LiteralPath $cacheFile -Raw) | Should -Be 'existing cache'
             Test-Path -LiteralPath "$cacheFile.download" | Should -BeFalse
         }
+
+        It 'retains safe acquisition diagnostics without disclosing the private source URI' {
+            Mock Get-SetupCmArtifactState {
+                [pscustomobject]@{ Name = 'mecm'; State = 'NotCompliant'; Reason = 'Missing' }
+            }
+            Mock Invoke-WebRequest {
+                throw 'TLS certificate validation failed for https://private.example.invalid/download?token=topsecret'
+            }
+            $message = $null
+
+            try {
+                Get-SetupCmArtifact -Source @{
+                    name = 'mecm'; cacheFile = 'mecm.iso'; sha256 = ('0' * 64)
+                    sizeBytes = 15; version = '2503'; architecture = 'x64'
+                    licenseAccepted = $true
+                    uri = 'https://private.example.invalid/download?token=topsecret'
+                } -CacheRoot $TestDrive -EvidenceRoot $TestDrive
+            }
+            catch {
+                $message = $_.Exception.Message
+            }
+
+            $message | Should -Match 'Acquisition failed for artifact.*mecm'
+            $message | Should -Match 'TLS certificate validation failed'
+            $message | Should -Match '<redacted-uri>'
+            $message | Should -Not -Match 'private\.example\.invalid|topsecret'
+            Test-Path -LiteralPath (Join-Path $TestDrive 'mecm.iso.download') |
+                Should -BeFalse
+        }
+
+        It 'redacts a private vault path from retained acquisition diagnostics' {
+            $vaultPath = Join-Path $TestDrive 'private-vault/mecm.iso'
+            New-Item -ItemType Directory -Path (Split-Path $vaultPath -Parent) -Force | Out-Null
+            Set-Content -LiteralPath $vaultPath -Value 'private media' -NoNewline
+            Mock Get-SetupCmArtifactState {
+                [pscustomobject]@{ Name = 'mecm'; State = 'NotCompliant'; Reason = 'Missing' }
+            }
+            Mock Copy-Item { throw "Access denied to $vaultPath" }
+            $message = $null
+
+            try {
+                Get-SetupCmArtifact -Source @{
+                    name = 'mecm'; cacheFile = 'mecm.iso'; sha256 = ('0' * 64)
+                    sizeBytes = 15; version = '2503'; architecture = 'x64'
+                    licenseAccepted = $true; vaultPath = $vaultPath
+                } -CacheRoot $TestDrive -EvidenceRoot $TestDrive
+            }
+            catch {
+                $message = $_.Exception.Message
+            }
+
+            $message | Should -Match 'Access denied'
+            $message | Should -Match '<redacted-source>'
+            $message | Should -Not -Match ([regex]::Escape($vaultPath))
+        }
     }
 }
 

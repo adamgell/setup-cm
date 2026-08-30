@@ -410,8 +410,20 @@ function Get-SetupCmArtifact {
         }
     }
     catch {
+        $detail = ConvertTo-SetupCmSanitizedEvidenceString -Value ([string]$_.Exception.Message)
+        if (-not [string]::IsNullOrWhiteSpace([string]$sourceUri)) {
+            $detail = [regex]::Replace(
+                $detail,
+                [regex]::Escape([string]$sourceUri),
+                '<redacted-source>',
+                [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+            )
+        }
         Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
-        throw "Acquisition failed for artifact '$($Source.name)'."
+        if ([string]::IsNullOrWhiteSpace($detail)) {
+            throw "Acquisition failed for artifact '$($Source.name)'."
+        }
+        throw "Acquisition failed for artifact '$($Source.name)': $detail"
     }
 
     $downloadedState = Get-SetupCmArtifactState -Source $Source -CacheRoot $CacheRoot -ArtifactPath $temporaryPath

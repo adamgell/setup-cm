@@ -28,6 +28,38 @@ Describe 'Test-MarkdownLinks script' {
         $result.LocalLinksChecked | Should -Be 1
     }
 
+    It 'does not close a fence when an inner example uses a different delimiter' {
+        Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') -Value @'
+````markdown
+~~~markdown
+[Example only](missing.md)
+~~~
+````
+'@
+
+        $result = & $linkScript -RepositoryRoot $TestDrive -Path index.md
+
+        $result.State | Should -BeExactly 'Passed'
+        $result.LocalLinksChecked | Should -Be 0
+    }
+
+    It 'does not collect headings exposed by a shorter nested fence' {
+        Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') `
+            -Value '[Guide](guide.md#not-a-heading)'
+        Set-Content -LiteralPath (Join-Path $TestDrive 'guide.md') -Value @'
+````markdown
+```markdown
+## Not a heading
+```
+````
+
+# Real heading
+'@
+
+        { & $linkScript -RepositoryRoot $TestDrive -Path index.md, guide.md } |
+            Should -Throw '*#not-a-heading*'
+    }
+
     It 'fails with the source location when a local target file is missing' {
         Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') -Value '[Missing](missing.md)'
 

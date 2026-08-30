@@ -26,9 +26,23 @@ function Get-MarkdownAnchors {
     )
     $slugCounts = @{}
     $inFence = $false
+    $fenceCharacter = $null
+    $fenceLength = 0
     foreach ($line in @(Get-Content -LiteralPath $MarkdownPath)) {
-        if ($line -match '^\s*(?:`{3,}|~{3,})') {
-            $inFence = -not $inFence
+        if ($line -match '^\s*(?<fence>`{3,}|~{3,})') {
+            $candidate = [string]$Matches.fence
+            $candidateCharacter = $candidate.Substring(0, 1)
+            if (-not $inFence) {
+                $inFence = $true
+                $fenceCharacter = $candidateCharacter
+                $fenceLength = $candidate.Length
+            }
+            elseif ($candidateCharacter -ceq $fenceCharacter -and
+                $candidate.Length -ge $fenceLength) {
+                $inFence = $false
+                $fenceCharacter = $null
+                $fenceLength = 0
+            }
             continue
         }
         if ($inFence) { continue }
@@ -109,10 +123,24 @@ foreach ($markdownFile in $markdownFiles) {
     $relativeSource = [System.IO.Path]::GetRelativePath($resolvedRoot, $markdownFile).Replace('\', '/')
     $lineNumber = 0
     $inFence = $false
+    $fenceCharacter = $null
+    $fenceLength = 0
     foreach ($line in @(Get-Content -LiteralPath $markdownFile)) {
         $lineNumber++
-        if ($line -match '^\s*(?:`{3,}|~{3,})') {
-            $inFence = -not $inFence
+        if ($line -match '^\s*(?<fence>`{3,}|~{3,})') {
+            $candidate = [string]$Matches.fence
+            $candidateCharacter = $candidate.Substring(0, 1)
+            if (-not $inFence) {
+                $inFence = $true
+                $fenceCharacter = $candidateCharacter
+                $fenceLength = $candidate.Length
+            }
+            elseif ($candidateCharacter -ceq $fenceCharacter -and
+                $candidate.Length -ge $fenceLength) {
+                $inFence = $false
+                $fenceCharacter = $null
+                $fenceLength = 0
+            }
             continue
         }
         if ($inFence) { continue }
