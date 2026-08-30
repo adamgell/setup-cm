@@ -152,6 +152,12 @@ lab enforces signed PowerShell scripts. The workflow does not weaken that
 policy or add trust. Uninstall remains limited to `marker.json` and removes its
 directory only when empty.
 
+The fail-closed client proof transport, one-time detector migration, and
+freshness/no-op rules are defined by the required
+[Authenticated Marker Client Evidence Channel Design](2026-08-30-marker-client-evidence-channel-design.md).
+That narrower design controls if the two documents differ on marker client
+evidence.
+
 ## Evidence and source identity
 
 Every run writes `run.json` plus stage/component artifacts. The accepted
