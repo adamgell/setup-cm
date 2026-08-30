@@ -337,6 +337,22 @@ Describe 'Get-SetupCmMecmDesiredState' {
                 Should -Be 'Compliant'
         }
 
+        It 'accepts CM01 short names in role records after the exact host boundary passes' {
+            $providers = New-CompliantMecmProviders
+            $roles = @(& $providers.Roles | ForEach-Object {
+                $role = $_.Clone()
+                $role.ServerName = 'LABZ1-CM01'
+                $role
+            })
+            $providers.Roles = { $roles }.GetNewClosure()
+
+            $state = Get-SetupCmMecmDesiredState -Config (New-TestMecmConfig) -Providers $providers
+
+            $state.State | Should -Be 'Compliant'
+            ($state.Components | Where-Object Name -eq 'MecmRoles').State |
+                Should -Be 'Compliant'
+        }
+
         It 'fails closed on a target host mismatch before provider probes' {
             $script:siteProbed = $false
             $providers = New-CompliantMecmProviders

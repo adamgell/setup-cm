@@ -596,14 +596,14 @@ function Get-SetupCmMecmDesiredState {
         $roles = @(& $Providers.Roles $Config)
         $distributedRoles = @($roles | Where-Object {
             [string](Get-SetupCmMecmObjectValue -InputObject $_ -Name RoleName) -in $requiredRoles -and
-            -not (Test-SetupCmMecmServerIdentity -Actual ([string](Get-SetupCmMecmObjectValue -InputObject $_ -Name ServerName)) -Expected $expectedServer)
+            -not (Test-SetupCmMecmServerIdentity -Actual ([string](Get-SetupCmMecmObjectValue -InputObject $_ -Name ServerName)) -Expected $expectedServer -AllowShortName)
         })
         $missingRoles = @($requiredRoles | Where-Object {
             $requiredRole = $_
             @($roles | Where-Object {
                 [string](Get-SetupCmMecmObjectValue -InputObject $_ -Name RoleName) -ceq $requiredRole -and
                 [string](Get-SetupCmMecmObjectValue -InputObject $_ -Name SiteCode) -ieq [string]$Config.mecm.siteCode -and
-                (Test-SetupCmMecmServerIdentity -Actual ([string](Get-SetupCmMecmObjectValue -InputObject $_ -Name ServerName)) -Expected $expectedServer)
+                (Test-SetupCmMecmServerIdentity -Actual ([string](Get-SetupCmMecmObjectValue -InputObject $_ -Name ServerName)) -Expected $expectedServer -AllowShortName)
             }).Count -eq 0
         })
         if ($distributedRoles.Count -gt 0) {

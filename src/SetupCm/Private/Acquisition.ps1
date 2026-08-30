@@ -223,7 +223,7 @@ function Get-SetupCmArtifactState {
         Architecture = if ($Source.ContainsKey('architecture')) { [string]$Source.architecture } else { $null }
     }
 
-    foreach ($field in 'name', 'cacheFile', 'sha256', 'sizeBytes', 'version', 'architecture') {
+    foreach ($field in 'name', 'cacheFile', 'sha256', 'sizeBytes', 'version', 'architecture', 'publisher') {
         if (-not $Source.ContainsKey($field) -or [string]::IsNullOrWhiteSpace([string]$Source[$field])) {
             $state.Reason = "MissingSourceField:$field"
             return [pscustomobject]$state

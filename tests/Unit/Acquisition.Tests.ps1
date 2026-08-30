@@ -42,6 +42,7 @@ Describe 'Get-SetupCmArtifact' {
                 Get-SetupCmArtifact -Source @{
                     name = 'mecm'; cacheFile = 'mecm.iso'; sha256 = ('0' * 64); licenseAccepted = $false
                     sizeBytes = 15; version = '2503'; architecture = 'x64'
+                    publisher = 'Microsoft Corporation'
                 } -CacheRoot $TestDrive -EvidenceRoot $TestDrive
             } | Should -Throw '*licenseAccepted*'
         }
@@ -193,6 +194,22 @@ Describe 'Get-SetupCmArtifactState' {
 
             $state.State | Should -Be 'Compliant'
             $state.Reason | Should -Be 'Verified'
+        }
+
+        It 'fails closed before probing bytes when publisher metadata is missing' {
+            $withoutPublisher = $source.Clone()
+            $null = $withoutPublisher.Remove('publisher')
+            $script:pathProbed = $false
+            $script:identityProbed = $false
+
+            $state = Get-SetupCmArtifactState -Source $withoutPublisher -CacheRoot $TestDrive `
+                -PathProvider { $script:pathProbed = $true } `
+                -IdentityProvider { $script:identityProbed = $true }
+
+            $state.State | Should -Be 'Conflict'
+            $state.Reason | Should -Be 'MissingSourceField:publisher'
+            $script:pathProbed | Should -BeFalse
+            $script:identityProbed | Should -BeFalse
         }
 
         It 'reports only the byte-length mismatch without probing native identity' {

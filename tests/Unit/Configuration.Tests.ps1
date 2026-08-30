@@ -76,7 +76,7 @@ Describe 'Assert-SetupCmConfig' {
             { Assert-SetupCmConfig -Config $config } | Should -Throw '*sizeBytes*'
         }
 
-        It 'accepts pinned source identity metadata in a runnable configuration' {
+        It 'requires an expected publisher for every runnable source' {
             $config = @{
                 safety = @{ isolatedLab = $true }
                 sources = @{
@@ -89,6 +89,31 @@ Describe 'Assert-SetupCmConfig' {
                         uri = 'https://vault/mecm.iso'; sha256 = ('b' * 64)
                         cacheFile = 'mecm.iso'; licenseAccepted = $true
                         sizeBytes = 2048; version = '2503'; architecture = 'x64'
+                        publisher = 'Microsoft Corporation'
+                    }
+                }
+                sql = @{ instanceName = 'MSSQLSERVER'; sysAdminAccounts = @('TEST\Admins') }
+            }
+
+            { Assert-SetupCmConfig -Config $config } |
+                Should -Throw '*sources.sqlServer.publisher*'
+        }
+
+        It 'accepts pinned source identity metadata in a runnable configuration' {
+            $config = @{
+                safety = @{ isolatedLab = $true }
+                sources = @{
+                    sqlServer = @{
+                        uri = 'https://vault/sql.iso'; sha256 = ('a' * 64)
+                        cacheFile = 'sql.iso'; licenseAccepted = $true
+                        sizeBytes = 1024; version = '16.0.1000.6'; architecture = 'x64'
+                        publisher = 'Microsoft Corporation'
+                    }
+                    mecm = @{
+                        uri = 'https://vault/mecm.iso'; sha256 = ('b' * 64)
+                        cacheFile = 'mecm.iso'; licenseAccepted = $true
+                        sizeBytes = 2048; version = '2503'; architecture = 'x64'
+                        publisher = 'Microsoft Corporation'
                     }
                 }
                 sql = @{ instanceName = 'MSSQLSERVER'; sysAdminAccounts = @('TEST\Admins') }

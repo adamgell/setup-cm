@@ -87,6 +87,32 @@ Describe 'Test-MarkdownLinks script' {
         $content | Should -Match '(?s)\[string\]::IsNullOrWhiteSpace\(\$env:SETUPCM_SOURCE_COMMIT\).*?\$archivePath = Join-Path'
     }
 
+    It 'documents and verifies an exact read-only ACL for private configuration in <Runbook>' -ForEach @(
+        @{ Runbook = 'docs/RUNBOOK.md' }
+        @{ Runbook = 'docs/gitbook/src/operations/runbook.md' }
+    ) {
+        $content = Get-Content -LiteralPath (Join-Path $repositoryRoot $Runbook) -Raw
+
+        $content | Should -Match "S-1-5-18"
+        $content | Should -Match "S-1-5-32-544"
+        $content | Should -Match '\[System\.Security\.Principal\.WindowsIdentity\]::GetCurrent\(\)\.User'
+        $content | Should -Match '\.SetAccessRuleProtection\(\$true, \$false\)'
+        $content | Should -Match '\.PurgeAccessRules\('
+        $content | Should -Match '\[System\.Security\.AccessControl\.FileSystemRights\]::ReadAndExecute'
+        $content | Should -Match 'Set-Acl -LiteralPath \$configPath'
+        $content | Should -Match '\.AreAccessRulesProtected'
+        $content | Should -Match 'Compare-Object'
+    }
+
+    It 'names the fail-on-mutation provider test used for the merged marker release check' {
+        $content = Get-Content -LiteralPath (
+            Join-Path $repositoryRoot 'docs/superpowers/plans/2026-08-30-hands-off-rerun-v1.md'
+        ) -Raw
+
+        $content | Should -Match 'tests/Integration/MarkerAcceptance\.Provider\.Tests\.ps1'
+        $content | Should -Match 'fail-on-mutation'
+    }
+
     It 'resolves reference-style local links whose definitions follow their usage' {
         Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') -Value @'
 [Guide][guide-reference]

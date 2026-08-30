@@ -220,8 +220,10 @@ Releases.
       hashes, provider/client agreement, and safe restart command.
 - [ ] Push, rerun final PR CI/review, and merge only when clean and approved.
 - [ ] Verify local main, origin/main, PR head, and merge ancestry.
-- [ ] Run release-critical tests and read-only live Health/marker checks at the
-      exact merge commit.
+- [ ] Run release-critical tests and read-only live Health at the exact merge
+      commit. For marker state, run the fail-on-mutation exact-state provider
+      test `tests/Integration/MarkerAcceptance.Provider.Tests.ps1`; it reads the
+      existing deployment and supplies mutation adapters that throw if called.
 - [ ] Confirm no conflicting tag and create the repository's first v1 tag at
       the accepted merge commit.
 - [ ] Push the tag and publish GitHub release notes with scope, topology, gates,

@@ -109,7 +109,7 @@ function Assert-SetupCmConfig {
         foreach ($sourceName in $Config.sources.Keys) {
             $source = $Config.sources[$sourceName]
             if ($source -isnot [hashtable]) { continue }
-            foreach ($field in 'cacheFile', 'sha256', 'sizeBytes', 'version', 'architecture') {
+            foreach ($field in 'cacheFile', 'sha256', 'sizeBytes', 'version', 'architecture', 'publisher') {
                 if (-not $source.ContainsKey($field) -or [string]::IsNullOrWhiteSpace([string]$source[$field])) {
                     throw "sources.$sourceName.$field is required."
                 }

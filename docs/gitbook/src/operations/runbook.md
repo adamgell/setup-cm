@@ -48,7 +48,70 @@ outside this runbook.
    Stage that archive on CM01 and verify its byte hash before extraction. Do
    not add generated or private files to it.
 3. Stage the non-template configuration separately at a protected path such as
-   `C:\ProgramData\SetupCm\config\lab.local.yaml`.
+   `C:\ProgramData\SetupCm\config\lab.local.yaml`. Never commit or copy it into
+   evidence. From the SetupCm operator account in an elevated PowerShell
+   session, replace inherited access with read-and-execute access for exactly
+   that operator, Local System, and local Administrators, then verify the ACL:
+
+   ```powershell
+   $configPath = 'C:\ProgramData\SetupCm\config\lab.local.yaml'
+   if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+       throw "Private configuration does not exist: $configPath"
+   }
+   $operatorSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+   $allowedSids = @(
+       [System.Security.Principal.SecurityIdentifier]::new('S-1-5-18')
+       [System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
+       $operatorSid
+   )
+   $configAcl = Get-Acl -LiteralPath $configPath
+   $configAcl.SetAccessRuleProtection($true, $false)
+   foreach ($identity in @($configAcl.Access.IdentityReference | Sort-Object Value -Unique)) {
+       $configAcl.PurgeAccessRules($identity)
+   }
+   foreach ($sid in $allowedSids) {
+       $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(
+           $sid,
+           [System.Security.AccessControl.FileSystemRights]::ReadAndExecute,
+           [System.Security.AccessControl.AccessControlType]::Allow
+       )
+       $configAcl.AddAccessRule($rule) | Out-Null
+   }
+   Set-Acl -LiteralPath $configPath -AclObject $configAcl
+
+   $verifiedAcl = Get-Acl -LiteralPath $configPath
+   $verifiedRules = @($verifiedAcl.Access)
+   $expectedSids = @($allowedSids | ForEach-Object Value | Sort-Object -Unique)
+   $actualSids = @($verifiedRules | ForEach-Object {
+       $_.IdentityReference.Translate(
+           [System.Security.Principal.SecurityIdentifier]
+       ).Value
+   } | Sort-Object -Unique)
+   $readExecuteMask = [int][System.Security.AccessControl.FileSystemRights]::ReadAndExecute
+   $writeMask = [int](
+       [System.Security.AccessControl.FileSystemRights]::WriteData -bor
+       [System.Security.AccessControl.FileSystemRights]::AppendData -bor
+       [System.Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
+       [System.Security.AccessControl.FileSystemRights]::WriteAttributes -bor
+       [System.Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
+       [System.Security.AccessControl.FileSystemRights]::Delete -bor
+       [System.Security.AccessControl.FileSystemRights]::ChangePermissions -bor
+       [System.Security.AccessControl.FileSystemRights]::TakeOwnership
+   )
+   $invalidRules = @($verifiedRules | Where-Object {
+       $rights = [int]$_.FileSystemRights
+       $_.IsInherited -or
+           $_.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow -or
+           ($rights -band $readExecuteMask) -ne $readExecuteMask -or
+           ($rights -band $writeMask) -ne 0
+   })
+   if (-not $verifiedAcl.AreAccessRulesProtected -or
+       $verifiedRules.Count -ne $expectedSids.Count -or
+       $invalidRules.Count -gt 0 -or
+       @(Compare-Object -ReferenceObject $expectedSids -DifferenceObject $actualSids).Count -gt 0) {
+       throw 'Private configuration ACL verification failed.'
+   }
+   ```
 4. Confirm the approved SQL, MECM, ADK, Windows PE, ODBC, and x64/x86 VC++
    artifacts are present in the configured cache or available through the
    approved source policy.
