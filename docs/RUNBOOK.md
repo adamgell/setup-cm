@@ -109,7 +109,6 @@ outside this runbook.
            ($rights -band $writeMask) -ne 0
    })
    if (-not $verifiedAcl.AreAccessRulesProtected -or
-       $verifiedRules.Count -ne $expectedSids.Count -or
        $invalidRules.Count -gt 0 -or
        @(Compare-Object -ReferenceObject $expectedSids -DifferenceObject $actualSids).Count -gt 0) {
        throw 'Private configuration ACL verification failed.'

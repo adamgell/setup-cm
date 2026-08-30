@@ -16,9 +16,29 @@ Describe 'MECM source safety' {
             param($node)
             $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
                 $node.Left -is [System.Management.Automation.Language.VariableExpressionAst] -and
-                $node.Left.VariablePath.UserPath -ieq 'Host'
+                ($node.Left.VariablePath.UserPath -split ':')[-1] -ieq 'Host'
         }, $true))
         $hostAssignments | Should -HaveCount 0
+    }
+
+    It 'recognizes scope-qualified Host assignments in the source guard' {
+        $tokens = $null
+        $parseErrors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseInput(@'
+$Host = 'unqualified'
+$script:Host = 'script'
+$global:HOST = 'global'
+$local:Other = 'allowed'
+'@, [ref]$tokens, [ref]$parseErrors)
+
+        $parseErrors | Should -HaveCount 0
+        $hostAssignments = @($ast.FindAll({
+            param($node)
+            $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+                $node.Left -is [System.Management.Automation.Language.VariableExpressionAst] -and
+                ($node.Left.VariablePath.UserPath -split ':')[-1] -ieq 'Host'
+        }, $true))
+        $hostAssignments | Should -HaveCount 3
     }
 }
 

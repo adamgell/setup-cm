@@ -74,6 +74,30 @@ Describe 'Test-MarkdownLinks script' {
         $result.LocalLinksChecked | Should -Be 0
     }
 
+    It 'recognizes a fence indented by the CommonMark maximum of three spaces' {
+        Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') -Value @'
+   ```markdown
+[Example only](missing.md)
+   ```
+'@
+
+        $result = & $linkScript -RepositoryRoot $TestDrive -Path index.md
+
+        $result.State | Should -BeExactly 'Passed'
+        $result.LocalLinksChecked | Should -Be 0
+    }
+
+    It 'does not let a four-space-indented marker hide a broken link' {
+        Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') -Value @'
+    ```markdown
+[Missing](missing.md)
+    ```
+'@
+
+        { & $linkScript -RepositoryRoot $TestDrive -Path index.md } |
+            Should -Throw '*missing.md*'
+    }
+
     It 'documents atomic source extraction with cleanup in <Runbook>' -ForEach @(
         @{ Runbook = 'docs/RUNBOOK.md' }
         @{ Runbook = 'docs/gitbook/src/operations/runbook.md' }
@@ -102,6 +126,7 @@ Describe 'Test-MarkdownLinks script' {
         $content | Should -Match 'Set-Acl -LiteralPath \$configPath'
         $content | Should -Match '\.AreAccessRulesProtected'
         $content | Should -Match 'Compare-Object'
+        $content | Should -Not -Match '\$verifiedRules\.Count\s+-ne'
     }
 
     It 'names the fail-on-mutation provider test used for the merged marker release check' {

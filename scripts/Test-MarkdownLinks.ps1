@@ -34,7 +34,7 @@ function Get-MarkdownContentLine {
     $fenceLength = 0
     foreach ($line in @(Get-Content -LiteralPath $MarkdownPath)) {
         $lineNumber++
-        if ($line -match '^\s*(?<fence>`{3,}|~{3,})(?<suffix>.*)$') {
+        if ($line -match '^ {0,3}(?<fence>`{3,}|~{3,})(?<suffix>.*)$') {
             $candidate = [string]$Matches.fence
             $candidateSuffix = [string]$Matches.suffix
             $candidateCharacter = $candidate.Substring(0, 1)
