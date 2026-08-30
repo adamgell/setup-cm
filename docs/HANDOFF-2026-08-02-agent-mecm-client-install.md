@@ -65,7 +65,7 @@ this document as the authoritative status, not the checkboxes.
 `codex/mecm-vc-redist` is rebased onto `main`: 9 commits ahead, 0 behind, clean
 tree.
 
-```
+```text
 cef1a57 feat: install MECM VC++ prerequisites
 d81d5a3 fix: acquire every configured dependency
 365ba4d fix: detect x86 MECM VC++ runtime
@@ -109,7 +109,7 @@ Local `main` is at `d2f0c56` / VERSION `2026.08.2`. Upstream is at VERSION
 
 Both tasks exist on `origin/main` of ProxmoxVEAutopilot. Relevant commits:
 
-```
+```text
 20e66ed feat: add typed MECM client Agent work          <- Task 3
 ca3742e feat: queue MECM client installation work       <- Task 4
 700709b fix: restrict MECM client work to LAB
@@ -187,7 +187,7 @@ real work against a live host. Get explicit operator sign-off before running it.
 
 `dotnet build autopilot-agent` fails with:
 
-```
+```text
 wix.targets(584,5): error MSB6006: "wix.exe" exited with code 1
   [autopilot-agent/installer/AutopilotAgent.Installer.wixproj]
 ```

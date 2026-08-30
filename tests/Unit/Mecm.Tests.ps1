@@ -82,24 +82,73 @@ Describe 'Get-SetupCmMecmPrerequisites' {
     }
 }
 
-Describe 'Install-SetupCmMecmOdbcDriver18' {
+Describe 'Install-SetupCmOdbcDriver18' {
     InModuleScope SetupCm {
+        It 'detects ODBC 18 only when its native registration exists' {
+            Test-SetupCmOdbcDriver18 -RegistryProvider { @{ Version = '18.4.1.1' } } |
+                Should -Be 'Compliant'
+            Test-SetupCmOdbcDriver18 -RegistryProvider { $null } |
+                Should -Be 'NotCompliant'
+        }
+
         It 'installs a verified, license-accepted ODBC artifact silently' {
             $script:IsWindows = $true
             Mock Get-SetupCmArtifact {
-                [pscustomobject]@{ Path = 'C:\SetupCm\cache\msodbcsql18-x64.msi' }
+                [pscustomobject]@{ Path = 'C:\Setup Cm\cache\msodbcsql18-x64.msi' }
             }
             Mock Start-Process { [pscustomobject]@{ ExitCode = 0 } }
 
-            Install-SetupCmMecmOdbcDriver18 -Source @{ name = 'odbcDriver18'; licenseAccepted = $true } -CacheRoot 'C:\SetupCm\cache' -EvidenceRoot $TestDrive
+            Install-SetupCmOdbcDriver18 -Source @{ name = 'odbcDriver18'; licenseAccepted = $true } -CacheRoot 'C:\SetupCm\cache' -EvidenceRoot $TestDrive
 
             Should -Invoke Get-SetupCmArtifact -Times 1 -Exactly
             Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter {
                 $FilePath -eq 'msiexec.exe' -and
                 $ArgumentList -contains '/qn' -and
+                $ArgumentList -contains 'REBOOT=ReallySuppress' -and
                 $ArgumentList -contains 'IACCEPTMSODBCSQLLICENSETERMS=YES' -and
-                $ArgumentList -contains 'C:\SetupCm\cache\msodbcsql18-x64.msi'
+                $ArgumentList -contains '"C:\Setup Cm\cache\msodbcsql18-x64.msi"'
             }
+        }
+
+        It 'rejects an ODBC installer failure' {
+            $script:IsWindows = $true
+            Mock Get-SetupCmArtifact {
+                [pscustomobject]@{ Path = 'C:\SetupCm\cache\msodbcsql18-x64.msi' }
+            }
+            Mock Start-Process { [pscustomobject]@{ ExitCode = 1603 } }
+
+            {
+                Install-SetupCmOdbcDriver18 -Source @{ name = 'odbcDriver18' } -CacheRoot 'C:\SetupCm\cache' -EvidenceRoot $TestDrive
+            } | Should -Throw '*exit code 1603*'
+        }
+    }
+}
+
+Describe 'Get-SetupCmMecmExpectedClientResourceId' {
+    InModuleScope SetupCm {
+        It 'uses a positive marker target before the legacy test-client resource ID' {
+            Get-SetupCmMecmExpectedClientResourceId -Config @{
+                markerAcceptance = @{ targetResourceId = '16777219' }
+                testClient = @{ resourceId = 42 }
+            } | Should -Be 16777219
+        }
+
+        It 'skips an invalid marker target and uses a valid test-client resource ID' {
+            Get-SetupCmMecmExpectedClientResourceId -Config @{
+                markerAcceptance = @{ targetResourceId = 'not-an-integer' }
+                testClient = @{ resourceId = '42' }
+            } | Should -Be 42
+        }
+
+        It 'treats non-positive, non-numeric, and overflowing candidates as absent' -ForEach @(
+            @{ Marker = 0; Client = -1 }
+            @{ Marker = 'invalid'; Client = 'also-invalid' }
+            @{ Marker = '999999999999999999999'; Client = $null }
+        ) {
+            Get-SetupCmMecmExpectedClientResourceId -Config @{
+                markerAcceptance = @{ targetResourceId = $Marker }
+                testClient = @{ resourceId = $Client }
+            } | Should -BeNullOrEmpty
         }
     }
 }
@@ -328,6 +377,18 @@ Describe 'Get-SetupCmMecmDesiredState' {
 
             $state.State | Should -Be 'Compliant'
             @($state.Components | Where-Object State -ne 'Compliant') | Should -HaveCount 0
+        }
+
+        It 'returns a bounded conflict when the MECM configuration is not a map' {
+            $config = New-TestMecmConfig
+            $config.mecm = 'invalid'
+
+            $state = Get-SetupCmMecmDesiredState -Config $config -Providers (New-CompliantMecmProviders)
+
+            $state.State | Should -Be 'Conflict'
+            $state.Components | Should -HaveCount 1
+            $state.Components[0].Name | Should -Be 'TargetHost'
+            $state.Components[0].Reason | Should -Be 'MissingExpectedHost'
         }
 
         It 'compares the SQL database identity case-insensitively' {
@@ -579,6 +640,45 @@ Describe 'Get-SetupCmMecmDefaultProviders' {
             Remove-Item -Path 'function:Get-CimInstance' -ErrorAction SilentlyContinue
         }
 
+        It 'classifies an absent SMS namespace by CIM status code' {
+            $state = Resolve-SetupCmAbsentMecmSiteCimStatus -StatusCode (
+                [uint32][Microsoft.Management.Infrastructure.NativeErrorCode]::InvalidNamespace
+            )
+
+            $state.Exists | Should -BeFalse
+            $state.ResidualState | Should -BeFalse
+        }
+
+        It 'classifies a missing provider class as residual state by CIM status code' {
+            $state = Resolve-SetupCmAbsentMecmSiteCimStatus -StatusCode (
+                [uint32][Microsoft.Management.Infrastructure.NativeErrorCode]::InvalidClass
+            )
+
+            $state.Exists | Should -BeFalse
+            $state.ResidualState | Should -BeTrue
+        }
+
+        It 'does not classify unknown CIM status codes' {
+            Resolve-SetupCmAbsentMecmSiteCimStatus -StatusCode 1 |
+                Should -BeNullOrEmpty
+        }
+
+        It 'does not infer CIM status from localized exception text' {
+            Mock Get-ItemProperty { $null } -ParameterFilter {
+                $Path -eq 'HKLM:\SOFTWARE\Microsoft\SMS\Identification'
+            }
+            Mock Get-CimInstance {
+                $exception = [Microsoft.Management.Infrastructure.CimException]::new(
+                    'invalid namespace'
+                )
+                throw $exception
+            }
+            $providers = Get-SetupCmMecmDefaultProviders
+
+            { & $providers.Site @{ mecm = @{ siteCode = 'LAB' } } } |
+                Should -Throw '*invalid namespace*'
+        }
+
         It 'normalizes an omitted optional ParentSiteCode from the live SMS_Site shape' {
             Mock Get-ItemProperty {
                 [pscustomobject]@{
@@ -670,7 +770,7 @@ Describe 'Get-SetupCmMecmDefaultProviders' {
             $providers = Get-SetupCmMecmDefaultProviders
 
             $providers.ClientDatabase.ToString() |
-                Should -Match "Parameters\.Add\('@Name', \[System\.Data\.SqlDbType\]::NVarChar, 256\)"
+                Should -Match 'Add-SetupCmSqlNVarCharParameter -Command \$client -Name Name -Size 256'
         }
     }
 }
@@ -681,7 +781,7 @@ Describe 'Repair-SetupCmMecmDesiredState' {
             Mock Install-SetupCmMecmVcRedist {}
             Mock Install-SetupCmMecmAdk {}
             Mock Install-SetupCmMecmWinPeAddOn {}
-            Mock Install-SetupCmMecmOdbcDriver18 {}
+            Mock Install-SetupCmOdbcDriver18 {}
             Mock Set-SetupCmMecmServiceState {}
             Mock Get-SetupCmArtifact { [pscustomobject]@{ Path = 'C:\SetupCm\cache\mecm.iso' } }
             Mock Get-SetupCmMecmPrerequisites { 'C:\SetupCm\Redist' }
@@ -807,6 +907,22 @@ Describe 'Repair-SetupCmMecmDesiredState' {
                 $Name -eq 'SMS_EXECUTIVE'
             }
             Should -Invoke Install-SetupCmPrimarySite -Times 0 -Exactly
+        }
+
+        It 'fails boundedly when service repair state omits service names' {
+            $state = [pscustomobject]@{
+                State = 'NotCompliant'
+                Components = @(
+                    [pscustomobject]@{
+                        Name = 'MecmServices'; State = 'NotCompliant'; Reason = 'ServiceState'
+                    }
+                )
+            }
+            $config = @{ cacheRoot = 'C:\SetupCm\cache'; mecm = @{}; sources = @{} }
+
+            { Repair-SetupCmMecmDesiredState -Config $config -State $state -EvidenceRoot $TestDrive } |
+                Should -Throw '*did not identify any service to repair*'
+            Should -Invoke Set-SetupCmMecmServiceState -Times 0 -Exactly
         }
 
         It 'never repairs a conflicting MECM state' {

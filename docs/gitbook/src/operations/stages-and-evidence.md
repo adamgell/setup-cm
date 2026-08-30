@@ -23,8 +23,8 @@ stops before mutation. Apply success is not acceptance: Verify must return
 | Stage | Read-only test | Bounded apply |
 | --- | --- | --- |
 | `Acquire` | Verifies every configured artifact's license, byte length, SHA-256, version, architecture, publisher, and cache identity. | Acquires only missing or invalid artifacts under the approved source policy. |
-| `Sql` | Verifies Windows prerequisites, instance and services, startup state, TCP/listener/firewall, query reachability, owned configuration, VC++ x64/x86, and conditional `CM_LAB` reachability. | Installs an absent instance or repairs only owned missing components; conflicting instance identity fails closed. |
-| `Mecm` | Verifies site/provider/database/role identity, services, prerequisites, ADK/WinPE/ODBC/VC++, content library, MP/DP, and the active non-obsolete client. | Installs an absent site or repairs only owned missing prerequisites or roles; an exact site never opens media or reruns setup. |
+| `Sql` | Verifies ODBC Driver 18, Windows prerequisites, instance and services, startup state, TCP/listener/firewall, strict-TLS query reachability, owned configuration, VC++ x64/x86, and conditional `CM_LAB` reachability. | Installs a missing ODBC provider before the first database probe, installs an absent instance, or repairs only owned missing components; conflicting instance identity fails closed. |
+| `Mecm` | Verifies site/provider/database/role identity, services, prerequisites, ADK/WinPE/ODBC/VC++, content library, MP/DP, and the active non-obsolete client. | Installs an absent site or repairs only owned missing prerequisites or roles; it shares the ODBC installer with SQL, and an exact site never opens media or reruns setup. |
 | `Marker` | Verifies the fixed LabZ1 boundary, source and detector hashes, application, deployment type, content, distribution, one-device direct collection, required assignment, and per-device compliance. | Reconciles only the fixed marker chain and requests policy/evaluation only when client or server compliance is missing. |
 | `Health` | Re-reads SQL, MECM, MP, DP, and active-client state. | None. |
 

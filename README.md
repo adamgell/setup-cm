@@ -62,7 +62,11 @@ The first-release baseline intentionally excludes production targets, distribute
 
 - An isolated, domain-joined lab with a Windows Server host and a separate test client.
 - PowerShell 7 or later.
+- Git for Windows with `git.exe` on `PATH`, used to verify the commit embedded
+  in the reviewed source archive before extraction.
 - The `powershell-yaml` module to read the YAML configuration.
+- [mdBook](https://rust-lang.github.io/mdBook/guide/installation.html) to build
+  the documentation site locally.
 - Approved SQL Server, MECM, Windows ADK, Windows PE add-on, ODBC Driver 18,
   and VC++ x64/x86 media, checksums, and accepted licenses.
 - Sufficient local disk space for the configured cache, SQL installation directory, MECM installation directory, and evidence.
@@ -73,6 +77,9 @@ The CI workflow uses Pester 6. Install the dependencies locally when you want to
 Install-Module Pester -RequiredVersion 6.0.0 -Scope CurrentUser
 Install-Module powershell-yaml -RequiredVersion 0.4.12 -Scope CurrentUser
 ```
+
+Install mdBook using its linked official installation guide before running the
+documentation build command.
 
 ## Quick start
 
@@ -112,8 +119,8 @@ See the [runbook](docs/RUNBOOK.md) before operating the workflow.
 | Stage | Purpose |
 | --- | --- |
 | `Acquire` | Obtains and verifies SQL Server and MECM installation media in the configured cache. |
-| `Sql` | Installs SQL Server prerequisites, SQL Server, and SQL network configuration. |
-| `Mecm` | Installs MECM prerequisites, ADK, Windows PE, ODBC Driver 18, and the primary site. |
+| `Sql` | Installs ODBC Driver 18, SQL Server prerequisites, SQL Server, and SQL network configuration. |
+| `Mecm` | Installs MECM prerequisites, ADK, Windows PE, and the primary site; it re-verifies ODBC Driver 18. |
 | `Marker` | Reconciles the fixed lab-only marker application and verifies its required one-device deployment. |
 | `Health` | Rechecks SQL, MECM, Management Point, Distribution Point, and active-client state without repair. |
 

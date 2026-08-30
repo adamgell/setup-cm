@@ -86,7 +86,11 @@ Describe 'Install-SetupCmSql' {
 
 Describe 'New-SetupCmSqlConnection' {
     InModuleScope SetupCm {
-        It 'builds an integrated encrypted connection using canonical SQL keywords' {
+        BeforeAll {
+            Add-Type -AssemblyName System.Data.Odbc -ErrorAction Stop
+        }
+
+        It 'builds a supported ODBC 18 connection with integrated authentication and strict TLS' {
             Mock Add-Type {}
             $config = @{
                 sql = @{ instanceName = 'MSSQLSERVER' }
@@ -95,13 +99,17 @@ Describe 'New-SetupCmSqlConnection' {
 
             $connection = New-SetupCmSqlConnection -Config $config -Database 'master'
             try {
-                $connection.DataSource | Should -Be 'LABZ1-CM01.test.gell.one'
-                $connection.Database | Should -Be 'master'
-                $connection.ConnectionString | Should -Match 'Integrated Security=True'
-                $connection.ConnectionString | Should -Match 'Encrypt=True'
-                $connection.ConnectionString | Should -Match 'TrustServerCertificate=False'
+                $connection.GetType().FullName | Should -Be 'System.Data.Odbc.OdbcConnection'
+                $connection.ConnectionString | Should -Match 'Driver=\{ODBC Driver 18 for SQL Server\}'
+                $connection.ConnectionString | Should -Match 'Server=LABZ1-CM01\.test\.gell\.one'
+                $connection.ConnectionString | Should -Match 'Database=master'
+                $connection.ConnectionString | Should -Match 'Trusted_Connection=Yes'
+                $connection.ConnectionString | Should -Match 'Encrypt=Yes'
+                $connection.ConnectionString | Should -Match 'TrustServerCertificate=No'
+                $connection.ConnectionString | Should -Match 'Connection Timeout=10'
+                $connection.ConnectionString | Should -Match 'Application Name=setup-cm'
                 Should -Invoke Add-Type -Times 1 -Exactly -ParameterFilter {
-                    $AssemblyName -eq 'System.Data.SqlClient'
+                    $AssemblyName -eq 'System.Data.Odbc'
                 }
             }
             finally {
@@ -130,6 +138,24 @@ Describe 'New-SetupCmSqlConnection' {
                 } -Database 'master'
             } | Should -Throw '*sql.instanceName*'
             Should -Invoke Add-Type -Times 0 -Exactly
+        }
+    }
+}
+
+Describe 'Add-SetupCmSqlNVarCharParameter' {
+    InModuleScope SetupCm {
+        It 'adds one bounded positional Unicode parameter to an ODBC command' {
+            Add-Type -AssemblyName System.Data.Odbc -ErrorAction Stop
+            $command = [System.Data.Odbc.OdbcCommand]::new()
+
+            $parameter = Add-SetupCmSqlNVarCharParameter -Command $command -Name DatabaseName -Size 128 -Value 'CM_LAB'
+
+            $command.Parameters.Count | Should -Be 1
+            [object]::ReferenceEquals($command.Parameters[0], $parameter) | Should -BeTrue
+            $parameter.ParameterName | Should -Be 'DatabaseName'
+            $parameter.OdbcType | Should -Be ([System.Data.Odbc.OdbcType]::NVarChar)
+            $parameter.Size | Should -Be 128
+            $parameter.Value | Should -Be 'CM_LAB'
         }
     }
 }
@@ -180,6 +206,7 @@ Describe 'Get-SetupCmSqlDesiredState' {
                         @{ Enabled = 1; TcpPort = '1433'; TcpDynamicPorts = ''; Listening = $true }
                     }
                     Firewall = { $true }
+                    Odbc = { $true }
                     VcRuntime = { param($Architecture) $true }
                     Site = { $true }
                     Database = {
@@ -200,6 +227,21 @@ Describe 'Get-SetupCmSqlDesiredState' {
 
             $state.State | Should -Be 'Compliant'
             @($state.Components | Where-Object State -ne 'Compliant') | Should -HaveCount 0
+        }
+
+        It 'returns a bounded conflict when the <Section> configuration is not a map' -ForEach @(
+            @{ Section = 'mecm'; Component = 'TargetHost'; Reason = 'MissingExpectedHost' }
+            @{ Section = 'sql'; Component = 'SqlInstance'; Reason = 'MissingInstanceName' }
+        ) {
+            $config = New-TestSqlConfig
+            $config[$Section] = 'invalid'
+
+            $state = Get-SetupCmSqlDesiredState -Config $config -Providers (New-CompliantSqlProviders)
+
+            $state.State | Should -Be 'Conflict'
+            $state.Components | Should -HaveCount 1
+            $state.Components[0].Name | Should -Be $Component
+            $state.Components[0].Reason | Should -Be $Reason
         }
 
         It 'fails closed when explicit SQL sysadmin configuration is missing or empty' -ForEach @(
@@ -440,6 +482,19 @@ Describe 'Get-SetupCmSqlDesiredState' {
             $state.State | Should -Be 'NotCompliant'
             ($state.Components | Where-Object Name -eq 'VcRuntimeX86').State | Should -Be 'NotCompliant'
         }
+
+        It 'reports a missing ODBC 18 provider as repairable without attempting a database query' {
+            $script:databaseProbed = $false
+            $providers = New-CompliantSqlProviders
+            $providers.Odbc = { $false }
+            $providers.Database = { $script:databaseProbed = $true; throw 'must not run' }
+
+            $state = Get-SetupCmSqlDesiredState -Config (New-TestSqlConfig) -Providers $providers
+
+            $state.State | Should -Be 'NotCompliant'
+            ($state.Components | Where-Object Name -eq 'OdbcDriver18').Reason | Should -Be 'Missing'
+            $script:databaseProbed | Should -BeFalse
+        }
     }
 }
 
@@ -448,12 +503,16 @@ Describe 'Repair-SetupCmSqlDesiredState' {
         BeforeEach {
             Mock Install-SetupCmWindowsPrerequisites {}
             Mock Install-SetupCmMecmVcRedist {}
+            Mock Install-SetupCmOdbcDriver18 {}
             Mock Install-SetupCmSql {}
             Mock Set-SetupCmSqlServiceState {}
             Mock Enable-SetupCmSqlNetwork {}
             Mock Enable-SetupCmSqlFirewall {}
             Mock Add-SetupCmSqlSysAdmin {}
             Mock Get-SetupCmArtifact { [pscustomobject]@{ Path = 'C:\cache\sql.iso' } }
+            Mock Get-SetupCmSqlDesiredState {
+                [pscustomobject]@{ State = 'Compliant'; Components = @() }
+            }
         }
 
         It 'repairs only a missing SQL firewall rule' {
@@ -566,6 +625,64 @@ Describe 'Repair-SetupCmSqlDesiredState' {
 
             Should -Invoke Install-SetupCmMecmVcRedist -Times 1 -Exactly -ParameterFilter {
                 $Source.name -eq 'vcRedistX86'
+            }
+            Should -Invoke Install-SetupCmSql -Times 0 -Exactly
+        }
+
+        It 'installs only a missing ODBC 18 provider and refreshes deferred database state' {
+            $state = [pscustomobject]@{
+                State = 'NotCompliant'
+                Components = @(
+                    [pscustomobject]@{ Name = 'OdbcDriver18'; State = 'NotCompliant'; Reason = 'Missing' }
+                )
+            }
+            $config = @{
+                cacheRoot = 'C:\cache'
+                sql = @{ instanceName = 'MSSQLSERVER' }
+                mecm = @{ siteServerFqdn = 'LABZ1-CM01.test.gell.one' }
+                sources = @{ odbcDriver18 = @{ name = 'odbcDriver18' } }
+            }
+
+            Repair-SetupCmSqlDesiredState -Config $config -State $state -EvidenceRoot $TestDrive
+
+            Should -Invoke Install-SetupCmOdbcDriver18 -Times 1 -Exactly -ParameterFilter {
+                $Source.name -eq 'odbcDriver18'
+            }
+            Should -Invoke Get-SetupCmSqlDesiredState -Times 1 -Exactly
+            Should -Invoke Install-SetupCmSql -Times 0 -Exactly
+            Should -Invoke Add-SetupCmSqlSysAdmin -Times 0 -Exactly
+        }
+
+        It 'repairs sysadmin drift discovered after ODBC bootstrap without repeating other repairs' {
+            $state = [pscustomobject]@{
+                State = 'NotCompliant'
+                Components = @(
+                    [pscustomobject]@{ Name = 'OdbcDriver18'; State = 'NotCompliant'; Reason = 'Missing' }
+                )
+            }
+            $config = @{
+                cacheRoot = 'C:\cache'
+                sql = @{ instanceName = 'MSSQLSERVER' }
+                mecm = @{ siteServerFqdn = 'LABZ1-CM01.test.gell.one' }
+                sources = @{ odbcDriver18 = @{ name = 'odbcDriver18' } }
+            }
+            Mock Get-SetupCmSqlDesiredState {
+                [pscustomobject]@{
+                    State = 'NotCompliant'
+                    Components = @(
+                        [pscustomobject]@{
+                            Name = 'SqlSysAdmins'; State = 'NotCompliant'; Reason = 'Missing'
+                            Missing = @('TEST\CMSetupAdmins')
+                        }
+                    )
+                }
+            }
+
+            Repair-SetupCmSqlDesiredState -Config $config -State $state -EvidenceRoot $TestDrive
+
+            Should -Invoke Install-SetupCmOdbcDriver18 -Times 1 -Exactly
+            Should -Invoke Add-SetupCmSqlSysAdmin -Times 1 -Exactly -ParameterFilter {
+                $Account -eq 'TEST\CMSetupAdmins'
             }
             Should -Invoke Install-SetupCmSql -Times 0 -Exactly
         }

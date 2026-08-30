@@ -77,6 +77,11 @@ publisher, native product version, architecture, and cache filename. SQL Server
 and MECM must also have a usable approved URI or vault location when the cache
 is absent. Source URIs and vault paths are never copied into evidence.
 
+The SQL stage uses `sources.odbcDriver18` to bootstrap Microsoft ODBC Driver 18
+before its first database query when the driver is absent. The MECM stage
+re-verifies the same prerequisite and uses the same installer path; it does not
+maintain a second copy or provider implementation.
+
 ## Marker acceptance
 
 `markerAcceptance.enabled` defaults to `false`. When enabled, configuration
@@ -111,4 +116,4 @@ Import-Module ./src/SetupCm/SetupCm.psd1 -Force
 Test-SetupCmPreflight -ConfigPath ./config/lab.local.yaml
 ```
 
-Resolve every item in `Missing` before proceeding. Preflight confirms the required SQL Server and MECM license acknowledgements and that each has a configured URI, vault location, or cached file. The full MECM stage also requires the ADK, Windows PE add-on, ODBC Driver 18, and both VC++ redistributable entries.
+Resolve every item in `Missing` before proceeding. Preflight confirms the required SQL Server and MECM license acknowledgements and that each has a configured URI, vault location, or cached file. The full workflow also requires the ADK, Windows PE add-on, ODBC Driver 18, and both VC++ redistributable entries.

@@ -82,6 +82,7 @@ The SQL probe separates components so repair is minimal:
 - configured SQL instance identity;
 - SQL service running with automatic startup;
 - setup-cm-owned service account and explicit sysadmin memberships;
+- Microsoft ODBC Driver 18 before any database probe;
 - both required VC++ runtime architectures;
 - enabled static TCP 1433 and the setup-cm firewall rule;
 - a real SQL connection and query against `master`;
@@ -90,10 +91,13 @@ The SQL probe separates components so repair is minimal:
 
 An absent instance permits setup. A different existing instance, site-owned
 database mismatch, or target-host mismatch is a conflict and fails closed.
-Stopped owned services, missing Windows features, missing VC++ runtime,
-network settings, and explicit sysadmin membership are repaired independently.
-No diagnostic tool such as `sqlcmd` is required when an equivalent .NET SQL
-probe is available.
+Stopped owned services, missing Windows features, ODBC Driver 18, missing VC++
+runtime, network settings, and explicit sysadmin membership are repaired
+independently. The SQL stage installs a missing ODBC provider before querying
+the database, then refreshes the deferred database/sysadmin state in the same
+Apply pass. No diagnostic tool such as `sqlcmd` is required: PowerShell 7 uses
+its built-in `System.Data.Odbc` assembly with integrated authentication,
+encrypted transport, and server-certificate validation.
 
 ## MECM desired state
 
@@ -103,7 +107,8 @@ The MECM probe uses the local SMS Provider and Windows state to require:
   and `CM_LAB` database;
 - local Primary Site, Management Point, and Distribution Point roles;
 - required SMS services in running/automatic state;
-- ADK Deployment Tools, USMT, Windows PE, ODBC 18, and VC++ x64/x86;
+- ADK Deployment Tools, USMT, Windows PE, ODBC 18, and VC++ x64/x86 (ODBC is
+  installed by SQL when absent and independently re-verified here);
 - accessible provider and content library;
 - active, non-obsolete `RING0IVY24-01` registration with the expected resource
   identity in both provider and SQL views.
@@ -185,10 +190,13 @@ after both runs.
 
 Implementation is reviewed on one branch and one PR. Live acceptance evidence
 is committed only in sanitized summary form. After merge, release-critical
-tests and live read-only checks run at the exact merge commit. The first v1 tag
-is created only if no conflicting tag exists, GitHub release notes identify the
-supported boundary and evidence hashes, and the deployed mdBook site is proven
-to represent the tagged source.
+tests and live read-only checks run at the exact merge commit. The live-tested
+and merged tree IDs must match; otherwise the complete two-run acceptance is
+repeated at the merge commit. The first release is the annotated `v1.0.0` tag,
+created only after confirming that tag is absent locally and on `origin` and
+verifying that it dereferences to the accepted merge commit. GitHub release
+notes identify the supported boundary and evidence hashes, and the deployed
+mdBook site is proven to represent the tagged source.
 
 ## Recovery and stop rules
 

@@ -400,7 +400,15 @@ Describe 'Setup-CM marker direct client file evidence' {
                     $true
                 } `
                 -HashProvider { param($Path) ('a' * 64) } `
-                -ItemProvider { param($Path) @{ LastWriteTimeUtc = [datetime]'2026-08-30T12:00:00Z' } }
+                -ItemProvider {
+                    param($Path)
+                    @{
+                        LastWriteTimeUtc = [datetime]::SpecifyKind(
+                            [datetime]'2026-08-30T12:00:00',
+                            [System.DateTimeKind]::Utc
+                        )
+                    }
+                }
 
             $script:probedPath | Should -BeExactly `
                 '\\RING0IVY24-01.test.gell.one\C$\ProgramData\SetupCm\Phase1\marker.json'

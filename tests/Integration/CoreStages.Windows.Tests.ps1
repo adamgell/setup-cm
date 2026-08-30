@@ -36,7 +36,7 @@ Describe 'LabZ1 core-stage read-only providers' -Tag LabIntegration -Skip:(-not 
             Mock Install-SetupCmMecmVcRedist { throw 'A read-only integration probe attempted VC runtime setup.' }
             Mock Install-SetupCmMecmAdk { throw 'A read-only integration probe attempted ADK setup.' }
             Mock Install-SetupCmMecmWinPeAddOn { throw 'A read-only integration probe attempted WinPE setup.' }
-            Mock Install-SetupCmMecmOdbcDriver18 { throw 'A read-only integration probe attempted ODBC setup.' }
+            Mock Install-SetupCmOdbcDriver18 { throw 'A read-only integration probe attempted ODBC setup.' }
         }
 
         It 'reports the real SQL desired state compliant without installation' {

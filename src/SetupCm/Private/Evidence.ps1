@@ -11,7 +11,7 @@ function New-SetupCmRunEvidence {
         -not [string]::IsNullOrWhiteSpace($env:SETUPCM_SOURCE_COMMIT)) {
         $SourceCommit = $env:SETUPCM_SOURCE_COMMIT
     }
-    if (-not [string]::IsNullOrWhiteSpace($SourceCommit) -and $SourceCommit -notmatch '^[0-9a-fA-F]{40}$') {
+    if (-not [string]::IsNullOrWhiteSpace($SourceCommit) -and $SourceCommit -notmatch '\A[0-9a-fA-F]{40}\z') {
         throw 'SourceCommit must be a full 40-character Git commit.'
     }
 
@@ -37,7 +37,7 @@ function Resolve-SetupCmRequiredSourceCommit {
         $SourceCommit = $env:SETUPCM_SOURCE_COMMIT
     }
     if ([string]::IsNullOrWhiteSpace($SourceCommit) -or
-        $SourceCommit -notmatch '^[0-9a-fA-F]{40}$') {
+        $SourceCommit -notmatch '\A[0-9a-fA-F]{40}\z') {
         throw 'Marker acceptance requires an exact 40-character source commit through SourceCommit or SETUPCM_SOURCE_COMMIT.'
     }
 
@@ -90,7 +90,7 @@ function ConvertTo-SetupCmSanitizedEvidenceString {
 
     $sanitized = [regex]::Replace(
         $Value,
-        '(?im)(\b(?:password|pwd|token|secret|authorization|(?:x-)?api[_-]?key)\s*(?:=|:)\s*)(?:"[^"]*"|''[^'']*''|[^;\r\n\s]+)',
+        '(?im)(\b(?:password|pwd|token|secret|authorization|(?:x-)?api[_-]?key)\s*(?:=|:)\s*)(?:"[^"]*"|''[^'']*''|[^;\r\n]+)',
         '$1<redacted>'
     )
     $sanitized = [regex]::Replace($sanitized, '(?i)(\bbearer\s+)[A-Za-z0-9._~+/=-]+', '$1<redacted>')
@@ -99,7 +99,7 @@ function ConvertTo-SetupCmSanitizedEvidenceString {
     if (-not $PreserveLocalPath) {
         $sanitized = [regex]::Replace(
             $sanitized,
-            '(?i)(?:"[A-Z]:\\[^"\r\n]*"|''[A-Z]:\\[^''\r\n]*''|(?<!\w)[A-Z]:\\[^;\r\n,"''<>]+)',
+            '(?i)(?:"[A-Z]:[\\/][^"\r\n]*"|''[A-Z]:[\\/][^''\r\n]*''|(?<!\w)[A-Z]:[\\/][^;\r\n,"''<>]+)',
             '<redacted-path>'
         )
     }
@@ -115,6 +115,11 @@ function ConvertTo-SetupCmSanitizedEvidenceValue {
 
     if ($null -eq $Value) { return $null }
 
+    if ($Value -is [string]) {
+        return ConvertTo-SetupCmSanitizedEvidenceString -Value $Value `
+            -PreserveLocalPath:$PreserveLocalPath
+    }
+
     if ($Value -is [System.Collections.IDictionary]) {
         $result = [ordered]@{}
         foreach ($key in $Value.Keys) {
@@ -126,7 +131,7 @@ function ConvertTo-SetupCmSanitizedEvidenceValue {
         return $result
     }
 
-    if ($Value -is [pscustomobject]) {
+    if ($Value -is [System.Management.Automation.PSCustomObject]) {
         $result = [ordered]@{}
         foreach ($property in $Value.PSObject.Properties) {
             if (Test-SetupCmSensitiveEvidenceKey -Name $property.Name) { continue }
@@ -144,11 +149,6 @@ function ConvertTo-SetupCmSanitizedEvidenceValue {
         }
         Write-Output -NoEnumerate ([object[]]$items.ToArray())
         return
-    }
-
-    if ($Value -is [string]) {
-        return ConvertTo-SetupCmSanitizedEvidenceString -Value $Value `
-            -PreserveLocalPath:$PreserveLocalPath
     }
 
     return $Value

@@ -67,18 +67,6 @@ function Get-SetupCmMecmPrerequisites {
     return $PrerequisitePath
 }
 
-function Test-SetupCmMecmOdbcDriver18 {
-    [CmdletBinding()]
-    param(
-        [scriptblock]$RegistryProvider = {
-            Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\MSODBCSQL18' -ErrorAction SilentlyContinue
-        }
-    )
-
-    if ($null -ne (& $RegistryProvider)) { return 'Compliant' }
-    return 'NotCompliant'
-}
-
 function Get-SetupCmMecmVcRedistRegistryPath {
     [CmdletBinding()]
     param([Parameter(Mandatory)][ValidateSet('x64', 'x86')][string]$Architecture)
@@ -250,15 +238,16 @@ function Get-SetupCmMecmExpectedClientResourceId {
     [CmdletBinding()]
     param([Parameter(Mandatory)][hashtable]$Config)
 
-    if ($Config.ContainsKey('markerAcceptance') -and
-        $Config.markerAcceptance.ContainsKey('targetResourceId') -and
-        [int]$Config.markerAcceptance.targetResourceId -gt 0) {
-        return [int]$Config.markerAcceptance.targetResourceId
-    }
-    if ($Config.ContainsKey('testClient') -and
-        $Config.testClient.ContainsKey('resourceId') -and
-        [int]$Config.testClient.resourceId -gt 0) {
-        return [int]$Config.testClient.resourceId
+    $candidates = @(
+        Get-SetupCmMecmObjectValue -InputObject $Config.markerAcceptance -Name targetResourceId
+        Get-SetupCmMecmObjectValue -InputObject $Config.testClient -Name resourceId
+    )
+    foreach ($candidate in $candidates) {
+        $parsedResourceId = 0
+        if ([int]::TryParse([string]$candidate, [ref]$parsedResourceId) -and
+            $parsedResourceId -gt 0) {
+            return $parsedResourceId
+        }
     }
     return $null
 }
@@ -275,6 +264,21 @@ function ConvertFrom-SetupCmMecmClientSqlRow {
         Client = if ($Reader.IsDBNull(4)) { 0 } else { [int]$Reader.GetValue(4) }
         ClientVersion = if ($Reader.IsDBNull(5)) { '' } else { [string]$Reader.GetValue(5) }
     }
+}
+
+function Resolve-SetupCmAbsentMecmSiteCimStatus {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][uint32]$StatusCode)
+
+    $invalidNamespace = [uint32][Microsoft.Management.Infrastructure.NativeErrorCode]::InvalidNamespace
+    $invalidClass = [uint32][Microsoft.Management.Infrastructure.NativeErrorCode]::InvalidClass
+    if ($StatusCode -eq $invalidNamespace) {
+        return @{ Exists = $false; ResidualState = $false }
+    }
+    if ($StatusCode -eq $invalidClass) {
+        return @{ Exists = $false; ResidualState = $true }
+    }
+    return $null
 }
 
 function Get-SetupCmMecmDefaultProviders {
@@ -295,7 +299,7 @@ function Get-SetupCmMecmDefaultProviders {
         }
         Adk = { (Test-SetupCmMecmAdk) -eq 'Compliant' }
         WinPe = { (Test-SetupCmMecmWinPeAddOn) -eq 'Compliant' }
-        Odbc = { (Test-SetupCmMecmOdbcDriver18) -eq 'Compliant' }
+        Odbc = { (Test-SetupCmOdbcDriver18) -eq 'Compliant' }
         VcRuntime = {
             param($Architecture)
             (Test-SetupCmMecmVcRedistArchitecture -Architecture $Architecture) -eq 'Compliant'
@@ -315,13 +319,10 @@ function Get-SetupCmMecmDefaultProviders {
                         ProviderCount = $residualProviders.Count
                     }
                 }
-                catch {
-                    if ($_.Exception.Message -match '(?i)invalid namespace|0x8004100e') {
-                        return @{ Exists = $false; ResidualState = $false }
-                    }
-                    if ($_.Exception.Message -match '(?i)invalid class|0x80041010') {
-                        return @{ Exists = $false; ResidualState = $true }
-                    }
+                catch [Microsoft.Management.Infrastructure.CimException] {
+                    $absentSiteState = Resolve-SetupCmAbsentMecmSiteCimStatus `
+                        -StatusCode ([uint32]$_.Exception.StatusCode)
+                    if ($null -ne $absentSiteState) { return $absentSiteState }
                     throw
                 }
             }
@@ -429,10 +430,9 @@ function Get-SetupCmMecmDefaultProviders {
                 $client.CommandText = @'
 SELECT Name0, ResourceID, Active0, Obsolete0, Client0, Client_Version0
 FROM dbo.v_R_System
-WHERE Name0 = @Name
+WHERE Name0 = ?
 '@
-                [void]$client.Parameters.Add('@Name', [System.Data.SqlDbType]::NVarChar, 256)
-                $client.Parameters['@Name'].Value = [string]$Config.testClient.name
+                Add-SetupCmSqlNVarCharParameter -Command $client -Name Name -Size 256 -Value ([string]$Config.testClient.name) | Out-Null
                 $rows = [System.Collections.Generic.List[object]]::new()
                 $reader = $client.ExecuteReader()
                 try {
@@ -469,6 +469,7 @@ function Get-SetupCmMecmDesiredState {
         return New-SetupCmMecmDesiredStateResult -Components $components
     }
     if (-not $Config.ContainsKey('mecm') -or
+        $Config.mecm -isnot [hashtable] -or
         -not $Config.mecm.ContainsKey('siteServerFqdn') -or
         [string]::IsNullOrWhiteSpace([string]$Config.mecm.siteServerFqdn)) {
         [void]$components.Add((New-SetupCmMecmComponent -Name TargetHost -State Conflict -Reason MissingExpectedHost))
@@ -836,10 +837,17 @@ function Repair-SetupCmMecmDesiredState {
         Install-SetupCmMecmWinPeAddOn -Source $Config.sources.adkWinPe -CacheRoot $Config.cacheRoot -EvidenceRoot $EvidenceRoot
     }
     if (@($repairable | Where-Object Name -eq 'OdbcDriver18').Count -gt 0) {
-        Install-SetupCmMecmOdbcDriver18 -Source $Config.sources.odbcDriver18 -CacheRoot $Config.cacheRoot -EvidenceRoot $EvidenceRoot
+        Install-SetupCmOdbcDriver18 -Source $Config.sources.odbcDriver18 -CacheRoot $Config.cacheRoot -EvidenceRoot $EvidenceRoot
     }
     foreach ($serviceState in @($repairable | Where-Object Name -eq 'MecmServices')) {
-        foreach ($serviceName in @($serviceState.Repair)) {
+        $repairDetails = Get-SetupCmMecmObjectValue -InputObject $serviceState -Name Repair -DefaultValue @()
+        $serviceNames = @($repairDetails | Where-Object {
+                -not [string]::IsNullOrWhiteSpace([string]$_)
+            })
+        if ($serviceNames.Count -eq 0) {
+            throw 'MecmServices repair state did not identify any service to repair.'
+        }
+        foreach ($serviceName in $serviceNames) {
             Set-SetupCmMecmServiceState -Name $serviceName
         }
     }
@@ -847,24 +855,6 @@ function Repair-SetupCmMecmDesiredState {
         $media = Get-SetupCmArtifact -Source $Config.sources.mecm -CacheRoot $Config.cacheRoot -EvidenceRoot $EvidenceRoot
         Get-SetupCmMecmPrerequisites -MediaPath $media.Path -PrerequisitePath $Config.mecm.prerequisitePath | Out-Null
         Install-SetupCmPrimarySite -MediaPath $media.Path -Mecm $Config.mecm -EvidenceRoot $EvidenceRoot | Out-Null
-    }
-}
-
-function Install-SetupCmMecmOdbcDriver18 {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][hashtable]$Source,
-        [Parameter(Mandatory)][string]$CacheRoot,
-        [Parameter(Mandatory)][string]$EvidenceRoot
-    )
-
-    if (-not $IsWindows) { throw 'MECM ODBC Driver installation can only run on Windows Server.' }
-    $artifact = Get-SetupCmArtifact -Source $Source -CacheRoot $CacheRoot -EvidenceRoot $EvidenceRoot
-    $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList @(
-        '/i', $artifact.Path, '/qn', 'IACCEPTMSODBCSQLLICENSETERMS=YES'
-    ) -Wait -PassThru -NoNewWindow
-    if ($process.ExitCode -notin 0, 3010) {
-        throw "MECM ODBC Driver installation failed with exit code $($process.ExitCode)."
     }
 }
 

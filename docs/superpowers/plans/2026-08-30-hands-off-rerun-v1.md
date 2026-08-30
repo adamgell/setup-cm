@@ -14,8 +14,8 @@ stage. Tie sanitized evidence to one exact commit and independently compare
 provider, SQL, client, controller, and Proxmox state.
 
 **Tech stack:** PowerShell 7, Pester 6, Microsoft Configuration Manager current
-branch provider/cmdlets, CIM/WMI, .NET SQL client, mdBook, GitHub Actions and
-Releases.
+branch provider/cmdlets, CIM/WMI, Microsoft ODBC Driver 18 through
+`System.Data.Odbc`, mdBook, GitHub Actions and Releases.
 
 ## Global constraints
 
@@ -107,6 +107,9 @@ Releases.
       drift repairs one component, an absent instance installs once, a conflict
       never installs, and Verify failure fails the stage.
 - [x] Implement a read-only SQL state probe and minimal repair dispatcher.
+- [x] Replace the deprecated `System.Data.SqlClient` path with the supported
+      ODBC Driver 18 provider, make it a SQL bootstrap prerequisite, and retain
+      positional bounded parameters plus strict TLS/integrated authentication.
 - [x] Run focused and full unit suites, plus the live CM01 read-only provider
       probe.
 - [x] Commit: `feat: reconcile SQL desired state`.
@@ -134,7 +137,7 @@ Releases.
       the Windows integration suite passed 3/3 against `LABZ1-CM01` using the
       real SQL, MECM, and Health read-only probes with installer/setup calls
       guarded by mocks.
-- [x] Commit: `feat: make MECM reruns read only`.
+- [x] Commit: `feat: make MECM reruns read-only`.
 
 ## Task 6: Productize the marker acceptance
 
@@ -204,8 +207,12 @@ Releases.
       repair; independently verify all resulting state and evidence.
 - [ ] Snapshot installer logs/process evidence and ConfigMgr object identities.
 - [ ] Run the identical command again from the identical commit.
-- [ ] Require all stages skipped/already compliant, no installer execution,
-      redistribution, object/deployment creation, or membership change.
+- [ ] Instrument every mutation or side-effect adapter during the second run
+      and require exactly zero calls for existing-object updates,
+      acquisition/download/copy, SQL repair/bootstrap, MECM
+      prerequisite/site/content mutation, and Marker
+      application/deployment/membership repair. Preserve the skipped/already
+      compliant stage checks as evidence rather than omitting them.
 - [ ] Verify both bundles are sanitized, fresh, hash them, and remove temporary
       staging/query files.
 
@@ -224,8 +231,13 @@ Releases.
       commit. For marker state, run the fail-on-mutation exact-state provider
       test `tests/Integration/MarkerAcceptance.Provider.Tests.ps1`; it reads the
       existing deployment and supplies mutation adapters that throw if called.
-- [ ] Confirm no conflicting tag and create the repository's first v1 tag at
-      the accepted merge commit.
+- [ ] Compare the tree IDs of the live-tested commit and the merge commit. If
+      they differ, rerun the complete two-run live acceptance at the merge
+      commit and treat that merge commit as the accepted live revision before
+      tagging.
+- [ ] Confirm `refs/tags/v1.0.0` does not exist locally or on `origin`, create
+      the repository's first annotated tag `v1.0.0` at the accepted merge
+      commit, and verify the dereferenced tag points to that exact commit.
 - [ ] Push the tag and publish GitHub release notes with scope, topology, gates,
       limitations, boundary, and evidence hashes.
 - [ ] Confirm Pages deployment succeeds and published docs match tagged source.

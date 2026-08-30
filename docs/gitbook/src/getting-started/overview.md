@@ -57,8 +57,8 @@ See the [Operator Runbook](../operations/runbook.md) before operating the workfl
 | Stage | Purpose |
 | --- | --- |
 | `Acquire` | Obtains and verifies SQL Server and MECM installation media in the configured cache. |
-| `Sql` | Installs SQL Server prerequisites, SQL Server, and SQL network configuration. |
-| `Mecm` | Installs MECM prerequisites, ADK, Windows PE, ODBC Driver 18, and the primary site. |
+| `Sql` | Installs ODBC Driver 18, SQL Server prerequisites, SQL Server, and SQL network configuration. |
+| `Mecm` | Installs MECM prerequisites, ADK, Windows PE, and the primary site; it re-verifies ODBC Driver 18. |
 | `Marker` | Reconciles and verifies the fixed one-device LabZ1 marker deployment. |
 | `Health` | Rechecks SQL, MECM, Management Point, Distribution Point, and active-client state without repair. |
 

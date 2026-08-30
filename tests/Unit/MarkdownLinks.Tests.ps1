@@ -109,6 +109,40 @@ Describe 'Test-MarkdownLinks script' {
         $result.LocalLinksChecked | Should -Be 1
     }
 
+    It 'ignores missing-looking links inside continued indented code blocks' {
+        Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') -Value @'
+# Examples
+
+    [Example only](missing-first.md)
+
+    ![Still example only](missing-after-blank.png)
+	[Tabbed example only](missing-tabbed.md)
+
+[Guide](guide.md)
+'@
+        Set-Content -LiteralPath (Join-Path $TestDrive 'guide.md') -Value '# Guide'
+
+        $result = & $linkScript -RepositoryRoot $TestDrive -Path index.md, guide.md
+
+        $result.State | Should -BeExactly 'Passed'
+        $result.LocalLinksChecked | Should -Be 1
+    }
+
+    It 'ignores escaped inline links and images while validating an unescaped link' {
+        Set-Content -LiteralPath (Join-Path $TestDrive 'index.md') -Value @'
+\[Escaped link](missing-link.md)
+\![Escaped image](missing-image.png)
+!\[Escaped image bracket](missing-image-bracket.png)
+[Guide](guide.md)
+'@
+        Set-Content -LiteralPath (Join-Path $TestDrive 'guide.md') -Value '# Guide'
+
+        $result = & $linkScript -RepositoryRoot $TestDrive -Path index.md, guide.md
+
+        $result.State | Should -BeExactly 'Passed'
+        $result.LocalLinksChecked | Should -Be 1
+    }
+
     It 'documents atomic source extraction with cleanup in <Runbook>' -ForEach @(
         @{ Runbook = 'docs/RUNBOOK.md' }
         @{ Runbook = 'docs/gitbook/src/operations/runbook.md' }
@@ -122,6 +156,31 @@ Describe 'Test-MarkdownLinks script' {
         $content | Should -Match '(?s)\[string\]::IsNullOrWhiteSpace\(\$env:SETUPCM_SOURCE_COMMIT\).*?\$archivePath = Join-Path'
     }
 
+    It 'verifies the embedded git-archive commit before source promotion in <Runbook>' -ForEach @(
+        @{ Runbook = 'docs/RUNBOOK.md' }
+        @{ Runbook = 'docs/gitbook/src/operations/runbook.md' }
+    ) {
+        $content = Get-Content -LiteralPath (Join-Path $repositoryRoot $Runbook) -Raw
+
+        $content | Should -Match 'Get-Command git\.exe -ErrorAction Stop'
+        $content | Should -Match "ArgumentList\.Add\('get-tar-commit-id'\)"
+        $content | Should -Match '\$embeddedArchiveCommit -ine \$env:SETUPCM_SOURCE_COMMIT'
+        $content | Should -Match '(?s)\$embeddedArchiveCommit.*?Move-Item -LiteralPath \$temporarySourceRoot'
+        $content | Should -Match "\\A\[0-9a-fA-F\]\{40\}\\z"
+    }
+
+    It 'documents the deliberate PowerShell 7.0 compatibility floor in <Runbook>' -ForEach @(
+        @{ Runbook = 'docs/RUNBOOK.md' }
+        @{ Runbook = 'docs/gitbook/src/operations/runbook.md' }
+    ) {
+        $content = Get-Content -LiteralPath (Join-Path $repositoryRoot $Runbook) -Raw
+
+        $content | Should -Match 'PowerShell 7\.0 or later'
+        $content | Should -Match '(?s)`ProcessStartInfo\.ArgumentList`\s+is available in \.NET Core 3\.1'
+        $content | Should -Match '(?s)`TimeoutSec`\s+on PowerShell 7\.0-7\.3'
+        $content | Should -Match '(?s)Pester 6\.0\.0.*declares PowerShell 5\.1'
+    }
+
     It 'documents and verifies an exact read-only ACL for private configuration in <Runbook>' -ForEach @(
         @{ Runbook = 'docs/RUNBOOK.md' }
         @{ Runbook = 'docs/gitbook/src/operations/runbook.md' }
@@ -131,10 +190,13 @@ Describe 'Test-MarkdownLinks script' {
         $content | Should -Match "S-1-5-18"
         $content | Should -Match "S-1-5-32-544"
         $content | Should -Match '\[System\.Security\.Principal\.WindowsIdentity\]::GetCurrent\(\)\.User'
+        $content | Should -Match '\.SetOwner\(\$operatorSid\)'
         $content | Should -Match '\.SetAccessRuleProtection\(\$true, \$false\)'
         $content | Should -Match '\.PurgeAccessRules\('
         $content | Should -Match '\[System\.Security\.AccessControl\.FileSystemRights\]::ReadAndExecute'
         $content | Should -Match 'Set-Acl -LiteralPath \$configPath'
+        $content | Should -Match '(?s)\.GetOwner\(\s*\[System\.Security\.Principal\.SecurityIdentifier\]\s*\)'
+        $content | Should -Match '\$verifiedOwnerSid -ne \$operatorSid\.Value'
         $content | Should -Match '\.AreAccessRulesProtected'
         $content | Should -Match 'Compare-Object'
         $content | Should -Not -Match '\$verifiedRules\.Count\s+-ne'

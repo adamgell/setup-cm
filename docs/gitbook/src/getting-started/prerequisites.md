@@ -6,6 +6,8 @@ Before running `setup-cm`, ensure the following are in place.
 
 - An **isolated, domain-joined lab** with a Windows Server host and a separate test client.
 - **PowerShell 7** or later on the server.
+- **Git for Windows** with `git.exe` on `PATH`, used to verify the commit
+  embedded in the reviewed source archive before extraction.
 - The `powershell-yaml` module to read the YAML configuration.
 - Approved SQL Server, MECM, Windows ADK, Windows PE add-on, ODBC Driver 18,
   and VC++ x64/x86 media, checksums, and accepted licenses.

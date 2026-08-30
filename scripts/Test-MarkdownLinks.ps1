@@ -37,12 +37,48 @@ function Remove-MarkdownInlineCode {
     )
 }
 
+function Test-MarkdownCharacterEscaped {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Line,
+        [Parameter(Mandatory)][int]$Index
+    )
+
+    $backslashCount = 0
+    for ($position = $Index - 1; $position -ge 0 -and $Line[$position] -eq '\'; $position--) {
+        $backslashCount++
+    }
+    ($backslashCount % 2) -eq 1
+}
+
+function Test-MarkdownLinkMatchEscaped {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Line,
+        [Parameter(Mandatory)][System.Text.RegularExpressions.Match]$Match
+    )
+
+    $imageMarker = $Match.Groups['image']
+    $bracketIndex = $Match.Index
+    if ($imageMarker.Success) {
+        $bracketIndex += $imageMarker.Length
+    }
+
+    if (Test-MarkdownCharacterEscaped -Line $Line -Index $bracketIndex) { return $true }
+    if ($imageMarker.Success -and
+        (Test-MarkdownCharacterEscaped -Line $Line -Index $Match.Index)) {
+        return $true
+    }
+    return $false
+}
+
 function Get-MarkdownContentLine {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$MarkdownPath)
 
     $lineNumber = 0
     $inFence = $false
+    $inIndentedCode = $false
     $fenceCharacter = $null
     $fenceLength = 0
     foreach ($line in @(Get-Content -LiteralPath $MarkdownPath)) {
@@ -65,9 +101,18 @@ function Get-MarkdownContentLine {
             }
             continue
         }
-        if (-not $inFence) {
-            [pscustomobject]@{ Number = $lineNumber; Text = $line }
+        if ($inFence) { continue }
+
+        if ($line -match '^(?: {4}|\t)') {
+            $inIndentedCode = $true
+            continue
         }
+        if ($inIndentedCode) {
+            if ([string]::IsNullOrWhiteSpace($line)) { continue }
+            $inIndentedCode = $false
+        }
+
+        [pscustomobject]@{ Number = $lineNumber; Text = $line }
     }
 }
 
@@ -174,13 +219,15 @@ foreach ($markdownFile in $markdownFiles) {
         if ($line -match '^\s{0,3}\[[^\]]+\]:\s*(?:<[^>]+>|\S+)') { continue }
 
         $destinations = [System.Collections.Generic.List[string]]::new()
-        foreach ($match in [regex]::Matches($line, '!?\[[^\]]*\]\((?<destination><[^>]+>|[^)\s]+)')) {
+        foreach ($match in [regex]::Matches($line, '(?<image>!)?\[[^\]]*\]\((?<destination><[^>]+>|[^)\s]+)')) {
+            if (Test-MarkdownLinkMatchEscaped -Line $line -Match $match) { continue }
             [void]$destinations.Add($match.Groups['destination'].Value.Trim().Trim('<', '>'))
         }
         foreach ($match in [regex]::Matches(
             $line,
-            '!?\[(?<text>[^\]]+)\]\[(?<label>[^\]]*)\]'
+            '(?<image>!)?\[(?<text>[^\]]+)\]\[(?<label>[^\]]*)\]'
         )) {
+            if (Test-MarkdownLinkMatchEscaped -Line $line -Match $match) { continue }
             $labelText = if ([string]::IsNullOrWhiteSpace($match.Groups['label'].Value)) {
                 $match.Groups['text'].Value
             }

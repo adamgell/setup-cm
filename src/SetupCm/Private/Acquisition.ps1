@@ -1,3 +1,22 @@
+function Get-SetupCmWebRequestTimeoutParameters {
+    [CmdletBinding()]
+    param(
+        [version]$PowerShellVersion = $PSVersionTable.PSVersion
+    )
+
+    if ($PowerShellVersion -ge [version]'7.4') {
+        return @{
+            ConnectionTimeoutSeconds = 30
+            OperationTimeoutSeconds = 300
+        }
+    }
+
+    # Before PowerShell 7.4, TimeoutSec is the only native request timeout.
+    # Allow up to two hours so multi-gigabyte lab media can finish while still
+    # preventing an indefinitely blocked acquisition.
+    return @{ TimeoutSec = 7200 }
+}
+
 function Resolve-SetupCmArtifactSignaturePath {
     [CmdletBinding()]
     param(
@@ -188,8 +207,9 @@ function ConvertTo-SetupCmComparableVersion {
 
     $match = [regex]::Match($Value, '\d+(?:\.\d+){0,3}')
     if (-not $match.Success) { return $Value.Trim() }
+    $candidate = if ($match.Value -notmatch '\.') { "$($match.Value).0" } else { $match.Value }
     try {
-        $parsed = [version]$match.Value
+        $parsed = [version]$candidate
         return ('{0}.{1}.{2}.{3}' -f
             $parsed.Major,
             [Math]::Max($parsed.Minor, 0),
@@ -304,7 +324,7 @@ function Get-SetupCmArtifactState {
         $identity.PSObject.Properties.Name -contains 'PublisherValid'
     }
     if ($hasPublisherState -and -not [bool]$identity.PublisherValid) {
-        $state.State = 'NotCompliant'
+        $state.State = 'Conflict'
         $state.Reason = 'PublisherMismatch'
         return [pscustomobject]$state
     }
@@ -315,7 +335,7 @@ function Get-SetupCmArtifactState {
     }
     if ((ConvertTo-SetupCmComparableVersion -Value ([string]$identity.Version)) -ne
         (ConvertTo-SetupCmComparableVersion -Value ([string]$Source.version))) {
-        $state.State = 'NotCompliant'
+        $state.State = 'Conflict'
         $state.Reason = 'VersionMismatch'
         return [pscustomobject]$state
     }
@@ -326,7 +346,7 @@ function Get-SetupCmArtifactState {
             return [pscustomobject]$state
         }
         if ([string]$identity.Architecture -ine [string]$Source.architecture) {
-            $state.State = 'NotCompliant'
+            $state.State = 'Conflict'
             $state.Reason = 'ArchitectureMismatch'
             return [pscustomobject]$state
         }
@@ -473,7 +493,8 @@ function Get-SetupCmArtifact {
             Copy-Item -LiteralPath $sourceUri -Destination $temporaryPath -Force
         }
         else {
-            Invoke-WebRequest -Uri $sourceUri -OutFile $temporaryPath
+            $timeoutParameters = Get-SetupCmWebRequestTimeoutParameters
+            Invoke-WebRequest -Uri $sourceUri -OutFile $temporaryPath @timeoutParameters
         }
     }
     catch {

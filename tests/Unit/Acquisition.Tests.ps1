@@ -1,5 +1,25 @@
 Import-Module "$PSScriptRoot/../../src/SetupCm/SetupCm.psd1" -Force
 
+Describe 'Get-SetupCmWebRequestTimeoutParameters' {
+    InModuleScope SetupCm {
+        It 'uses separate bounded connection and stream-read timeouts on PowerShell 7.4 and later' {
+            $parameters = Get-SetupCmWebRequestTimeoutParameters -PowerShellVersion ([version]'7.4')
+
+            $parameters.ConnectionTimeoutSeconds | Should -Be 30
+            $parameters.OperationTimeoutSeconds | Should -Be 300
+            $parameters.ContainsKey('TimeoutSec') | Should -BeFalse
+        }
+
+        It 'uses a bounded legacy request timeout before PowerShell 7.4' {
+            $parameters = Get-SetupCmWebRequestTimeoutParameters -PowerShellVersion ([version]'7.3')
+
+            $parameters.TimeoutSec | Should -Be 7200
+            $parameters.ContainsKey('ConnectionTimeoutSeconds') | Should -BeFalse
+            $parameters.ContainsKey('OperationTimeoutSeconds') | Should -BeFalse
+        }
+    }
+}
+
 Describe 'Get-SetupCmArtifact' {
     InModuleScope SetupCm {
         It 'uses a matching cached artifact without downloading' {
@@ -114,6 +134,16 @@ Describe 'Get-SetupCmArtifact' {
             $message | Should -Match 'TLS certificate validation failed'
             $message | Should -Match '<redacted-uri>'
             $message | Should -Not -Match 'private\.example\.invalid|topsecret'
+            if ($PSVersionTable.PSVersion -ge [version]'7.4') {
+                Should -Invoke Invoke-WebRequest -Times 1 -Exactly -ParameterFilter {
+                    $ConnectionTimeoutSeconds -eq 30 -and $OperationTimeoutSeconds -eq 300
+                }
+            }
+            else {
+                Should -Invoke Invoke-WebRequest -Times 1 -Exactly -ParameterFilter {
+                    $TimeoutSec -eq 7200
+                }
+            }
             Test-Path -LiteralPath (Join-Path $TestDrive 'mecm.download.iso') |
                 Should -BeFalse
         }
@@ -264,12 +294,12 @@ Describe 'Get-SetupCmArtifactState' {
             $script:identityProbed | Should -BeFalse
         }
 
-        It 'reports a version mismatch as NotCompliant' {
+        It 'fails closed on a version mismatch after the approved hash matches' {
             $state = Get-SetupCmArtifactState -Source $source -CacheRoot $TestDrive `
                 -PathProvider { $true } -LengthProvider { 1024 } -HashProvider { ('a' * 64) } `
                 -IdentityProvider { @{ Version = '15.0.1.0'; Architecture = 'x64'; PublisherValid = $true } }
 
-            $state.State | Should -Be 'NotCompliant'
+            $state.State | Should -Be 'Conflict'
             $state.Reason | Should -Be 'VersionMismatch'
         }
 
@@ -285,21 +315,33 @@ Describe 'Get-SetupCmArtifactState' {
             $state.Reason | Should -Be 'Verified'
         }
 
-        It 'reports an architecture mismatch as NotCompliant' {
+        It 'treats a bare major version as equivalent to four-component trailing zeros' {
+            $versionSource = $source.Clone()
+            $versionSource.version = '17.0.0.0'
+
+            $state = Get-SetupCmArtifactState -Source $versionSource -CacheRoot $TestDrive `
+                -PathProvider { $true } -LengthProvider { 1024 } -HashProvider { ('a' * 64) } `
+                -IdentityProvider { @{ Version = '17'; Architecture = 'x64'; PublisherValid = $true } }
+
+            $state.State | Should -Be 'Compliant'
+            $state.Reason | Should -Be 'Verified'
+        }
+
+        It 'fails closed on an architecture mismatch after the approved hash matches' {
             $state = Get-SetupCmArtifactState -Source $source -CacheRoot $TestDrive `
                 -PathProvider { $true } -LengthProvider { 1024 } -HashProvider { ('a' * 64) } `
                 -IdentityProvider { @{ Version = '16.0.1000.6'; Architecture = 'x86'; PublisherValid = $true } }
 
-            $state.State | Should -Be 'NotCompliant'
+            $state.State | Should -Be 'Conflict'
             $state.Reason | Should -Be 'ArchitectureMismatch'
         }
 
-        It 'reports a publisher mismatch from a hashtable identity provider as NotCompliant' {
+        It 'fails closed on a publisher mismatch after the approved hash matches' {
             $state = Get-SetupCmArtifactState -Source $source -CacheRoot $TestDrive `
                 -PathProvider { $true } -LengthProvider { 1024 } -HashProvider { ('a' * 64) } `
                 -IdentityProvider { @{ Version = '16.0.1000.6'; Architecture = 'x64'; PublisherValid = $false } }
 
-            $state.State | Should -Be 'NotCompliant'
+            $state.State | Should -Be 'Conflict'
             $state.Reason | Should -Be 'PublisherMismatch'
         }
 

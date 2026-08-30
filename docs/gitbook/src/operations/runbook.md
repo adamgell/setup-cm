@@ -28,18 +28,26 @@ outside this runbook.
 
 ## Prepare the server
 
-1. Install PowerShell 7, `powershell-yaml`, and Pester 6:
+1. Install PowerShell 7.0 or later, Git for Windows, `powershell-yaml`, and
+   Pester 6:
 
    ```powershell
    Install-Module powershell-yaml -RequiredVersion 0.4.12 -Scope CurrentUser
    Install-Module Pester -RequiredVersion 6.0.0 -Scope CurrentUser
    ```
 
+   PowerShell 7.0 is the deliberate minimum. `ProcessStartInfo.ArgumentList`
+   is available in .NET Core 3.1, the archive verifier writes bytes directly to
+   the child process stream, and acquisition uses the compatible `TimeoutSec`
+   on PowerShell 7.0-7.3 before switching to split timeouts on 7.4 and later.
+   The pinned Pester 6.0.0 module manifest declares PowerShell 5.1, so Pester
+   does not raise that floor.
+
 2. On the review host, create and hash a source archive from one exact commit:
 
    ```powershell
    $sourceCommit = (git rev-parse HEAD).Trim()
-   if ($sourceCommit -notmatch '^[0-9a-f]{40}$') { throw 'Commit is not exact.' }
+   if ($sourceCommit -notmatch '\A[0-9a-f]{40}\z') { throw 'Commit is not exact.' }
    $archive = "setup-cm-$sourceCommit.tar"
    git archive --format=tar --output=$archive $sourceCommit
    Get-FileHash -LiteralPath $archive -Algorithm SHA256
@@ -65,6 +73,7 @@ outside this runbook.
        $operatorSid
    )
    $configAcl = Get-Acl -LiteralPath $configPath
+   $configAcl.SetOwner($operatorSid)
    $configAcl.SetAccessRuleProtection($true, $false)
    foreach ($identity in @($configAcl.Access.IdentityReference | Sort-Object Value -Unique)) {
        $configAcl.PurgeAccessRules($identity)
@@ -80,6 +89,9 @@ outside this runbook.
    Set-Acl -LiteralPath $configPath -AclObject $configAcl
 
    $verifiedAcl = Get-Acl -LiteralPath $configPath
+   $verifiedOwnerSid = $verifiedAcl.GetOwner(
+       [System.Security.Principal.SecurityIdentifier]
+   ).Value
    $verifiedRules = @($verifiedAcl.Access)
    $expectedSids = @($allowedSids | ForEach-Object Value | Sort-Object -Unique)
    $actualSids = @($verifiedRules | ForEach-Object {
@@ -105,7 +117,8 @@ outside this runbook.
            ($rights -band $readExecuteMask) -ne $readExecuteMask -or
            ($rights -band $writeMask) -ne 0
    })
-   if (-not $verifiedAcl.AreAccessRulesProtected -or
+   if ($verifiedOwnerSid -ne $operatorSid.Value -or
+       -not $verifiedAcl.AreAccessRulesProtected -or
        $invalidRules.Count -gt 0 -or
        @(Compare-Object -ReferenceObject $expectedSids -DifferenceObject $actualSids).Count -gt 0) {
        throw 'Private configuration ACL verification failed.'
@@ -119,7 +132,7 @@ outside this runbook.
    ```powershell
    $env:SETUPCM_CONFIG = 'C:\ProgramData\SetupCm\config\lab.local.yaml'
    $env:SETUPCM_SOURCE_COMMIT = '<FULL_40_CHARACTER_GIT_COMMIT>'
-   if ($env:SETUPCM_SOURCE_COMMIT -notmatch '^[0-9a-fA-F]{40}$') {
+   if ($env:SETUPCM_SOURCE_COMMIT -notmatch '\A[0-9a-fA-F]{40}\z') {
        throw 'SETUPCM_SOURCE_COMMIT must identify the exact staged commit.'
    }
    ```
@@ -134,18 +147,66 @@ the expected source layout before using any relative command:
 
 ```powershell
 if ([string]::IsNullOrWhiteSpace($env:SETUPCM_SOURCE_COMMIT) -or
-    $env:SETUPCM_SOURCE_COMMIT -notmatch '^[0-9a-fA-F]{40}$') {
+    $env:SETUPCM_SOURCE_COMMIT -notmatch '\A[0-9a-fA-F]{40}\z') {
     throw 'SETUPCM_SOURCE_COMMIT must identify the exact staged commit.'
 }
 $archivePath = Join-Path 'C:\ProgramData\SetupCm\staging' `
   "setup-cm-$($env:SETUPCM_SOURCE_COMMIT).tar"
 $expectedArchiveHash = '<RECORDED_64_CHARACTER_SHA256>'
-if ($expectedArchiveHash -notmatch '^[0-9a-fA-F]{64}$') {
+if ($expectedArchiveHash -notmatch '\A[0-9a-fA-F]{64}\z') {
     throw 'The recorded archive SHA-256 is missing or invalid.'
 }
 $actualArchiveHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash
 if ($actualArchiveHash -ine $expectedArchiveHash) {
     throw 'The staged source archive hash does not match the reviewed archive.'
+}
+
+$git = Get-Command git.exe -ErrorAction Stop
+# This writes bytes directly to the child process stream and does not depend on
+# the native byte-pipeline behavior added after PowerShell 7.0.
+$archiveHeader = [byte[]]::new(1024)
+$archiveStream = [IO.File]::OpenRead($archivePath)
+try {
+    $offset = 0
+    while ($offset -lt $archiveHeader.Length) {
+        $bytesRead = $archiveStream.Read(
+            $archiveHeader,
+            $offset,
+            $archiveHeader.Length - $offset
+        )
+        if ($bytesRead -eq 0) { throw 'The staged source archive has no complete tar header.' }
+        $offset += $bytesRead
+    }
+}
+finally {
+    $archiveStream.Dispose()
+}
+$gitStartInfo = [Diagnostics.ProcessStartInfo]::new()
+$gitStartInfo.FileName = $git.Source
+$gitStartInfo.ArgumentList.Add('get-tar-commit-id')
+$gitStartInfo.UseShellExecute = $false
+$gitStartInfo.RedirectStandardInput = $true
+$gitStartInfo.RedirectStandardOutput = $true
+$gitStartInfo.RedirectStandardError = $true
+$gitProcess = [Diagnostics.Process]::new()
+$gitProcess.StartInfo = $gitStartInfo
+try {
+    if (-not $gitProcess.Start()) { throw 'Git archive identity verifier did not start.' }
+    $gitProcess.StandardInput.BaseStream.Write($archiveHeader, 0, $archiveHeader.Length)
+    $gitProcess.StandardInput.Close()
+    $embeddedArchiveCommit = $gitProcess.StandardOutput.ReadToEnd().Trim()
+    $gitError = $gitProcess.StandardError.ReadToEnd().Trim()
+    $gitProcess.WaitForExit()
+    if ($gitProcess.ExitCode -ne 0) {
+        throw "The staged archive has no readable git commit identity: $gitError"
+    }
+}
+finally {
+    $gitProcess.Dispose()
+}
+if ($embeddedArchiveCommit -notmatch '\A[0-9a-fA-F]{40}\z' -or
+    $embeddedArchiveCommit -ine $env:SETUPCM_SOURCE_COMMIT) {
+    throw 'The commit embedded in the staged archive does not match SETUPCM_SOURCE_COMMIT.'
 }
 
 $sourceRoot = Join-Path 'C:\ProgramData\SetupCm\source' $env:SETUPCM_SOURCE_COMMIT

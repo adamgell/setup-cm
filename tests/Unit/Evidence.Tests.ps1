@@ -52,6 +52,16 @@ Describe 'Write-SetupCmEvidenceJson' {
                 Should -Be 'C:\ProgramData\SetupCm\cache\mecm-current-branch-2509.iso'
         }
 
+        It 'redacts quoted and unquoted Windows paths that use forward slashes' {
+            $path = Write-SetupCmEvidenceJson -EvidenceRoot $TestDrive -Name 'forward-path-message' -Value @{
+                message = 'Failure at C:/Users/Operator/private/a.iso; "D:/Vault/b.iso" and ''E:/Cache/c.iso'''
+            }
+
+            $parsed = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+
+            $parsed.message | Should -Be 'Failure at <redacted-path>; <redacted-path> and <redacted-path>'
+        }
+
         It 'fully redacts quoted credential assignments that contain spaces' {
             $path = Write-SetupCmEvidenceJson -EvidenceRoot $TestDrive -Name 'quoted-credentials' -Value @{
                 message = 'Password="two words"; Token=''three words''; Pwd=four'
@@ -63,6 +73,14 @@ Describe 'Write-SetupCmEvidenceJson' {
             $message | Should -Be 'Password=<redacted>; Token=<redacted>; Pwd=<redacted>'
         }
 
+        It 'sanitizes a string wrapped in a PowerShell object before inspecting object properties' {
+            $wrapped = [System.Management.Automation.PSObject]::AsPSObject('Password=NotForEvidence')
+
+            $sanitized = ConvertTo-SetupCmSanitizedEvidenceValue -Value $wrapped
+
+            $sanitized | Should -Be 'Password=<redacted>'
+        }
+
         It 'redacts API key assignments and HTTP header forms in free text' {
             $path = Write-SetupCmEvidenceJson -EvidenceRoot $TestDrive -Name 'api-key-text' -Value @{
                 message = 'apiKey="two words"; X-Api-Key: header-secret; API_KEY=third-secret'
@@ -72,6 +90,24 @@ Describe 'Write-SetupCmEvidenceJson' {
             $message = ($json | ConvertFrom-Json).message
             $json | Should -Not -Match 'two words|header-secret|third-secret'
             $message | Should -Be 'apiKey=<redacted>; X-Api-Key: <redacted>; API_KEY=<redacted>'
+        }
+
+        It 'fully redacts a Bearer Authorization header value' {
+            $sanitized = ConvertTo-SetupCmSanitizedEvidenceString -Value (
+                'Authorization: Bearer bearer-credential; status=Compliant'
+            )
+
+            $sanitized | Should -Be 'Authorization: <redacted>; status=Compliant'
+            $sanitized | Should -Not -Match 'Bearer|bearer-credential'
+        }
+
+        It 'fully redacts a Basic Authorization header value' {
+            $sanitized = ConvertTo-SetupCmSanitizedEvidenceString -Value (
+                'Authorization=Basic dXNlcjpwYXNzd29yZA==; status=Compliant'
+            )
+
+            $sanitized | Should -Be 'Authorization=<redacted>; status=Compliant'
+            $sanitized | Should -Not -Match 'Basic|dXNlcjpwYXNzd29yZA=='
         }
 
         It 'removes composite sensitive keys while preserving safe path and status fields' {
@@ -145,6 +181,24 @@ Describe 'New-SetupCmRunEvidence' {
         It 'rejects an abbreviated source commit' {
             { New-SetupCmRunEvidence -Root $TestDrive -SourceCommit 'abc1234' } |
                 Should -Throw '*40-character*'
+        }
+
+        It 'rejects a 40-character source commit followed by a line break' {
+            $commit = ('a' * 40) + "`n"
+
+            { New-SetupCmRunEvidence -Root $TestDrive -SourceCommit $commit } |
+                Should -Throw '*40-character*'
+        }
+    }
+}
+
+Describe 'Resolve-SetupCmRequiredSourceCommit' {
+    InModuleScope SetupCm {
+        It 'rejects a 40-character source commit followed by a line break' {
+            $commit = ('b' * 40) + "`n"
+
+            { Resolve-SetupCmRequiredSourceCommit -SourceCommit $commit } |
+                Should -Throw '*exact 40-character*'
         }
     }
 }

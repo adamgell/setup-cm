@@ -164,19 +164,38 @@ function New-SetupCmSqlConnection {
     )
 
     $server = Get-SetupCmSqlConnectionServer -Config $Config
-    Add-Type -AssemblyName System.Data.SqlClient -ErrorAction Stop
+    Add-Type -AssemblyName System.Data.Odbc -ErrorAction Stop
     $instanceName = [string]$Config.sql.instanceName
     $dataSource = if ($instanceName -ieq 'MSSQLSERVER') { $server } else { "$server\$instanceName" }
 
-    $builder = [System.Data.SqlClient.SqlConnectionStringBuilder]::new()
-    $builder['Data Source'] = $dataSource
-    $builder['Initial Catalog'] = $Database
-    $builder['Integrated Security'] = $true
-    $builder['Encrypt'] = $true
-    $builder['TrustServerCertificate'] = $false
-    $builder['Connect Timeout'] = 10
+    $builder = [System.Data.Odbc.OdbcConnectionStringBuilder]::new()
+    $builder['Driver'] = '{ODBC Driver 18 for SQL Server}'
+    $builder['Server'] = $dataSource
+    $builder['Database'] = $Database
+    $builder['Trusted_Connection'] = 'Yes'
+    $builder['Encrypt'] = 'Yes'
+    $builder['TrustServerCertificate'] = 'No'
+    $builder['Connection Timeout'] = 10
     $builder['Application Name'] = 'setup-cm'
-    return [System.Data.SqlClient.SqlConnection]::new($builder.ConnectionString)
+    return [System.Data.Odbc.OdbcConnection]::new($builder.ConnectionString)
+}
+
+function Add-SetupCmSqlNVarCharParameter {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]$Command,
+        [Parameter(Mandatory)][ValidatePattern('^[A-Za-z][A-Za-z0-9_]*$')][string]$Name,
+        [Parameter(Mandatory)][ValidateRange(1, 4000)][int]$Size,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Value
+    )
+
+    $parameter = $Command.CreateParameter()
+    $parameter.ParameterName = $Name
+    $parameter.OdbcType = [System.Data.Odbc.OdbcType]::NVarChar
+    $parameter.Size = $Size
+    $parameter.Value = $Value
+    [void]$Command.Parameters.Add($parameter)
+    return $parameter
 }
 
 function Get-SetupCmSqlDefaultProviders {
@@ -265,6 +284,7 @@ function Get-SetupCmSqlDefaultProviders {
                 [string]$filters[0].LocalPort -eq '1433'
             @{ Exists = $true; Count = $rules.Count; Compliant = $exactRule -and $exactFilter }
         }
+        Odbc = { (Test-SetupCmOdbcDriver18) -eq 'Compliant' }
         VcRuntime = {
             param($Architecture)
             (Test-SetupCmMecmVcRedistArchitecture -Architecture $Architecture) -eq 'Compliant'
@@ -294,9 +314,11 @@ function Get-SetupCmSqlDefaultProviders {
 
                 $databaseName = "CM_$($Config.mecm.siteCode)"
                 $databaseCommand = $master.CreateCommand()
-                $databaseCommand.CommandText = 'SELECT CASE WHEN DB_ID(@DatabaseName) IS NULL THEN 0 ELSE 1 END'
-                [void]$databaseCommand.Parameters.Add('@DatabaseName', [System.Data.SqlDbType]::NVarChar, 128)
-                $databaseCommand.Parameters['@DatabaseName'].Value = $databaseName
+                $databaseCommand.CommandText = @'
+DECLARE @DatabaseName nvarchar(128) = ?;
+SELECT CASE WHEN DB_ID(@DatabaseName) IS NULL THEN 0 ELSE 1 END;
+'@
+                Add-SetupCmSqlNVarCharParameter -Command $databaseCommand -Name DatabaseName -Size 128 -Value $databaseName | Out-Null
                 $databaseExists = [int]$databaseCommand.ExecuteScalar() -eq 1
 
                 $roleCommand = $master.CreateCommand()
@@ -359,12 +381,14 @@ function Get-SetupCmSqlDesiredState {
         return New-SetupCmSqlDesiredStateResult -Components $components
     }
     if (-not $Config.ContainsKey('mecm') -or
+        $Config.mecm -isnot [hashtable] -or
         -not $Config.mecm.ContainsKey('siteServerFqdn') -or
         [string]::IsNullOrWhiteSpace([string]$Config.mecm.siteServerFqdn)) {
         [void]$components.Add((New-SetupCmSqlComponent -Name TargetHost -State Conflict -Reason MissingExpectedHost))
         return New-SetupCmSqlDesiredStateResult -Components $components
     }
     if (-not $Config.ContainsKey('sql') -or
+        $Config.sql -isnot [hashtable] -or
         -not $Config.sql.ContainsKey('instanceName') -or
         [string]::IsNullOrWhiteSpace([string]$Config.sql.instanceName)) {
         [void]$components.Add((New-SetupCmSqlComponent -Name SqlInstance -State Conflict -Reason MissingInstanceName))
@@ -430,6 +454,20 @@ function Get-SetupCmSqlDesiredState {
         catch {
             [void]$components.Add((New-SetupCmSqlComponent -Name $componentName -State Conflict -Reason ProbeUnavailable))
         }
+    }
+
+    $odbcAvailable = $false
+    try {
+        if ([bool](& $Providers.Odbc)) {
+            $odbcAvailable = $true
+            [void]$components.Add((New-SetupCmSqlComponent -Name OdbcDriver18 -State Compliant -Reason Exact))
+        }
+        else {
+            [void]$components.Add((New-SetupCmSqlComponent -Name OdbcDriver18 -State NotCompliant -Reason Missing))
+        }
+    }
+    catch {
+        [void]$components.Add((New-SetupCmSqlComponent -Name OdbcDriver18 -State Conflict -Reason ProbeUnavailable))
     }
 
     $instanceName = [string]$Config.sql.instanceName
@@ -595,6 +633,10 @@ function Get-SetupCmSqlDesiredState {
     }
     catch {
         [void]$components.Add((New-SetupCmSqlComponent -Name SqlDatabase -State Conflict -Reason SiteProbeUnavailable))
+        return New-SetupCmSqlDesiredStateResult -Components $components
+    }
+
+    if (-not $odbcAvailable) {
         return New-SetupCmSqlDesiredStateResult -Components $components
     }
 
@@ -764,6 +806,7 @@ function Add-SetupCmSqlSysAdmin {
         $connection.Open()
         $command = $connection.CreateCommand()
         $command.CommandText = @'
+DECLARE @LoginName nvarchar(256) = ?;
 DECLARE @statement nvarchar(max);
 IF SUSER_ID(@LoginName) IS NULL
 BEGIN
@@ -785,8 +828,7 @@ BEGIN
     EXEC sys.sp_executesql @statement;
 END;
 '@
-        [void]$command.Parameters.Add('@LoginName', [System.Data.SqlDbType]::NVarChar, 256)
-        $command.Parameters['@LoginName'].Value = $Account
+        Add-SetupCmSqlNVarCharParameter -Command $command -Name LoginName -Size 256 -Value $Account | Out-Null
         [void]$command.ExecuteNonQuery()
     }
     finally {
@@ -819,6 +861,7 @@ function Repair-SetupCmSqlDesiredState {
     $sourceByComponent = @{
         VcRuntimeX64 = 'vcRedistX64'
         VcRuntimeX86 = 'vcRedistX86'
+        OdbcDriver18 = 'odbcDriver18'
         SqlInstance = 'sqlServer'
     }
     foreach ($component in $repairable) {
@@ -843,6 +886,11 @@ function Repair-SetupCmSqlDesiredState {
         Install-SetupCmMecmVcRedist -Source $Config.sources[$sourceName] -CacheRoot $Config.cacheRoot -EvidenceRoot $EvidenceRoot
     }
 
+    $odbcInstalled = @($repairable | Where-Object Name -eq 'OdbcDriver18').Count -gt 0
+    if ($odbcInstalled) {
+        Install-SetupCmOdbcDriver18 -Source $Config.sources.odbcDriver18 -CacheRoot $Config.cacheRoot -EvidenceRoot $EvidenceRoot
+    }
+
     if (@($repairable | Where-Object Name -eq 'SqlInstance').Count -gt 0) {
         $media = Get-SetupCmArtifact -Source $Config.sources.sqlServer -CacheRoot $Config.cacheRoot -EvidenceRoot $EvidenceRoot
         Install-SetupCmSql -MediaPath $media.Path -Sql $Config.sql
@@ -859,9 +907,30 @@ function Repair-SetupCmSqlDesiredState {
         Enable-SetupCmSqlFirewall
     }
 
+    $repairedSysAdmins = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase
+    )
     foreach ($sysAdminState in @($repairable | Where-Object Name -eq 'SqlSysAdmins')) {
         foreach ($account in @($sysAdminState.Missing)) {
             Add-SetupCmSqlSysAdmin -Config $Config -Account $account
+            [void]$repairedSysAdmins.Add((ConvertTo-SetupCmSqlComparableAccount -Account ([string]$account)))
+        }
+    }
+
+    if ($odbcInstalled) {
+        $postBootstrapState = Get-SetupCmSqlDesiredState -Config $Config
+        if ([string]$postBootstrapState.State -eq 'Conflict') {
+            throw 'SQL desired state contains a conflict after ODBC bootstrap.'
+        }
+        foreach ($sysAdminState in @($postBootstrapState.Components | Where-Object {
+            $_.Name -eq 'SqlSysAdmins' -and $_.State -eq 'NotCompliant'
+        })) {
+            foreach ($account in @($sysAdminState.Missing)) {
+                $normalizedAccount = ConvertTo-SetupCmSqlComparableAccount -Account ([string]$account)
+                if ($repairedSysAdmins.Contains($normalizedAccount)) { continue }
+                Add-SetupCmSqlSysAdmin -Config $Config -Account $account
+                [void]$repairedSysAdmins.Add($normalizedAccount)
+            }
         }
     }
 }

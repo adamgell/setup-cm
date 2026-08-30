@@ -11,8 +11,9 @@ src/SetupCm/
 │   ├── Evidence.ps1          # Run-folder creation and structured stage-result writes
 │   ├── Health.ps1            # Read-only SQL, MECM, MP, DP, and client checks
 │   ├── MarkerApplication.ps1 # Fixed LabZ1 marker probes and bounded provider repair
-│   ├── Mecm.ps1              # MECM prerequisites, ADK, WinPE, ODBC, site setup
+│   ├── Mecm.ps1              # MECM prerequisites, ADK, WinPE, and site setup
 │   ├── Media.ps1             # Media path helpers
+│   ├── Odbc.ps1              # Shared ODBC Driver 18 detection and installation
 │   ├── Sql.ps1               # SQL prerequisites and unattended installation
 │   └── StageEngine.ps1       # Shared idempotent stage executor
 └── Public/
