@@ -653,7 +653,7 @@ component compliant and install mutation adapters that throw for:
 )
 ```
 
-- [ ] **Step 2: Run all portable gates**
+- [x] **Step 2: Run all portable gates**
 
 ```powershell
 Invoke-Pester ./tests/Unit -Output Detailed -CI
