@@ -14,6 +14,7 @@ Start with `config/lab.example.yaml` and save the working copy as `config/lab.lo
 | `sql` | Configures the SQL Server instance, service identity, administrators, and install directory. |
 | `mecm` | Configures the primary-site identity, SQL endpoint, site server, product identifier, and install paths. |
 | `testClient` | Identifies the client used by the health stage. |
+| `markerAcceptance` | Enables the fixed, lab-only marker boundary; disabled in the template. |
 
 ## Safety
 
@@ -31,11 +32,26 @@ The template includes `sqlServer`, `mecm`, `adk`, `adkWinPe`, `odbcDriver18`, `v
 | `sha256` | Expected SHA-256 checksum for the downloaded artifact. |
 | `publisher` | Expected publisher for signature validation where applicable. |
 | `version` | The approved installer version. |
+| `architecture` | Approved target architecture: `x64`, `x86`, or `neutral`. |
+| `sizeBytes` | Exact approved artifact length in bytes. |
 | `licenseAccepted` | An explicit acknowledgement that the operator has accepted the applicable license. |
 | `cacheFile` | Filename used under `cacheRoot`. |
 | `signatureRelativePath` | Executable inside ISO media whose signature can be checked; used by the SQL Server and MECM entries. |
 
-Replace all `REPLACE_WITH_*` values and example URLs before a real run. SQL Server and MECM must have a non-placeholder `uri` and `sha256` when `template` is false. Keep the corresponding media in a private vault or cache when a vendor download is unavailable or requires authentication.
+Replace all `REPLACE_WITH_*` values and example URLs before a real run. Every
+non-template source requires an exact SHA-256, positive `sizeBytes`, version,
+architecture, and cache filename. SQL Server and MECM must also have a usable
+approved URI or vault location when the cache is absent. Source URIs and vault
+paths are never copied into evidence.
+
+## Marker acceptance
+
+`markerAcceptance.enabled` defaults to `false`. When enabled, configuration
+validation requires `safety.isolatedLab: true`, `labOnly: true`, site `LAB`,
+server `LABZ1-CM01.test.gell.one`, target
+`RING0IVY24-01.test.gell.one`, and resource ID `16777219`. Any mismatch fails
+before a provider mutation. The Marker stage adds the remaining object, hash,
+collection, and assignment gates.
 
 ## SQL and MECM settings
 

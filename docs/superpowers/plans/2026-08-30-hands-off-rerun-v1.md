@@ -62,15 +62,15 @@ Releases.
 - Modify: `config/lab.example.yaml`
 - Test: `tests/Unit/{Evidence,StageEngine,Configuration}.Tests.ps1`
 
-- [ ] Write failing tests for recursive redaction, omitted private source
+- [x] Write failing tests for recursive redaction, omitted private source
       locations, source-commit validation, conflict handling, and verification
       after a successful Apply.
-- [ ] Add structured component evidence and exact source-commit metadata while
+- [x] Add structured component evidence and exact source-commit metadata while
       preserving the public stage result schema.
-- [ ] Require non-template source `sizeBytes`, `version`, and `architecture`;
+- [x] Require non-template source `sizeBytes`, `version`, and `architecture`;
       require the fixed LabZ1 boundary only when marker acceptance is enabled.
-- [ ] Run focused suites and the full unit suite.
-- [ ] Commit: `feat: pin v1 evidence and compliance contracts`.
+- [x] Run focused suites and the full unit suite.
+- [x] Commit: `feat: pin v1 evidence and compliance contracts`.
 
 ## Task 3: Make Acquire read-only before apply
 

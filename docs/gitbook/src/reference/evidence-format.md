@@ -2,6 +2,13 @@
 
 Each run creates a unique directory under `evidenceRoot`. The directory name includes the run timestamp.
 
+## Run metadata
+
+Every run writes `run.json` with its run ID and UTC start time. Accepted and
+release-critical runs set `SETUPCM_SOURCE_COMMIT` to the full 40-character Git
+commit before invocation; the validated lowercase value is recorded as
+`sourceCommit`.
+
 ## Stage result files
 
 Every selected stage writes `stage-<stage>.json`.
@@ -32,11 +39,16 @@ Every selected stage writes `stage-<stage>.json`.
 
 ## Acquisition metadata
 
-The `Acquire` stage also writes `acquisition.json` in the run directory. It records the verified artifact path, SHA-256, source URI, and verification timestamp for each downloaded or cached file.
+The `Acquire` stage also writes `acquisition.json` in the run directory. It
+records bounded artifact identity, SHA-256, and verification time. Source URIs,
+vault paths, and source bytes are excluded.
 
 ## Client evidence
 
-The `Client` stage writes sanitized log tails and local state to the run directory. Raw passwords and sensitive values are redacted before evidence is persisted.
+The `Client` stage writes sanitized log tails and local state to the run
+directory. Evidence serialization recursively omits password, secret, token,
+authorization, credential, private-key, source-URI, and vault-path fields and
+redacts credential-like values embedded in strings.
 
 ## Retention
 

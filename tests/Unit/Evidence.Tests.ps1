@@ -1,0 +1,87 @@
+Import-Module "$PSScriptRoot/../../src/SetupCm/SetupCm.psd1" -Force
+
+Describe 'Write-SetupCmEvidenceJson' {
+    InModuleScope SetupCm {
+        It 'removes nested sensitive fields and credential-like string values' {
+            $value = [ordered]@{
+                stage = 'Acquire'
+                sourceUri = 'https://private.example.invalid/media.iso'
+                nested = [ordered]@{
+                    password = 'NotForEvidence'
+                    token = 'also-not-for-evidence'
+                    status = 'Password=NotForEvidence; completed'
+                    client_secret = 'third-secret'
+                    apiKey = 'fourth-secret'
+                }
+            }
+
+            $path = Write-SetupCmEvidenceJson -EvidenceRoot $TestDrive -Name 'sanitized' -Value $value
+            $json = Get-Content -LiteralPath $path -Raw
+            $parsed = $json | ConvertFrom-Json
+
+            $json | Should -Not -Match 'NotForEvidence|also-not-for-evidence|third-secret|fourth-secret|private\.example'
+            $parsed.stage | Should -Be 'Acquire'
+            $parsed.PSObject.Properties.Name | Should -Not -Contain 'sourceUri'
+            $parsed.nested.PSObject.Properties.Name | Should -Not -Contain 'password'
+            $parsed.nested.PSObject.Properties.Name | Should -Not -Contain 'token'
+            $parsed.nested.PSObject.Properties.Name | Should -Not -Contain 'client_secret'
+            $parsed.nested.PSObject.Properties.Name | Should -Not -Contain 'apiKey'
+            $parsed.nested.status | Should -Be 'Password=<redacted>; completed'
+        }
+
+        It 'redacts a private URL embedded in a safe message field' {
+            $path = Write-SetupCmEvidenceJson -EvidenceRoot $TestDrive -Name 'uri-message' -Value @{
+                message = 'Download failed from https://private.example.invalid/path?sig=secret'
+            }
+
+            $json = Get-Content -LiteralPath $path -Raw
+            $json | Should -Not -Match 'private\.example|sig=secret'
+            ($json | ConvertFrom-Json).message | Should -Be 'Download failed from <redacted-uri>'
+        }
+
+        It 'preserves safe arrays and component fields' {
+            $value = [ordered]@{
+                state = 'Compliant'
+                components = @(
+                    [ordered]@{ name = 'SqlService'; state = 'Compliant' },
+                    [ordered]@{ name = 'Tcp1433'; state = 'Compliant' }
+                )
+            }
+
+            $path = Write-SetupCmEvidenceJson -EvidenceRoot $TestDrive -Name 'components' -Value $value
+            $parsed = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+
+            $parsed.state | Should -Be 'Compliant'
+            $parsed.components | Should -HaveCount 2
+            $parsed.components[1].name | Should -Be 'Tcp1433'
+        }
+
+        It 'preserves an empty safe array instead of converting it to null' {
+            $path = Write-SetupCmEvidenceJson -EvidenceRoot $TestDrive -Name 'empty-array' -Value @{
+                components = @()
+            }
+            $json = Get-Content -LiteralPath $path -Raw
+
+            $json | Should -Match '"components"\s*:\s*\[\]'
+        }
+    }
+}
+
+Describe 'New-SetupCmRunEvidence' {
+    InModuleScope SetupCm {
+        It 'writes run metadata for an exact source commit' {
+            $commit = '0123456789abcdef0123456789abcdef01234567'
+
+            $runRoot = New-SetupCmRunEvidence -Root $TestDrive -SourceCommit $commit
+            $metadata = Get-Content -LiteralPath (Join-Path $runRoot 'run.json') -Raw | ConvertFrom-Json
+
+            $metadata.sourceCommit | Should -Be $commit
+            $metadata.startedAt | Should -Not -BeNullOrEmpty
+        }
+
+        It 'rejects an abbreviated source commit' {
+            { New-SetupCmRunEvidence -Root $TestDrive -SourceCommit 'abc1234' } |
+                Should -Throw '*40-character*'
+        }
+    }
+}

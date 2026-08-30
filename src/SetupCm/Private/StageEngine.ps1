@@ -19,14 +19,19 @@ function Invoke-SetupCmStage {
 
     $startedAt = (Get-Date).ToUniversalTime().ToString('o')
     try {
-        $testState = & $Test
-        if ($testState -eq 'Compliant') {
-            $result = [pscustomobject]@{
-                name = $Name; state = 'Skipped'; startedAt = $startedAt
-                finishedAt = (Get-Date).ToUniversalTime().ToString('o'); message = 'Already compliant.'
+        $testState = [string](& $Test)
+        switch ($testState) {
+            'Compliant' {
+                $result = [pscustomobject]@{
+                    name = $Name; state = 'Skipped'; startedAt = $startedAt
+                    finishedAt = (Get-Date).ToUniversalTime().ToString('o'); message = 'Already compliant.'
+                }
+                Write-SetupCmEvidenceJson -EvidenceRoot $EvidenceRoot -Name "stage-$Name" -Value $result | Out-Null
+                return $result
             }
-            Write-SetupCmEvidenceJson -EvidenceRoot $EvidenceRoot -Name "stage-$Name" -Value $result | Out-Null
-            return $result
+            'NotCompliant' { break }
+            'Conflict' { throw "$Name compliance conflict." }
+            default { throw "$Name returned unsupported compliance state '$testState'." }
         }
 
         & $Apply
