@@ -428,6 +428,83 @@ Describe 'Resolve-SetupCmArtifactSignaturePath' {
     }
 }
 
+Describe 'Get-SetupCmArtifactIdentity architecture proof' {
+    InModuleScope SetupCm {
+        It 'uses a separately signed payload path for ISO architecture' {
+            Mock Resolve-SetupCmArtifactSignaturePath {
+                if ($SignatureRelativePath -eq 'setup.exe') { return 'Q:\setup.exe' }
+                if ($SignatureRelativePath -eq 'x64\ScenarioEngine.exe') {
+                    return 'Q:\x64\ScenarioEngine.exe'
+                }
+                throw 'unexpected relative path'
+            }
+            $script:signedPaths = [System.Collections.Generic.List[string]]::new()
+
+            $identity = Get-SetupCmArtifactIdentity -Path 'C:\cache\sql.iso' -Source @{
+                publisher = 'Microsoft Corporation'; architecture = 'x64'
+                signatureRelativePath = 'setup.exe'
+                architectureRelativePath = 'x64\ScenarioEngine.exe'
+            } -SignatureProvider {
+                param($ArtifactPath, $ExpectedPublisher, $RelativePath)
+                $ArtifactPath | Should -BeExactly 'C:\cache\sql.iso'
+                $ExpectedPublisher | Should -BeExactly 'Microsoft Corporation'
+                [void]$script:signedPaths.Add($RelativePath)
+            } -VersionInfoProvider {
+                param($IdentityPath)
+                $IdentityPath | Should -BeExactly 'Q:\setup.exe'
+                [pscustomobject]@{
+                    ProductVersion = '16.0.1000.6'; FileVersion = '16.0.1000.6'
+                    ProductName = 'Microsoft SQL Server'; FileDescription = 'SQL Setup'
+                    OriginalFilename = 'setup.exe'
+                }
+            } -PeArchitectureProvider {
+                param($IdentityPath)
+                if ($IdentityPath -eq 'Q:\x64\ScenarioEngine.exe') { 'x64' } else { 'x86' }
+            }
+
+            $identity.Version | Should -BeExactly '16.0.1000.6'
+            $identity.Architecture | Should -BeExactly 'x64'
+            $identity.PublisherValid | Should -BeTrue
+            @($script:signedPaths) | Should -BeExactly `
+                @('setup.exe', 'x64\ScenarioEngine.exe')
+        }
+
+        It 'accepts an explicitly approved signed x64 bootstrapper identity' {
+            Mock Resolve-SetupCmArtifactSignaturePath { 'C:\cache\vc_redist.x64.exe' }
+
+            $identity = Get-SetupCmArtifactIdentity -Path 'C:\cache\vc_redist.x64.exe' -Source @{
+                publisher = 'Microsoft Corporation'; architecture = 'x64'
+                architectureVerification = 'signedVersionResource'
+            } -SignatureProvider {} -VersionInfoProvider {
+                [pscustomobject]@{
+                    ProductVersion = '14.51.36247.0'; FileVersion = '14.51.36247.0'
+                    ProductName = 'Microsoft Visual C++ Redistributable (x64)'
+                    FileDescription = 'Microsoft Visual C++ Redistributable (x64)'
+                    OriginalFilename = 'VC_redist.x64.exe'
+                }
+            } -PeArchitectureProvider { 'x86' }
+
+            $identity.Version | Should -BeExactly '14.51.36247.0'
+            $identity.Architecture | Should -BeExactly 'x64'
+            $identity.PublisherValid | Should -BeTrue
+        }
+
+        It 'rejects a generic signed x86 bootstrapper as x64 evidence' {
+            Test-SetupCmSignedVersionResourceArchitecture -ExpectedArchitecture x64 `
+                -ProductName 'Microsoft Setup Bootstrapper' `
+                -FileDescription 'Microsoft Setup Bootstrapper' `
+                -OriginalFilename 'setup.exe' | Should -BeFalse
+        }
+
+        It 'requires both the original filename and product identity to name x64' {
+            Test-SetupCmSignedVersionResourceArchitecture -ExpectedArchitecture x64 `
+                -ProductName 'Microsoft Visual C++ Redistributable (x86)' `
+                -FileDescription 'Microsoft Visual C++ Redistributable (x86)' `
+                -OriginalFilename 'VC_redist.x64.exe' | Should -BeFalse
+        }
+    }
+}
+
 Describe 'Invoke-SetupCmAcquire' {
     InModuleScope SetupCm {
         It 'acquires every configured source' {

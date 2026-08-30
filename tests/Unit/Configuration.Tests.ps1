@@ -11,6 +11,18 @@ Describe 'Assert-SetupCmConfig' {
             $config.sql.sysAdminAccounts[0] | Should -BeOfType [string]
         }
 
+        It 'preserves an empty nested YAML list instead of collapsing it to null' {
+            $emptyList = [System.Collections.Generic.List[object]]::new()
+
+            $config = ConvertTo-SetupCmHashtable -Value @{
+                sources = @{ prerequisites = $emptyList }
+            }
+
+            $null -eq $config.sources.prerequisites | Should -BeFalse
+            $config.sources.prerequisites -is [object[]] | Should -BeTrue
+            @($config.sources.prerequisites) | Should -HaveCount 0
+        }
+
         It 'rejects a production target without explicit approval' {
             {
                 Assert-SetupCmConfig @{ safety = @{ isolatedLab = $false; allowProductionTarget = $false } }
@@ -154,6 +166,91 @@ Describe 'Assert-SetupCmConfig' {
             }
 
             (Assert-SetupCmConfig -Config $config).sources.mecm.architecture | Should -Be 'x64'
+        }
+
+        It 'rejects an unknown bootstrapper architecture verification mode' {
+            $config = @{
+                safety = @{ isolatedLab = $true }
+                sources = @{
+                    sqlServer = @{
+                        uri = 'https://vault/sql.iso'; sha256 = ('a' * 64)
+                        cacheFile = 'sql.iso'; licenseAccepted = $true
+                        sizeBytes = 1024; version = '16.0.1000.6'; architecture = 'x64'
+                        publisher = 'Microsoft Corporation'; signatureRelativePath = 'setup.exe'
+                    }
+                    mecm = @{
+                        uri = 'https://vault/mecm.iso'; sha256 = ('b' * 64)
+                        cacheFile = 'mecm.iso'; licenseAccepted = $true
+                        sizeBytes = 2048; version = '5.00.9141.1002'; architecture = 'x64'
+                        publisher = 'Microsoft Corporation'
+                        signatureRelativePath = 'SMSSETUP\BIN\X64\setup.exe'
+                    }
+                    vcRedistX64 = @{
+                        uri = 'https://vault/vc.exe'; sha256 = ('c' * 64)
+                        cacheFile = 'vc_redist.x64.exe'; licenseAccepted = $true
+                        sizeBytes = 4096; version = '14.51.36247.0'; architecture = 'x64'
+                        publisher = 'Microsoft Corporation'
+                        architectureVerification = 'trustTheFilename'
+                    }
+                }
+                sql = @{ instanceName = 'MSSQLSERVER'; sysAdminAccounts = @('TEST\Admins') }
+            }
+
+            { Assert-SetupCmConfig -Config $config } |
+                Should -Throw '*architectureVerification*signedVersionResource*'
+        }
+
+        It 'rejects competing payload-path and bootstrapper architecture proofs' {
+            $config = @{
+                safety = @{ isolatedLab = $true }
+                sources = @{
+                    sqlServer = @{
+                        uri = 'https://vault/sql.iso'; sha256 = ('a' * 64)
+                        cacheFile = 'sql.iso'; licenseAccepted = $true
+                        sizeBytes = 1024; version = '16.0.1000.6'; architecture = 'x64'
+                        publisher = 'Microsoft Corporation'; signatureRelativePath = 'setup.exe'
+                        architectureRelativePath = 'x64\ScenarioEngine.exe'
+                        architectureVerification = 'signedVersionResource'
+                    }
+                    mecm = @{
+                        uri = 'https://vault/mecm.iso'; sha256 = ('b' * 64)
+                        cacheFile = 'mecm.iso'; licenseAccepted = $true
+                        sizeBytes = 2048; version = '5.00.9141.1002'; architecture = 'x64'
+                        publisher = 'Microsoft Corporation'
+                        signatureRelativePath = 'SMSSETUP\BIN\X64\setup.exe'
+                    }
+                }
+                sql = @{ instanceName = 'MSSQLSERVER'; sysAdminAccounts = @('TEST\Admins') }
+            }
+
+            { Assert-SetupCmConfig -Config $config } |
+                Should -Throw '*only one architecture proof*'
+        }
+
+        It 'rejects a payload architecture proof for neutral media' {
+            $config = @{
+                safety = @{ isolatedLab = $true }
+                sources = @{
+                    sqlServer = @{
+                        uri = 'https://vault/sql.iso'; sha256 = ('a' * 64)
+                        cacheFile = 'sql.iso'; licenseAccepted = $true
+                        sizeBytes = 1024; version = '16.0.1000.6'; architecture = 'neutral'
+                        publisher = 'Microsoft Corporation'; signatureRelativePath = 'setup.exe'
+                        architectureRelativePath = 'x64\ScenarioEngine.exe'
+                    }
+                    mecm = @{
+                        uri = 'https://vault/mecm.iso'; sha256 = ('b' * 64)
+                        cacheFile = 'mecm.iso'; licenseAccepted = $true
+                        sizeBytes = 2048; version = '5.00.9141.1002'; architecture = 'x64'
+                        publisher = 'Microsoft Corporation'
+                        signatureRelativePath = 'SMSSETUP\BIN\X64\setup.exe'
+                    }
+                }
+                sql = @{ instanceName = 'MSSQLSERVER'; sysAdminAccounts = @('TEST\Admins') }
+            }
+
+            { Assert-SetupCmConfig -Config $config } |
+                Should -Throw '*architecture proof requires x64 or x86*'
         }
 
         It 'requires a signed identity path for every runnable ISO source' {

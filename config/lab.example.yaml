@@ -14,6 +14,7 @@ sources:
     sha256: REPLACE_WITH_SHA256
     publisher: Microsoft Corporation
     signatureRelativePath: setup.exe
+    architectureRelativePath: x64\ScenarioEngine.exe
     version: "16.0.1000.6"
     architecture: x64
     sizeBytes: REPLACE_WITH_SIZE_BYTES
@@ -62,6 +63,7 @@ sources:
     publisher: Microsoft Corporation
     version: "14.44.35211.0"
     architecture: x64
+    architectureVerification: signedVersionResource
     sizeBytes: REPLACE_WITH_SIZE_BYTES
     licenseAccepted: false
     cacheFile: vc_redist.x64.exe

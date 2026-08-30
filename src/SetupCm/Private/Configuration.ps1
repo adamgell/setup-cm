@@ -11,7 +11,11 @@ function ConvertTo-SetupCmHashtable {
     }
 
     if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
-        return @(foreach ($item in $Value) { ConvertTo-SetupCmHashtable -Value $item })
+        $items = [System.Collections.Generic.List[object]]::new()
+        foreach ($item in $Value) {
+            [void]$items.Add((ConvertTo-SetupCmHashtable -Value $item))
+        }
+        return ,([object[]]$items.ToArray())
     }
 
     if ($Value -is [pscustomobject]) {
@@ -130,6 +134,31 @@ function Assert-SetupCmConfig {
             }
             if ([string]$source.architecture -notin 'x64', 'x86', 'neutral') {
                 throw "sources.$sourceName.architecture must be x64, x86, or neutral."
+            }
+            $hasArchitecturePath = $source.ContainsKey('architectureRelativePath')
+            $hasArchitectureVerification = $source.ContainsKey('architectureVerification')
+            if ($hasArchitecturePath -and
+                [string]::IsNullOrWhiteSpace([string]$source.architectureRelativePath)) {
+                throw "sources.$sourceName.architectureRelativePath must not be empty."
+            }
+            if ($hasArchitectureVerification -and
+                [string]$source.architectureVerification -cne 'signedVersionResource') {
+                throw "sources.$sourceName.architectureVerification must be signedVersionResource."
+            }
+            if ($hasArchitecturePath -and $hasArchitectureVerification) {
+                throw "sources.$sourceName must select only one architecture proof."
+            }
+            if (($hasArchitecturePath -or $hasArchitectureVerification) -and
+                [string]$source.architecture -notin 'x64', 'x86') {
+                throw "sources.$sourceName architecture proof requires x64 or x86."
+            }
+            if ($hasArchitecturePath -and
+                [IO.Path]::GetExtension([string]$source.cacheFile) -ine '.iso') {
+                throw "sources.$sourceName.architectureRelativePath requires ISO media."
+            }
+            if ($hasArchitectureVerification -and
+                [IO.Path]::GetExtension([string]$source.cacheFile) -ine '.exe') {
+                throw "sources.$sourceName.architectureVerification requires an executable bootstrapper."
             }
             if ([IO.Path]::GetExtension([string]$source.cacheFile) -ieq '.iso' -and
                 (-not $source.ContainsKey('signatureRelativePath') -or

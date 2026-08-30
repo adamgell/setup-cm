@@ -143,11 +143,45 @@ function Get-SetupCmMsiIdentity {
     }
 }
 
+function Test-SetupCmSignedVersionResourceArchitecture {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('x64', 'x86')]
+        [string]$ExpectedArchitecture,
+
+        [AllowEmptyString()][string]$ProductName = '',
+        [AllowEmptyString()][string]$FileDescription = '',
+        [AllowEmptyString()][string]$OriginalFilename = ''
+    )
+
+    $escapedArchitecture = [regex]::Escape($ExpectedArchitecture)
+    $tokenPattern = "(?i)(?:^|[^a-z0-9])$escapedArchitecture(?:[^a-z0-9]|$)"
+    $originalMatches = $OriginalFilename -match $tokenPattern
+    $productMatches = $ProductName -match $tokenPattern -or
+        $FileDescription -match $tokenPattern
+    $originalMatches -and $productMatches
+}
+
 function Get-SetupCmArtifactIdentity {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Path,
-        [Parameter(Mandatory)][hashtable]$Source
+        [Parameter(Mandatory)][hashtable]$Source,
+        [scriptblock]$SignatureProvider = {
+            param($ArtifactPath, $ExpectedPublisher, $RelativePath)
+            Test-SetupCmArtifactSignature -Path $ArtifactPath `
+                -ExpectedPublisher $ExpectedPublisher `
+                -SignatureRelativePath $RelativePath
+        },
+        [scriptblock]$VersionInfoProvider = {
+            param($IdentityPath)
+            [System.Diagnostics.FileVersionInfo]::GetVersionInfo($IdentityPath)
+        },
+        [scriptblock]$PeArchitectureProvider = {
+            param($IdentityPath)
+            Get-SetupCmPeArchitecture -Path $IdentityPath
+        }
     )
 
     $signatureRelativePath = if ($Source.ContainsKey('signatureRelativePath')) {
@@ -159,7 +193,7 @@ function Get-SetupCmArtifactIdentity {
     $identityPath = Resolve-SetupCmArtifactSignaturePath -Path $Path -SignatureRelativePath $signatureRelativePath
     $publisher = if ($Source.ContainsKey('publisher')) { [string]$Source.publisher } else { $null }
     try {
-        Test-SetupCmArtifactSignature -Path $Path -ExpectedPublisher $publisher -SignatureRelativePath $signatureRelativePath
+        & $SignatureProvider $Path $publisher $signatureRelativePath
     }
     catch {
         if ($_.Exception.Message -like 'Authenticode signature validation failed*') {
@@ -181,18 +215,51 @@ function Get-SetupCmArtifactIdentity {
         }
     }
 
-    $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($identityPath)
+    $versionInfo = & $VersionInfoProvider $identityPath
     $version = if (-not [string]::IsNullOrWhiteSpace($versionInfo.ProductVersion)) {
         $versionInfo.ProductVersion
     }
     else {
         $versionInfo.FileVersion
     }
+    $architecturePath = $identityPath
+    if ($Source.ContainsKey('architectureRelativePath')) {
+        $architectureRelativePath = [string]$Source.architectureRelativePath
+        $architecturePath = Resolve-SetupCmArtifactSignaturePath -Path $Path `
+            -SignatureRelativePath $architectureRelativePath
+        try {
+            & $SignatureProvider $Path $publisher $architectureRelativePath
+        }
+        catch {
+            if ($_.Exception.Message -like 'Authenticode signature validation failed*') {
+                return [pscustomobject]@{
+                    Version = $null
+                    Architecture = $null
+                    PublisherValid = $false
+                }
+            }
+            throw
+        }
+    }
     $architecture = if ([string]$Source.architecture -eq 'neutral') {
         'neutral'
     }
     else {
-        Get-SetupCmPeArchitecture -Path $identityPath
+        [string](& $PeArchitectureProvider $architecturePath)
+    }
+    if ($Source.ContainsKey('architectureVerification')) {
+        if ([string]$Source.architectureVerification -cne 'signedVersionResource') {
+            throw 'Unsupported artifact architecture verification mode.'
+        }
+        $expectedArchitecture = [string]$Source.architecture
+        if ($architecture -ine $expectedArchitecture -and
+            (Test-SetupCmSignedVersionResourceArchitecture `
+                -ExpectedArchitecture $expectedArchitecture `
+                -ProductName ([string]$versionInfo.ProductName) `
+                -FileDescription ([string]$versionInfo.FileDescription) `
+                -OriginalFilename ([string]$versionInfo.OriginalFilename))) {
+            $architecture = $expectedArchitecture
+        }
     }
     [pscustomobject]@{
         Version = $version

@@ -65,11 +65,22 @@ The template includes `sqlServer`, `mecm`, `adk`, `adkWinPe`, `odbcDriver18`, `v
 | `licenseAccepted` | An explicit acknowledgement that the operator has accepted the applicable license. |
 | `cacheFile` | Filename used under `cacheRoot`. |
 | `signatureRelativePath` | Required for ISO media: executable inside the ISO whose signature and native identity are checked. |
+| `architectureRelativePath` | Optional ISO-only executable whose separate valid publisher signature and PE header prove the declared payload architecture. Do not combine it with `architectureVerification`. |
+| `architectureVerification` | Optional executable-bootstrapper mode. The only accepted value is `signedVersionResource`, which requires the signed original filename and signed product identity to name the declared architecture. Do not combine it with `architectureRelativePath`. |
 
 For signed executables and ISO media, `version` is the native `ProductVersion`
 of the file selected by `signatureRelativePath`. Human release labels are not
 interchangeable with that value: the accepted Current Branch 2509 media uses
 `5.00.9141.1002`, not `2509`.
+
+Some signed installers use an x86 launcher for an x64 payload. Keep the target
+architecture declared as `x64`: SQL Server media uses the separately signed
+`x64\ScenarioEngine.exe` payload as `architectureRelativePath`, while the x64
+VC++ redistributable uses `architectureVerification: signedVersionResource`.
+The latter is accepted only when Authenticode is valid and both the signed
+original filename and signed product name or description unambiguously name
+`x64`; a generic x86 bootstrapper remains a conflict. Architecture proofs may
+only be selected for sources declared as `x64` or `x86`.
 
 Replace all `REPLACE_WITH_*` values and example URLs before a real run. Every
 non-template source requires an exact SHA-256, positive `sizeBytes`, expected
