@@ -23,17 +23,15 @@ function Invoke-SetupCm {
                     Write-Output
             }
             'Sql' {
+                $sqlContext = [pscustomobject]@{ State = $null }
                 Invoke-SetupCmStage -Name Sql -EvidenceRoot $evidenceRoot -Test {
-                    if ((Test-SetupCmSql -InstanceName $config.sql.instanceName) -eq 'Compliant' -and (Test-SetupCmSqlNetwork -InstanceName $config.sql.instanceName) -eq 'Compliant') { 'Compliant' } else { 'NotCompliant' }
+                    $probe = Test-SetupCmSqlDesiredState -Config $config -EvidenceRoot $evidenceRoot -PassThru
+                    $sqlContext.State = $probe
+                    if ($probe -is [string]) { [string]$probe } else { [string]$probe.State }
                 } -Apply {
-                    if ((Test-SetupCmSql -InstanceName $config.sql.instanceName) -ne 'Compliant') {
-                        $media = Get-SetupCmArtifact -Source $config.sources.sqlServer -CacheRoot $config.cacheRoot -EvidenceRoot $evidenceRoot
-                        Install-SetupCmWindowsPrerequisites
-                        Install-SetupCmSql -MediaPath $media.Path -Sql $config.sql
-                    }
-                    Enable-SetupCmSqlNetwork -InstanceName $config.sql.instanceName
+                    Repair-SetupCmSqlDesiredState -Config $config -State $sqlContext.State -EvidenceRoot $evidenceRoot
                 } -Verify {
-                    if ((Test-SetupCmSql -InstanceName $config.sql.instanceName) -eq 'Compliant' -and (Test-SetupCmSqlNetwork -InstanceName $config.sql.instanceName) -eq 'Compliant') { 'Compliant' } else { 'NotCompliant' }
+                    Test-SetupCmSqlDesiredState -Config $config -EvidenceRoot $evidenceRoot
                 } | Write-Output
             }
             'Mecm' {

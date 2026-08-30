@@ -99,16 +99,17 @@ Releases.
 - Modify: `src/SetupCm/Public/Invoke-SetupCm.ps1`
 - Test: `tests/Unit/Sql.Tests.ps1`
 
-- [ ] Write failing component tests for Windows features, instance/service and
+- [x] Write failing component tests for Windows features, instance/service and
       startup state, network/listener/firewall, SQL query reachability, owned
       service/sysadmin configuration, VC++ x64/x86, conditional `CM_LAB`
       reachability, and conflicting identity.
-- [ ] Write orchestration tests proving exact compliance skips Apply, partial
+- [x] Write orchestration tests proving exact compliance skips Apply, partial
       drift repairs one component, an absent instance installs once, a conflict
       never installs, and Verify failure fails the stage.
-- [ ] Implement a read-only SQL state probe and minimal repair dispatcher.
-- [ ] Run focused and full unit suites.
-- [ ] Commit: `feat: reconcile SQL desired state`.
+- [x] Implement a read-only SQL state probe and minimal repair dispatcher.
+- [x] Run focused and full unit suites, plus the live CM01 read-only provider
+      probe.
+- [x] Commit: `feat: reconcile SQL desired state`.
 
 ## Task 5: Implement MECM and read-only Health probes
 
