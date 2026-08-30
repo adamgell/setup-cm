@@ -85,7 +85,7 @@ Describe 'Get-SetupCmArtifact' {
             } | Should -Throw '*failed verification*VersionMismatch*'
 
             (Get-Content -LiteralPath $cacheFile -Raw) | Should -Be 'existing cache'
-            Test-Path -LiteralPath "$cacheFile.download" | Should -BeFalse
+            Test-Path -LiteralPath (Join-Path $TestDrive 'mecm.download.iso') | Should -BeFalse
         }
 
         It 'retains safe acquisition diagnostics without disclosing the private source URI' {
@@ -113,7 +113,7 @@ Describe 'Get-SetupCmArtifact' {
             $message | Should -Match 'TLS certificate validation failed'
             $message | Should -Match '<redacted-uri>'
             $message | Should -Not -Match 'private\.example\.invalid|topsecret'
-            Test-Path -LiteralPath (Join-Path $TestDrive 'mecm.iso.download') |
+            Test-Path -LiteralPath (Join-Path $TestDrive 'mecm.download.iso') |
                 Should -BeFalse
         }
 
@@ -141,6 +141,32 @@ Describe 'Get-SetupCmArtifact' {
             $message | Should -Match 'Access denied'
             $message | Should -Match '<redacted-source>'
             $message | Should -Not -Match ([regex]::Escape($vaultPath))
+        }
+
+        It 'preserves an MSI extension while verifying newly acquired bytes' {
+            $sourceFile = Join-Path $TestDrive 'source-driver.msi'
+            Set-Content -LiteralPath $sourceFile -Value 'msi bytes' -NoNewline
+            $script:downloadProbePath = ''
+            Mock Get-SetupCmArtifactState {
+                if ([string]::IsNullOrWhiteSpace($ArtifactPath)) {
+                    return [pscustomobject]@{
+                        Name = 'odbcDriver18'; State = 'NotCompliant'; Reason = 'Missing'
+                    }
+                }
+                $script:downloadProbePath = $ArtifactPath
+                [pscustomobject]@{
+                    Name = 'odbcDriver18'; State = 'Compliant'; Reason = 'Verified'
+                    Sha256 = ('a' * 64); SizeBytes = 9; Version = '18.4.1.1'; Architecture = 'x64'
+                }
+            }
+
+            Get-SetupCmArtifact -Source @{
+                name = 'odbcDriver18'; cacheFile = 'driver.msi'; sha256 = ('a' * 64)
+                sizeBytes = 9; version = '18.4.1.1'; architecture = 'x64'
+                licenseAccepted = $true; vaultPath = $sourceFile
+            } -CacheRoot $TestDrive -EvidenceRoot $TestDrive | Out-Null
+
+            $script:downloadProbePath | Should -Match '\.download\.msi$'
         }
     }
 }
@@ -228,6 +254,18 @@ Describe 'Get-SetupCmArtifactState' {
 
             $state.State | Should -Be 'NotCompliant'
             $state.Reason | Should -Be 'VersionMismatch'
+        }
+
+        It 'treats omitted trailing version components as equivalent zeros' {
+            $versionSource = $source.Clone()
+            $versionSource.version = '17.0.0.0'
+
+            $state = Get-SetupCmArtifactState -Source $versionSource -CacheRoot $TestDrive `
+                -PathProvider { $true } -LengthProvider { 1024 } -HashProvider { ('a' * 64) } `
+                -IdentityProvider { @{ Version = '17.0'; Architecture = 'x64'; PublisherValid = $true } }
+
+            $state.State | Should -Be 'Compliant'
+            $state.Reason | Should -Be 'Verified'
         }
 
         It 'reports an architecture mismatch as NotCompliant' {
@@ -371,6 +409,7 @@ Describe 'Invoke-SetupCmAcquire' {
 
             $result | Should -HaveCount 3
             Should -Invoke Get-SetupCmArtifact -Times 1 -Exactly -ParameterFilter { $Source.name -eq 'mecm' }
+            Should -Invoke Get-SetupCmArtifact -Times 1 -Exactly
         }
 
         It 'normalizes reused and acquired artifacts to the same bounded evidence shape' {
@@ -417,6 +456,7 @@ Describe 'Invoke-SetupCmAcquire' {
             @($result | Where-Object { $_.PSObject.Properties.Name -notcontains 'Path' }) |
                 Should -HaveCount 0
             Should -Invoke Get-SetupCmArtifact -Times 1 -Exactly -ParameterFilter { $Source.name -eq 'mecm' }
+            Should -Invoke Get-SetupCmArtifact -Times 1 -Exactly
         }
 
         It 'fails closed without acquisition when any artifact state is Conflict' {

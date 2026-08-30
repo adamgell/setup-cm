@@ -188,7 +188,15 @@ function ConvertTo-SetupCmComparableVersion {
 
     $match = [regex]::Match($Value, '\d+(?:\.\d+){0,3}')
     if (-not $match.Success) { return $Value.Trim() }
-    try { return ([version]$match.Value).ToString() } catch { return $match.Value }
+    try {
+        $parsed = [version]$match.Value
+        return ('{0}.{1}.{2}.{3}' -f
+            $parsed.Major,
+            [Math]::Max($parsed.Minor, 0),
+            [Math]::Max($parsed.Build, 0),
+            [Math]::Max($parsed.Revision, 0))
+    }
+    catch { return $match.Value }
 }
 
 function Get-SetupCmArtifactState {
@@ -452,7 +460,13 @@ function Get-SetupCmArtifact {
     }
 
     New-Item -ItemType Directory -Path $CacheRoot -Force | Out-Null
-    $temporaryPath = "$path.download"
+    $extension = [IO.Path]::GetExtension($path)
+    $temporaryPath = if ([string]::IsNullOrEmpty($extension)) {
+        "$path.download"
+    }
+    else {
+        $path.Substring(0, $path.Length - $extension.Length) + ".download$extension"
+    }
     Remove-Item -LiteralPath $temporaryPath -Force -ErrorAction SilentlyContinue
     try {
         if (Test-Path -LiteralPath $sourceUri -PathType Leaf) {

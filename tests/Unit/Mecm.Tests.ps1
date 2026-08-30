@@ -629,6 +629,13 @@ Describe 'Get-SetupCmMecmDefaultProviders' {
             $row.Client | Should -Be 0
             $row.ClientVersion | Should -Be ''
         }
+
+        It 'binds the client name parameter at the live v_R_System Name0 width' {
+            $providers = Get-SetupCmMecmDefaultProviders
+
+            $providers.ClientDatabase.ToString() |
+                Should -Match "Parameters\.Add\('@Name', \[System\.Data\.SqlDbType\]::NVarChar, 256\)"
+        }
     }
 }
 

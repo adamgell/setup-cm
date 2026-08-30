@@ -39,6 +39,17 @@ Describe 'Write-SetupCmEvidenceJson' {
             ($json | ConvertFrom-Json).message | Should -Be 'Download failed from <redacted-uri>'
         }
 
+        It 'fully redacts quoted credential assignments that contain spaces' {
+            $path = Write-SetupCmEvidenceJson -EvidenceRoot $TestDrive -Name 'quoted-credentials' -Value @{
+                message = 'Password="two words"; Token=''three words''; Pwd=four'
+            }
+
+            $json = Get-Content -LiteralPath $path -Raw
+            $message = ($json | ConvertFrom-Json).message
+            $json | Should -Not -Match 'two words|three words|four'
+            $message | Should -Be 'Password=<redacted>; Token=<redacted>; Pwd=<redacted>'
+        }
+
         It 'removes composite sensitive keys while preserving safe path and status fields' {
             $sensitiveValues = 1..6 | ForEach-Object { "sensitive-value-$_" }
             $value = [ordered]@{

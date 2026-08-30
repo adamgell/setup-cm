@@ -431,7 +431,7 @@ SELECT Name0, ResourceID, Active0, Obsolete0, Client0, Client_Version0
 FROM dbo.v_R_System
 WHERE Name0 = @Name
 '@
-                [void]$client.Parameters.Add('@Name', [System.Data.SqlDbType]::NVarChar, 64)
+                [void]$client.Parameters.Add('@Name', [System.Data.SqlDbType]::NVarChar, 256)
                 $client.Parameters['@Name'].Value = [string]$Config.testClient.name
                 $rows = [System.Collections.Generic.List[object]]::new()
                 $reader = $client.ExecuteReader()

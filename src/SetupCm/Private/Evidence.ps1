@@ -70,7 +70,7 @@ function ConvertTo-SetupCmSanitizedEvidenceString {
 
     $sanitized = [regex]::Replace(
         $Value,
-        '(?im)(\b(?:password|pwd|token|secret|authorization)\s*=\s*)[^;\r\n\s]+',
+        '(?im)(\b(?:password|pwd|token|secret|authorization)\s*=\s*)(?:"[^"]*"|''[^'']*''|[^;\r\n\s]+)',
         '$1<redacted>'
     )
     $sanitized = [regex]::Replace($sanitized, '(?i)(\bbearer\s+)[A-Za-z0-9._~+/=-]+', '$1<redacted>')

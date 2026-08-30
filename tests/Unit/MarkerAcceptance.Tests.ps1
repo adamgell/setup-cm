@@ -372,6 +372,18 @@ Describe 'Setup-CM marker acceptance desired state' {
             $evidence.state | Should -BeExactly 'Compliant'
             @($evidence.components | Where-Object state -ne 'Compliant') | Should -HaveCount 0
         }
+
+        It 'fails closed instead of writing unpinned evidence when run metadata is malformed' {
+            $runRoot = Join-Path $TestDrive 'malformed-run'
+            New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
+            [System.IO.File]::WriteAllText((Join-Path $runRoot 'run.json'), '{')
+
+            {
+                Test-SetupCmMarkerDesiredState -Config (New-TestMarkerConfig) -EvidenceRoot $runRoot `
+                    -Providers (New-CompliantMarkerProviders)
+            } | Should -Throw
+            Test-Path -LiteralPath (Join-Path $runRoot 'marker-state.json') | Should -BeFalse
+        }
     }
 }
 
