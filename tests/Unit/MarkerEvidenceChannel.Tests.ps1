@@ -90,7 +90,8 @@ Describe 'Setup-CM marker evidence channel desired state' {
                     [bool]$ParentExists = $true,
                     [bool]$TargetExists = $true,
                     [bool]$ShareExists = $true,
-                    [bool]$EvidenceExists = $false
+                    [bool]$EvidenceExists = $false,
+                    [switch]$UseApprovedPredecessorTargetAcl
                 )
 
                 $administratorsSid = 'S-1-5-32-544'
@@ -127,7 +128,8 @@ Describe 'Setup-CM marker evidence channel desired state' {
                             New-TestMarkerNtfsAce -Sid $targetSid -Rights 1179819 `
                                 -InheritanceFlags 0 -PropagationFlags 0
                             New-TestMarkerNtfsAce -Sid $targetSid -Rights 1245631 `
-                                -InheritanceFlags 1 -PropagationFlags 2
+                                -InheritanceFlags $(if ($UseApprovedPredecessorTargetAcl) { 1 } else { 2 }) `
+                                -PropagationFlags 2
                         )
                     }
                     Share = [pscustomobject][ordered]@{
@@ -182,6 +184,29 @@ Describe 'Setup-CM marker evidence channel desired state' {
             $assessment.Reason | Should -BeExactly 'IncompleteOwnedChannel'
         }
 
+        It 'classifies only the container-inherit predecessor as a bounded file-ACL upgrade' {
+            $inventory = New-TestMarkerEvidenceChannelInventory `
+                -UseApprovedPredecessorTargetAcl
+
+            $assessment = Get-SetupCmMarkerEvidenceChannelAssessment `
+                -Contract (Get-SetupCmMarkerFixedContract) -Inventory $inventory
+
+            $assessment.State | Should -BeExactly 'NotCompliant'
+            $assessment.Reason | Should -BeExactly `
+                'ApprovedTargetFileInheritanceUpgrade'
+        }
+
+        It 'keeps the predecessor plus a missing share in the safe-partial state' {
+            $inventory = New-TestMarkerEvidenceChannelInventory `
+                -ShareExists $false -UseApprovedPredecessorTargetAcl
+
+            $assessment = Get-SetupCmMarkerEvidenceChannelAssessment `
+                -Contract (Get-SetupCmMarkerFixedContract) -Inventory $inventory
+
+            $assessment.State | Should -BeExactly 'NotCompliant'
+            $assessment.Reason | Should -BeExactly 'IncompleteOwnedChannel'
+        }
+
         It 'fails closed when the existing share points at another path' {
             $inventory = New-TestMarkerEvidenceChannelInventory
             $inventory.Share.Path = 'C:\Other\MarkerEvidence'
@@ -200,6 +225,7 @@ Describe 'Setup-CM marker evidence channel desired state' {
             @{ Name = 'unknown trustee'; Mutation = 'Unknown' }
             @{ Name = 'duplicate ACE'; Mutation = 'Duplicate' }
             @{ Name = 'excessive rights'; Mutation = 'Excessive' }
+            @{ Name = 'unapproved inheritance flags'; Mutation = 'WrongInheritance' }
         ) {
             $inventory = New-TestMarkerEvidenceChannelInventory
             switch ($Mutation) {
@@ -216,6 +242,7 @@ Describe 'Setup-CM marker evidence channel desired state' {
                 }
                 'Duplicate' { $inventory.Target.Aces += $inventory.Target.Aces[2].PSObject.Copy() }
                 'Excessive' { $inventory.Target.Aces[2].Rights = 2032127 }
+                'WrongInheritance' { $inventory.Target.Aces[3].InheritanceFlags = 3 }
             }
 
             $assessment = Get-SetupCmMarkerEvidenceChannelAssessment `
@@ -465,6 +492,61 @@ Describe 'Setup-CM marker evidence channel creation provider' {
             Should -Invoke Set-Acl -Times 0 -Exactly
             Should -Invoke New-SmbShare -Times 0 -Exactly
             Should -Invoke Get-SetupCmMarkerEvidenceChannelInventory -Times 1 -Exactly
+        }
+
+        It 'normalizes only the approved target file-inheritance predecessor' {
+            $script:initialState = 'NotCompliant'
+            $script:initialReason = 'ApprovedTargetFileInheritanceUpgrade'
+            $script:initialInventory.Parent.Exists = $true
+            $script:initialInventory.Target.Exists = $true
+            $script:initialInventory.Share.Exists = $true
+
+            $result = New-SetupCmMarkerEvidenceChannel `
+                -Contract (Get-SetupCmMarkerFixedContract)
+
+            $result.Changed | Should -BeTrue
+            $result.State | Should -BeExactly 'Compliant'
+            $result.Actions | Should -BeExactly @('NormalizeTargetFileInheritance')
+            ($script:sequence -join '|') | Should -BeExactly 'Build:Target|Set:Target'
+            Should -Invoke New-Item -Times 0 -Exactly
+            Should -Invoke New-SmbShare -Times 0 -Exactly
+            Should -Invoke Get-SetupCmMarkerEvidenceChannelInventory -Times 2 -Exactly
+        }
+
+        It 'completes a missing share while normalizing the approved predecessor' {
+            $script:initialReason = 'IncompleteOwnedChannel'
+            Add-Member -InputObject $script:initialInventory `
+                -MemberType NoteProperty -Name AdministratorsSid `
+                -Value 'S-1-5-32-544'
+            Add-Member -InputObject $script:initialInventory `
+                -MemberType NoteProperty -Name SystemSid -Value 'S-1-5-18'
+            $script:initialInventory.Parent.Exists = $true
+            $script:initialInventory.Target = [pscustomobject]@{
+                Exists = $true
+                Aces = @(
+                    New-TestMarkerNtfsAce -Sid 'S-1-5-32-544' -Rights 2032127 `
+                        -InheritanceFlags 3 -PropagationFlags 0
+                    New-TestMarkerNtfsAce -Sid 'S-1-5-18' -Rights 2032127 `
+                        -InheritanceFlags 3 -PropagationFlags 0
+                    New-TestMarkerNtfsAce -Sid 'S-1-5-21-1-2-3-1001' `
+                        -Rights 1179819 -InheritanceFlags 0 -PropagationFlags 0
+                    New-TestMarkerNtfsAce -Sid 'S-1-5-21-1-2-3-1001' `
+                        -Rights 1245631 -InheritanceFlags 1 -PropagationFlags 2
+                )
+            }
+            $script:initialInventory.Share.Exists = $false
+
+            $result = New-SetupCmMarkerEvidenceChannel `
+                -Contract (Get-SetupCmMarkerFixedContract)
+
+            $result.Changed | Should -BeTrue
+            $result.Actions | Should -BeExactly @(
+                'NormalizeTargetFileInheritance',
+                'CreateBoundedShare'
+            )
+            ($script:sequence -join '|') |
+                Should -BeExactly 'Build:Target|Set:Target|Share'
+            Should -Invoke New-Item -Times 0 -Exactly
         }
 
         It 'refuses a conflicting channel without mutation' {

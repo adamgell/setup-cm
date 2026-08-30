@@ -78,6 +78,8 @@ Describe 'Setup-CM marker acceptance desired state' {
             }
 
             function New-TestMarkerEvidenceChannelInventory {
+                param([switch]$UseApprovedPredecessorTargetAcl)
+
                 $administratorsSid = 'S-1-5-32-544'
                 $systemSid = 'S-1-5-18'
                 $targetSid = 'S-1-5-21-1-2-3-1001'
@@ -115,7 +117,10 @@ Describe 'Setup-CM marker acceptance desired state' {
                             }
                             [pscustomobject]@{
                                 Sid = $targetSid; Rights = 1245631
-                                InheritanceFlags = 1; PropagationFlags = 2
+                                InheritanceFlags = $(
+                                    if ($UseApprovedPredecessorTargetAcl) { 1 } else { 2 }
+                                )
+                                PropagationFlags = 2
                                 AccessControlType = 0; IsInherited = $false
                             }
                         )
@@ -244,6 +249,7 @@ Describe 'Setup-CM marker acceptance desired state' {
             $component.TargetComputerSid | Should -BeExactly `
                 'S-1-5-21-1-2-3-1001'
             $component.SchemaVersion | Should -Be 1
+            $component.ShareExists | Should -BeTrue
             $component.PSObject.Properties.Name | Should -Not -Contain 'Aces'
             ($component | ConvertTo-Json -Depth 8) | Should -Not -Match `
                 'Rights|InheritanceFlags|PropagationFlags|AccessControlType'
@@ -555,6 +561,64 @@ Describe 'Setup-CM marker acceptance desired state' {
                 Should -BeExactly $requestTimestamp.ToUniversalTime().ToString('o')
             [object]::ReferenceEquals($capture.Providers, $repairProviders) |
                 Should -BeTrue
+        }
+
+        It 'repairs only the approved target file inheritance before requesting evidence' {
+            $providers = New-CompliantMarkerProviders
+            $channel = New-TestMarkerEvidenceChannelInventory `
+                -UseApprovedPredecessorTargetAcl
+            $providers.EvidenceChannel = { $channel }.GetNewClosure()
+            $inventory = & $providers.Inventory
+            $inventory.Client.MarkerHash = ''
+            $inventory.Client.MarkerLength = 0
+            $inventory.Client.MarkerHashVerification = 'ClientEvidencePending'
+            $providers.Inventory = { $inventory }.GetNewClosure()
+            $state = Get-SetupCmMarkerDesiredState `
+                -Config (New-TestMarkerConfig) -Providers $providers
+            $calls = [System.Collections.Generic.List[string]]::new()
+
+            Repair-SetupCmMarkerDesiredState -Config (New-TestMarkerConfig) `
+                -State $state `
+                -Providers (New-RecordingMarkerRepairProviders -Calls $calls)
+
+            $state.State | Should -BeExactly 'NotCompliant'
+            @($state.Components | Where-Object State -ne 'Compliant' |
+                ForEach-Object { '{0}/{1}' -f $_.Name, $_.Reason }) |
+                Should -BeExactly @(
+                    'EvidenceChannel/ApprovedTargetFileInheritanceUpgrade',
+                    'Client/ClientEvidencePending'
+                )
+            $calls | Should -BeExactly @(
+                'CreateEvidenceChannel',
+                'RequestClientPolicy',
+                'WaitForConvergence'
+            )
+        }
+
+        It 'refuses the approved inheritance reason without exact-share proof' {
+            $providers = New-CompliantMarkerProviders
+            $channel = New-TestMarkerEvidenceChannelInventory `
+                -UseApprovedPredecessorTargetAcl
+            $providers.EvidenceChannel = { $channel }.GetNewClosure()
+            $inventory = & $providers.Inventory
+            $inventory.Client.MarkerHash = ''
+            $inventory.Client.MarkerLength = 0
+            $inventory.Client.MarkerHashVerification = 'ClientEvidencePending'
+            $providers.Inventory = { $inventory }.GetNewClosure()
+            $state = Get-SetupCmMarkerDesiredState `
+                -Config (New-TestMarkerConfig) -Providers $providers
+            $evidenceComponent = $state.Components |
+                Where-Object Name -eq EvidenceChannel
+            Add-Member -InputObject $evidenceComponent -MemberType NoteProperty `
+                -Name ShareExists -Value $false -Force
+            $calls = [System.Collections.Generic.List[string]]::new()
+
+            {
+                Repair-SetupCmMarkerDesiredState -Config (New-TestMarkerConfig) `
+                    -State $state `
+                    -Providers (New-RecordingMarkerRepairProviders -Calls $calls)
+            } | Should -Throw '*not safely repairable*'
+            $calls | Should -HaveCount 0
         }
 
         It 'fails closed when the policy provider does not return its request timestamp' {

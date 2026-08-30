@@ -106,12 +106,27 @@ function Get-SetupCmMarkerExpectedChannelAces {
             [pscustomobject]@{
                 Sid = $targetSid
                 Rights = 1245631
-                InheritanceFlags = 1
+                InheritanceFlags = 2
                 PropagationFlags = 2
                 AccessControlType = 0
                 IsInherited = $false
             }
         )
+    }
+    $expected
+}
+
+function Get-SetupCmMarkerApprovedPredecessorTargetAces {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)]$Inventory)
+
+    $expected = @(Get-SetupCmMarkerExpectedChannelAces `
+        -Inventory $Inventory -Scope Target)
+    foreach ($entry in $expected) {
+        if ([string]$entry.Sid -ceq [string]$Inventory.TargetComputerSid -and
+            [int]$entry.Rights -eq 1245631) {
+            $entry.InheritanceFlags = 1
+        }
     }
     $expected
 }
@@ -438,7 +453,7 @@ function Get-SetupCmMarkerDirectorySecurity {
             [System.Security.AccessControl.FileSystemAccessRule]::new(
                 $targetSid,
                 [System.Security.AccessControl.FileSystemRights]1245631,
-                [System.Security.AccessControl.InheritanceFlags]1,
+                [System.Security.AccessControl.InheritanceFlags]2,
                 [System.Security.AccessControl.PropagationFlags]2,
                 [System.Security.AccessControl.AccessControlType]::Allow
             )
@@ -463,7 +478,11 @@ function New-SetupCmMarkerEvidenceChannel {
         }
     }
     if ($assessment.State -eq 'Conflict' -or
-        $assessment.Reason -notin 'Missing', 'IncompleteOwnedChannel') {
+        $assessment.Reason -notin @(
+            'Missing',
+            'IncompleteOwnedChannel',
+            'ApprovedTargetFileInheritanceUpgrade'
+        )) {
         throw "Marker evidence channel conflict: $($assessment.Reason)."
     }
 
@@ -499,16 +518,34 @@ function New-SetupCmMarkerEvidenceChannel {
     }
 
     $target = Get-SetupCmMarkerValue -InputObject $inventory -Name Target
-    if (-not [bool](Get-SetupCmMarkerValue `
-            -InputObject $target -Name Exists -DefaultValue $false)) {
-        New-Item -ItemType Directory `
-            -Path ([string]$Contract.EvidenceChannel.LocalPath) `
-            -ErrorAction Stop | Out-Null
+    $targetExists = [bool](Get-SetupCmMarkerValue `
+        -InputObject $target -Name Exists -DefaultValue $false)
+    $targetUsesApprovedPredecessorAcl = $targetExists -and
+        (Test-SetupCmMarkerAclEntriesExact `
+            -Actual @(Get-SetupCmMarkerValue -InputObject $target -Name Aces) `
+            -Expected @(Get-SetupCmMarkerApprovedPredecessorTargetAces `
+                -Inventory $inventory) -Kind Ntfs)
+    $normalizeTargetFileInheritance =
+        $assessment.Reason -eq 'ApprovedTargetFileInheritanceUpgrade' -or
+        ($assessment.Reason -eq 'IncompleteOwnedChannel' -and
+            $targetUsesApprovedPredecessorAcl)
+    if (-not $targetExists -or $normalizeTargetFileInheritance) {
+        if (-not $targetExists) {
+            New-Item -ItemType Directory `
+                -Path ([string]$Contract.EvidenceChannel.LocalPath) `
+                -ErrorAction Stop | Out-Null
+        }
         $targetAcl = Get-SetupCmMarkerDirectorySecurity `
             -Role Target -TargetComputerSid $targetSid
         Set-Acl -LiteralPath ([string]$Contract.EvidenceChannel.LocalPath) `
             -AclObject $targetAcl -ErrorAction Stop
-        [void]$actions.Add('CreateProtectedTarget')
+        $targetAction = if ($normalizeTargetFileInheritance) {
+            'NormalizeTargetFileInheritance'
+        }
+        else {
+            'CreateProtectedTarget'
+        }
+        [void]$actions.Add($targetAction)
     }
 
     $share = Get-SetupCmMarkerValue -InputObject $inventory -Name Share
@@ -633,15 +670,28 @@ function Get-SetupCmMarkerEvidenceChannelAssessment {
         return Get-SetupCmMarkerEvidenceChannelResult `
             -State Conflict -Reason EvidenceAclConflict
     }
-    if ($targetExists -and
-        (-not [bool](Get-SetupCmMarkerValue `
-                -InputObject $target -Name AclProtected -DefaultValue $false) -or
-        -not (Test-SetupCmMarkerAclEntriesExact `
-            -Actual @(Get-SetupCmMarkerValue -InputObject $target -Name Aces) `
-            -Expected @(Get-SetupCmMarkerExpectedChannelAces `
-                -Inventory $Inventory -Scope Target) -Kind Ntfs))) {
-        return Get-SetupCmMarkerEvidenceChannelResult `
-            -State Conflict -Reason EvidenceAclConflict
+    $approvedTargetFileInheritanceUpgrade = $false
+    if ($targetExists) {
+        if (-not [bool](Get-SetupCmMarkerValue `
+                -InputObject $target -Name AclProtected -DefaultValue $false)) {
+            return Get-SetupCmMarkerEvidenceChannelResult `
+                -State Conflict -Reason EvidenceAclConflict
+        }
+        $targetAces = @(Get-SetupCmMarkerValue -InputObject $target -Name Aces)
+        if (-not (Test-SetupCmMarkerAclEntriesExact `
+                -Actual $targetAces `
+                -Expected @(Get-SetupCmMarkerExpectedChannelAces `
+                    -Inventory $Inventory -Scope Target) -Kind Ntfs)) {
+            $approvedTargetFileInheritanceUpgrade =
+                Test-SetupCmMarkerAclEntriesExact `
+                    -Actual $targetAces `
+                    -Expected @(Get-SetupCmMarkerApprovedPredecessorTargetAces `
+                        -Inventory $Inventory) -Kind Ntfs
+            if (-not $approvedTargetFileInheritanceUpgrade) {
+                return Get-SetupCmMarkerEvidenceChannelResult `
+                    -State Conflict -Reason EvidenceAclConflict
+            }
+        }
     }
     if ($shareExists -and
         -not (Test-SetupCmMarkerAclEntriesExact `
@@ -656,6 +706,11 @@ function Get-SetupCmMarkerEvidenceChannelAssessment {
             -InputObject $evidence -Name AclExact -DefaultValue $false)) {
         return Get-SetupCmMarkerEvidenceChannelResult `
             -State Conflict -Reason EvidenceAclConflict
+    }
+
+    if ($approvedTargetFileInheritanceUpgrade -and $shareExists) {
+        return Get-SetupCmMarkerEvidenceChannelResult `
+            -State NotCompliant -Reason ApprovedTargetFileInheritanceUpgrade
     }
 
     if (-not $targetExists -or -not $shareExists) {

@@ -126,6 +126,11 @@ directories. The target computer receives two allow ACEs and no deny ACE:
   `Synchronize`; and
 - files only, inherited by child files: `Modify` and `Synchronize`.
 
+The files-only ACE uses the .NET numeric `InheritanceFlags` value `2`
+(`ObjectInherit`) with `PropagationFlags` value `2` (`InheritOnly`). Value `1`
+is `ContainerInherit`; it does not grant the target computer rights on a newly
+created file and therefore cannot be accepted as the final channel state.
+
 No other explicit or inherited trustee is accepted. No target ACE grants
 `CreateDirectories`, `Delete` on the target directory, `ChangePermissions`, or
 `TakeOwnership`. The exact rights permit a new temporary file to be created,
@@ -370,6 +375,12 @@ delete an ambiguous pre-existing path. A later run may complete only a
 recognizable safe partial state. Same-name share conflicts, broad ACLs,
 unresolvable identities, malformed/foreign evidence, and unknown detector
 hashes require operator reconciliation.
+
+The one approved predecessor exception is the otherwise exact target ACL that
+used `ContainerInherit` for the target computer's `Modify` ACE. That exact shape
+is a bounded `ApprovedTargetFileInheritanceUpgrade`: setup-cm replaces only the
+target-directory ACL with the fixed `ObjectInherit` form and verifies the full
+channel again. Any additional ACL drift remains a conflict.
 
 Detector publication failure removes only its own bounded temporary file when
 possible. The provider never deletes the final record merely because it is

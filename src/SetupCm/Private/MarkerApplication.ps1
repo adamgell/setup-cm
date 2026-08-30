@@ -353,6 +353,10 @@ function Get-SetupCmMarkerDesiredState {
             SchemaVersion = [int]$contract.EvidenceChannel.SchemaVersion
             TargetComputerSid = [string](Get-SetupCmMarkerValue `
                 -InputObject $evidenceChannelInventory -Name TargetComputerSid)
+            ShareExists = [bool](Get-SetupCmMarkerValue `
+                -InputObject (Get-SetupCmMarkerValue `
+                    -InputObject $evidenceChannelInventory -Name Share) `
+                -Name Exists -DefaultValue $false)
         }
         [void]$components.Add((New-SetupCmMarkerComponent `
             -Name EvidenceChannel -State $evidenceChannelAssessment.State `
@@ -1177,7 +1181,12 @@ function Repair-SetupCmMarkerDesiredState {
         throw 'Marker repair requires an EvidenceChannel component.'
     }
     if ($evidenceChannel.State -eq 'NotCompliant') {
-        if ($evidenceChannel.Reason -notin 'Missing', 'IncompleteOwnedChannel') {
+        $approvedInheritanceUpgrade =
+            $evidenceChannel.Reason -eq 'ApprovedTargetFileInheritanceUpgrade' -and
+            [bool](Get-SetupCmMarkerValue `
+                -InputObject $evidenceChannel -Name ShareExists -DefaultValue $false)
+        if ($evidenceChannel.Reason -notin 'Missing', 'IncompleteOwnedChannel' -and
+            -not $approvedInheritanceUpgrade) {
             throw 'Marker evidence channel is not safely repairable.'
         }
         Invoke-SetupCmMarkerProviderAction -Providers $Providers `

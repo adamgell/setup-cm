@@ -37,6 +37,34 @@ Describe 'Setup-CM marker evidence channel Windows providers' -Skip:(-not $IsWin
             Test-SetupCmMarkerAclEntriesExact -Actual $targetRules -Kind Ntfs `
                 -Expected @(Get-SetupCmMarkerExpectedChannelAces `
                     -Inventory $inventory -Scope Target) | Should -BeTrue
+            $targetFileRule = $targetRules | Where-Object {
+                $_.Sid -ceq $targetSid -and $_.Rights -eq 1245631
+            } | Select-Object -First 1
+            $targetFileRule.InheritanceFlags | Should -Be 2
+            $targetFileRule.PropagationFlags | Should -Be 2
+        }
+
+        It 'grants a newly created evidence file inherited target modify rights' {
+            $path = Join-Path $TestDrive 'target-marker-evidence'
+            New-Item -ItemType Directory -Path $path | Out-Null
+            $currentSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+            $security = Get-SetupCmMarkerDirectorySecurity `
+                -Role Target -TargetComputerSid $currentSid.Value
+            Set-Acl -LiteralPath $path -AclObject $security
+            $filePath = Join-Path $path 'marker-evidence.json'
+            [System.IO.File]::WriteAllText($filePath, '{}')
+
+            $fileRules = @((Get-Acl -LiteralPath $filePath).GetAccessRules(
+                    $true,
+                    $true,
+                    [System.Security.Principal.SecurityIdentifier]
+                ) | ForEach-Object { ConvertTo-SetupCmMarkerNtfsAce -AccessRule $_ })
+            $targetRule = $fileRules | Where-Object {
+                $_.Sid -ceq $currentSid.Value -and $_.Rights -eq 1245631
+            } | Select-Object -First 1
+
+            $targetRule | Should -Not -BeNullOrEmpty
+            $targetRule.IsInherited | Should -BeTrue
         }
 
         It 'normalizes a protected temporary directory by SID and numeric masks' {

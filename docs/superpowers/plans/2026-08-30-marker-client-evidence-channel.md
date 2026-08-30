@@ -325,7 +325,9 @@ $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::ne
 
 On the target directory add exactly one this-folder-only target ACE with mask
 `1179819` and one object-inherit/inherit-only target ACE with the Windows
-canonical `Modify` plus `Synchronize` mask `1245631`.
+canonical `Modify` plus `Synchronize` mask `1245631`. Pin the numeric
+inheritance value to `2` (`ObjectInherit`), not `1` (`ContainerInherit`), and
+cover actual child-file inheritance in the Windows integration test.
 Create the share last:
 
 ```powershell
