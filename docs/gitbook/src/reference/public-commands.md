@@ -61,6 +61,13 @@ The command refuses any boundary other than site `LAB`, server
 `LABZ1-CM01.test.gell.one`, and target `RING0IVY24-01.test.gell.one`
 resource `16777219`.
 
+Client proof comes from an authenticated `C$` marker read when available, or
+from the code-fixed `SetupCmMarkerEvidence$` channel when the direct route is
+unavailable. Missing or stale evidence permits only the bounded, lab-approved
+channel, predecessor-detector policy, and client reevaluation sequence.
+Malformed or contradictory evidence fails closed, and `ClientProbeUnavailable`
+means both authenticated proof routes failed unexpectedly.
+
 ## `Invoke-SetupCmAcquire`
 
 Runs the acquisition apply path for artifacts identified by the outer Acquire

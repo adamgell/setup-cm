@@ -475,9 +475,10 @@ Describe 'Setup-CM marker acceptance desired state' {
                 Should -BeExactly 'ClientNotCompliant'
         }
 
-        It 'fails closed when the direct client marker probe is unavailable' {
+        It 'fails closed when both authenticated client proof routes are unavailable' {
             $providers = New-CompliantMarkerProviders
             $inventory = & $providers.Inventory
+            # Provider inventory is post-selection; ProbeUnavailable means both routes failed.
             $inventory.Client.MarkerHash = ''
             $inventory.Client.MarkerHashVerification = 'ProbeUnavailable'
             $providers.Inventory = { $inventory }.GetNewClosure()

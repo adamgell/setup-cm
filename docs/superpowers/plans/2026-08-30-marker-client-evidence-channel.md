@@ -625,6 +625,7 @@ git commit -m "feat: converge marker client evidence"
 - Modify: `docs/gitbook/src/operations/current-status.md`
 - Modify: `docs/gitbook/src/development/implementation-plans.md`
 - Modify: `docs/gitbook/src/development/testing.md`
+- Modify: `docs/gitbook/src/reference/public-commands.md`
 - Modify: `docs/superpowers/specs/2026-08-30-marker-client-evidence-channel-design.md`
 - Modify: `docs/superpowers/plans/2026-08-30-hands-off-rerun-v1.md`
 
@@ -701,6 +702,7 @@ git add README.md docs/CONFIGURATION.md docs/RUNBOOK.md \
   docs/gitbook/src/operations/current-status.md \
   docs/gitbook/src/development/implementation-plans.md \
   docs/gitbook/src/development/testing.md \
+  docs/gitbook/src/reference/public-commands.md \
   docs/superpowers/specs/2026-08-30-marker-client-evidence-channel-design.md \
   docs/superpowers/plans/2026-08-30-hands-off-rerun-v1.md \
   tests/Integration/MarkerAcceptance.Provider.Tests.ps1 \
