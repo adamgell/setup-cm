@@ -958,7 +958,7 @@ function Wait-SetupCmMarkerPolicyPublication {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]$Contract,
-        [Parameter(Mandatory)][scriptblock]$SnapshotProvider,
+        [scriptblock]$SnapshotProvider,
         [scriptblock]$UtcNowProvider = {
             (Get-Date).ToUniversalTime()
         },
@@ -989,7 +989,13 @@ function Wait-SetupCmMarkerPolicyPublication {
                 )
             )
         )
-        $snapshot = & $SnapshotProvider $remainingMilliseconds
+        $snapshot = if ($null -eq $SnapshotProvider) {
+            Get-SetupCmMarkerPolicyPublicationSnapshot -Contract $Contract `
+                -TimeoutMilliseconds $remainingMilliseconds
+        }
+        else {
+            & $SnapshotProvider $remainingMilliseconds
+        }
         $now = ([datetime](& $UtcNowProvider)).ToUniversalTime()
         if ($now -ge $deadline) {
             throw "Marker policy publication timed out after $($Contract.ClientPolicy.PublicationTimeoutSeconds) seconds."
@@ -1775,13 +1781,7 @@ function Get-SetupCmMarkerDefaultProviders {
         }
         RequestClientPolicy = {
             param($Config, $Contract)
-            $snapshotProvider = {
-                param($TimeoutMilliseconds)
-                Get-SetupCmMarkerPolicyPublicationSnapshot -Contract $Contract `
-                    -TimeoutMilliseconds $TimeoutMilliseconds
-            }.GetNewClosure()
-            Wait-SetupCmMarkerPolicyPublication -Contract $Contract `
-                -SnapshotProvider $snapshotProvider | Out-Null
+            Wait-SetupCmMarkerPolicyPublication -Contract $Contract | Out-Null
 
             Invoke-SetupCmMarkerSiteCommand -Config $Config -ScriptBlock {
                 $targetResourceId = [string]$Contract.TargetResourceId

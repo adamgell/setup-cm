@@ -916,6 +916,37 @@ Describe 'Setup-CM marker acceptance desired state' {
             $snapshotTimeouts | Should -BeExactly @(90000)
         }
 
+        It 'uses the isolated bounded publication snapshot directly by default' {
+            $contract = Get-SetupCmMarkerFixedContract
+            $contract.ClientPolicy.PublicationSettleSeconds = 0
+            $clock = [datetime]::SpecifyKind(
+                [datetime]'2026-08-30T12:00:00',
+                [System.DateTimeKind]::Utc
+            )
+            Mock Get-SetupCmMarkerPolicyPublicationSnapshot {
+                [pscustomobject]@{
+                    ApplicationCount = 1
+                    AssignmentCount = 1
+                    ApplicationIdentity = 'ScopeId_test/Application_test'
+                    AssignmentIdentity = '16777217'
+                    ApplicationRevision = 5
+                    AssignmentRevision = 5
+                    ApplicationLastModifiedUtc = $clock.AddMinutes(-5)
+                    AssignmentCollectionName = $contract.CollectionName
+                }
+            }
+            $clockProvider = { $clock }.GetNewClosure()
+
+            $result = Wait-SetupCmMarkerPolicyPublication -Contract $contract `
+                -UtcNowProvider $clockProvider
+
+            $result.ApplicationRevision | Should -Be 5
+            Should -Invoke Get-SetupCmMarkerPolicyPublicationSnapshot `
+                -Times 1 -Exactly -ParameterFilter {
+                    $TimeoutMilliseconds -eq 90000
+                }
+        }
+
         It 'gets a publication snapshot in an isolated read-only process with the supplied bound' {
             $contract = Get-SetupCmMarkerFixedContract
             $script:decodedMarkerSnapshot = ''
@@ -985,10 +1016,12 @@ Describe 'Setup-CM marker acceptance desired state' {
 
         It 'routes the live client request through policy-publication and paired-notification guards' {
             $requestText = (Get-SetupCmMarkerDefaultProviders).RequestClientPolicy.ToString()
+            $waitText = (Get-Command Wait-SetupCmMarkerPolicyPublication).ScriptBlock.ToString()
 
             $requestText | Should -Match 'Wait-SetupCmMarkerPolicyPublication'
-            $requestText | Should -Match 'Get-SetupCmMarkerPolicyPublicationSnapshot'
+            $requestText | Should -Not -Match '\$snapshotProvider'
             $requestText | Should -Match 'Invoke-SetupCmMarkerClientPolicyEvaluation'
+            $waitText | Should -Match 'Get-SetupCmMarkerPolicyPublicationSnapshot'
         }
 
         It 'converges from pending to compliant with one 15-second read-only delay' {
