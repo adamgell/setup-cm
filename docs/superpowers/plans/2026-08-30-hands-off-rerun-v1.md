@@ -148,17 +148,19 @@ Releases.
 - Test: `tests/Unit/MarkerAcceptance.Tests.ps1`
 - Add: `tests/Integration/MarkerAcceptance.Provider.Tests.ps1`
 
-- [ ] Write failing safety tests for every fixed identity, one-member/direct-rule
+- [x] Write failing safety tests for every fixed identity, one-member/direct-rule
       gate, assignment scope, same-name conflicts, and payload/detector hashes.
-- [ ] Write failing idempotency tests proving exact objects are reused, no
+- [x] Write failing idempotency tests proving exact objects are reused, no
       unchanged redistribution/deployment/membership occurs, and partial owned
       drift invokes only its reconciler.
-- [ ] Implement provider adapters, bounded reconciliation, supported client
+- [x] Implement provider adapters, bounded reconciliation, supported client
       policy/evaluation, and structured client/server evidence.
-- [ ] Keep the reviewed VBScript detector and safe uninstall contract exact.
-- [ ] Run focused unit tests, provider integration tests on CM01, Windows
-      detector tests, and the full suite.
-- [ ] Commit: `feat: automate marker acceptance`.
+- [x] Keep the reviewed VBScript detector and safe uninstall contract exact.
+- [x] Run focused unit tests, provider integration tests on CM01, Windows
+      detector tests, and the full suite: 165/165 local unit tests and 8/8
+      combined CM01 provider/detector/core tests passed; the live exact-state
+      provider test also proved that every mutation adapter remained unused.
+- [x] Commit: `feat: automate marker acceptance`.
 
 ## Task 7: Document and package the v1 operator workflow
 

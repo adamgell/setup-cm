@@ -1,13 +1,6 @@
 [CmdletBinding()]
 param(
     [string]$ConfigPath = $env:SETUPCM_CONFIG,
-
-    [ValidateSet('Guided', 'Unattended')]
-    [string]$Mode = 'Unattended',
-
-    [ValidateSet('Acquire', 'Sql', 'Mecm', 'Marker', 'Health')]
-    [string[]]$Stage,
-
     [string]$SourceCommit = $env:SETUPCM_SOURCE_COMMIT
 )
 
@@ -18,4 +11,4 @@ if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
 }
 
 Import-Module "$PSScriptRoot/../src/SetupCm/SetupCm.psd1" -Force
-Invoke-SetupCm -ConfigPath $ConfigPath -Mode $Mode -Stage $Stage -SourceCommit $SourceCommit
+Invoke-SetupCmMarkerAcceptance -ConfigPath $ConfigPath -SourceCommit $SourceCommit

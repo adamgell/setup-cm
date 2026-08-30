@@ -29,6 +29,21 @@ function New-SetupCmRunEvidence {
     return $path
 }
 
+function Resolve-SetupCmRequiredSourceCommit {
+    [CmdletBinding()]
+    param([string]$SourceCommit)
+
+    if ([string]::IsNullOrWhiteSpace($SourceCommit)) {
+        $SourceCommit = $env:SETUPCM_SOURCE_COMMIT
+    }
+    if ([string]::IsNullOrWhiteSpace($SourceCommit) -or
+        $SourceCommit -notmatch '^[0-9a-fA-F]{40}$') {
+        throw 'Marker acceptance requires an exact 40-character source commit through SourceCommit or SETUPCM_SOURCE_COMMIT.'
+    }
+
+    $SourceCommit.ToLowerInvariant()
+}
+
 function Test-SetupCmSensitiveEvidenceKey {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Name)

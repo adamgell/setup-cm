@@ -7,12 +7,26 @@ function Invoke-SetupCm {
         [ValidateSet('Guided', 'Unattended')]
         [string]$Mode = 'Guided',
 
-        [string[]]$Stage
+        [ValidateSet('Acquire', 'Sql', 'Mecm', 'Marker', 'Health')]
+        [string[]]$Stage,
+
+        [string]$SourceCommit
     )
 
     $config = Read-SetupCmConfig -Path $ConfigPath
-    $evidenceRoot = New-SetupCmRunEvidence -Root $config.evidenceRoot
-    $selected = if ($Stage) { $Stage } else { @('Acquire', 'Sql', 'Mecm', 'Health') }
+    $selected = if ($Stage) {
+        $Stage
+    }
+    elseif ($config.ContainsKey('markerAcceptance') -and $config.markerAcceptance.enabled) {
+        @('Acquire', 'Sql', 'Mecm', 'Marker', 'Health')
+    }
+    else {
+        @('Acquire', 'Sql', 'Mecm', 'Health')
+    }
+    if ($selected -contains 'Marker') {
+        $SourceCommit = Resolve-SetupCmRequiredSourceCommit -SourceCommit $SourceCommit
+    }
+    $evidenceRoot = New-SetupCmRunEvidence -Root $config.evidenceRoot -SourceCommit $SourceCommit
     foreach ($name in $selected) {
         switch ($name) {
             'Acquire' {
@@ -44,6 +58,18 @@ function Invoke-SetupCm {
                     Repair-SetupCmMecmDesiredState -Config $config -State $mecmContext.State -EvidenceRoot $evidenceRoot
                 } -Verify {
                     Test-SetupCmMecmDesiredState -Config $config -EvidenceRoot $evidenceRoot
+                } | Write-Output
+            }
+            'Marker' {
+                $markerContext = [pscustomobject]@{ State = $null }
+                Invoke-SetupCmStage -Name Marker -EvidenceRoot $evidenceRoot -Test {
+                    $probe = Test-SetupCmMarkerDesiredState -Config $config -EvidenceRoot $evidenceRoot -PassThru
+                    $markerContext.State = $probe
+                    [string]$probe.State
+                } -Apply {
+                    Repair-SetupCmMarkerDesiredState -Config $config -State $markerContext.State -EvidenceRoot $evidenceRoot
+                } -Verify {
+                    Test-SetupCmMarkerDesiredState -Config $config -EvidenceRoot $evidenceRoot
                 } | Write-Output
             }
             'Health' {
